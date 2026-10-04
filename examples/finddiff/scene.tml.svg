@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="scene.svg">
+  <!-- Счёт — единственная логика вьюшки; клики и находки ведёт main.ts (hitTestAll + клип found). -->
+  <tml:ref id="score" tml:bind="state.found + ' / ' + state.total"/>
+</svg>

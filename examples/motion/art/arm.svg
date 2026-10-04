@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 44" width="14" height="44">
+  <!-- An arm, light grey: the scene tints it (data-tint). Shoulder at (6, 4). -->
+  <rect x="1" y="0" width="11" height="34" rx="5.5" fill="#f0f0f0"/>
+  <circle cx="6.5" cy="37" r="6" fill="#ffffff"/>
+</svg>

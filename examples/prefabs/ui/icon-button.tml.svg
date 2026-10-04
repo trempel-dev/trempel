@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="icon-button.svg">
+  <!-- Круглая кнопка-иконка: что делает — имя функции сцены в data-action. -->
+  <tml:ref id="hit" tml:on-click="self.call(self.action)"/>
+</svg>

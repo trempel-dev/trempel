@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" width="360" height="300">
+  <!-- Правая картинка FindDiff: тот же арт, что слева, плюс пять правок поверх. Префаб — сцена вставляет его <use href="picture.svg">. -->
+  <image id="art" href="art/picture.png" width="360" height="300"/>
+  <g id="changes">
+    <circle id="sun" cx="300" cy="55" r="28" fill="#ff8c1a"/>
+    <rect id="wall" x="95" y="169" width="36" height="32" fill="#f4e1b5"/>
+    <rect id="door" x="148" y="190" width="26" height="50" fill="#3b6fb6"/>
+    <circle id="apple" cx="280" cy="139" r="5" fill="#d93a3a"/>
+    <circle id="grass" cx="210" cy="266" r="7.5" fill="#58a83a"/>
+  </g>
+</svg>

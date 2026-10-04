@@ -1,0 +1,8 @@
+<!-- Кнопка-префаб: что ждёт её логика, и обязательные параметры каждого инстанса.
+     v1.0: растягивается по ширине (<use width>): подложка — 9-slice, подпись — по центру. -->
+<contract viewBox="0 0 240 72" params="data-label data-action" resizable="x">
+  <image id="bg" slices="true"/>
+  <image id="shade"/>
+  <text id="label" anchor="0.5 0"/>
+  <rect id="hit"/>
+</contract>

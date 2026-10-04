@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@trempel/scene": ["../src/index.ts"],
+      "@trempel/scene/core": ["../src/core.ts"],
+      "@trempel/scene/view": ["../view/api.ts"]
+    }
+  },
+  "include": ["**/*.ts", "../view/**/*.ts"],
+  "exclude": ["e2e/fixtures"]
+}

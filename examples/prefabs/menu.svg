@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect id="backdrop" width="800" height="600" fill="#141a2e"/>
+  <text id="title" x="400" y="120" text-anchor="middle" font-size="52" font-weight="bold" fill="#ffffff">Меню</text>
+  <use id="playBtn" href="ui/button.svg" x="280" y="180" data-label="Играть" data-action="play"/>
+  <use id="settingsBtn" href="ui/button.svg" x="280" y="270" data-label="=t('settings')" data-action="openSettings"/>
+  <use id="shopBtn" href="ui/button-green.svg" x="280" y="360" data-label="Магазин" data-action="openShop"/>
+  <use id="exitBtn" href="ui/button.svg" x="280" y="450" data-label="Выход" data-action="exit"/>
+</svg>

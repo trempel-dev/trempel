@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trempel view</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <aside id="side">
+      <header>
+        <div class="title">Trempel view</div>
+        <div id="folder" class="muted"></div>
+      </header>
+      <div class="modes">
+        <button id="mode-scene" class="on">Сцена</button>
+        <button id="mode-gallery">Галерея</button>
+      </div>
+      <ul id="scenes"></ul>
+    </aside>
+
+    <main>
+      <div id="toolbar">
+        <label>Вьюпорт
+          <select id="viewport">
+            <option value="scene">сцена (viewBox)</option>
+            <option value="9:16">9:16</option>
+            <option value="9:19.5">9:19.5</option>
+            <option value="3:4">3:4</option>
+            <option value="16:9">16:9</option>
+            <option value="custom">свой W×H…</option>
+          </select>
+        </label>
+        <span id="custom" hidden>
+          <input id="cw" type="number" min="16" value="1080" /> × <input id="ch" type="number" min="16" value="1920" />
+        </span>
+        <label>Масштаб
+          <select id="zoom">
+            <option value="fit">вписать</option>
+            <option value="0.25">25%</option>
+            <option value="0.5">50%</option>
+            <option value="1">100%</option>
+            <option value="2">200%</option>
+          </select>
+        </label>
+        <label>Фон
+          <select id="bg">
+            <option value="checker">шахматка</option>
+            <option value="dark">тёмный</option>
+            <option value="light">светлый</option>
+          </select>
+        </label>
+        <span class="grow"></span>
+        <span id="size" class="muted"></span>
+        <button id="shot">PNG</button>
+      </div>
+      <div id="stage-wrap" class="checker">
+        <div id="stage"></div>
+        <div id="gallery" hidden></div>
+        <div id="empty" class="muted" hidden></div>
+      </div>
+    </main>
+
+    <aside id="panel">
+      <section>
+        <h3>Ошибки <span id="issue-count" class="badge"></span></h3>
+        <ul id="issues"></ul>
+      </section>
+      <section class="state">
+        <h3>Состояние <span id="state-src" class="muted"></span></h3>
+        <textarea id="state" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="apply" title="Ctrl/⌘+Enter">Применить</button>
+          <button id="reset">Из файла</button>
+        </div>
+      </section>
+      <section>
+        <h3>Лог кликов <button id="clear-log" class="link">очистить</button></h3>
+        <ol id="log"></ol>
+      </section>
+    </aside>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

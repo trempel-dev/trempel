@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="popup-pause.svg">
+  <!-- Узлы слота — узлы сцены: id без префикса инстанса, выражения — в контексте сцены. -->
+  <tml:ref id="hint" tml:bind="t('paused')"/>
+  <tml:ref id="exitBtn/label" tml:bind="t('exit')"/>
+</svg>

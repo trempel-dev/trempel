@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="menu.svg">
+  <tml:ref id="title" tml:bind="t('menu')"/>
+  <!-- Переопределение внутренностей инстансов по составному id: подпись считает сцена. -->
+  <tml:ref id="playBtn/label" tml:bind="state.coins > 0 ? t('play') + ' · ' + state.coins : t('play')"/>
+  <tml:ref id="exitBtn/label" tml:bind="t('exit')"/>
+</svg>

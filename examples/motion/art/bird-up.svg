@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 30" width="36" height="30">
+  <!-- Bird, nose to +x, wings up. The centre of the body is at (14, 18). -->
+  <path d="M 13 17 L 4 2 L 22 14 Z" fill="#d9d4bd" stroke="#1d3557" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M 34 18 L 2 7 L 9 18 L 2 29 Z" fill="#f4f1de" stroke="#1d3557" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>

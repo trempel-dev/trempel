@@ -1,0 +1,41 @@
+// vite.config.ts — the scene viewer's dev server (npm run view / view:shot start it with
+// TML_VIEW_DIR = the scene folder, TML_VIEW_MODULE = an explicit consumer module).
+//
+// `@trempel/scene`, `@trempel/scene/core` resolve to this runtime's sources and `pixi.js` to one copy, so a
+// consumer module importing them (from any folder) shares classes with the viewer.
+
+import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vite';
+import { findModule, trempelView } from './plugin';
+
+const here = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
+
+const dir = process.env.TML_VIEW_DIR;
+if (!dir) throw new Error('TML_VIEW_DIR is not set — start the viewer with `npm run view -- <folder>`');
+const module = findModule(dir, process.env.TML_VIEW_MODULE || undefined) ?? undefined;
+
+export default defineConfig({
+  root: here('./app'),
+  cacheDir: here('../node_modules/.vite-view'),
+  logLevel: process.env.TML_VIEW_QUIET ? 'error' : 'info',
+  clearScreen: false,
+  resolve: {
+    preserveSymlinks: true,
+    alias: [
+      { find: /^@trempel\/scene\/view$/, replacement: here('./api.ts') },
+      { find: /^@trempel\/scene\/core$/, replacement: here('../src/core.ts') },
+      { find: /^@trempel\/scene$/, replacement: here('../src/index.ts') },
+    ],
+    dedupe: ['pixi.js'],
+  },
+  optimizeDeps: {
+    include: ['pixi.js'],
+    // Scan the consumer module up front: a dependency found late re-optimizes and reloads the page.
+    entries: ['index.html', ...(module ? [module] : [])],
+  },
+  server: {
+    // Scene folders and consumer modules live anywhere on disk.
+    fs: { strict: false },
+  },
+  plugins: [trempelView({ dir, module })],
+});

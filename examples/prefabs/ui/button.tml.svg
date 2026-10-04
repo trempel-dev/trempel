@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="button.svg">
+  <!-- Подпись — параметр инстанса (data-label; «=выражение» считается в контексте сцены). -->
+  <tml:ref id="label" tml:bind="self.label"/>
+  <!-- Наведение/нажатие — варианты спрайта затенения (data-views v0.8); '' — спрайт по умолчанию. -->
+  <tml:ref id="shade" tml:bind-view="self.state.pressed ? 'pressed' : self.state.hover ? 'hover' : ''"/>
+  <!-- Кнопка не знает, что делает: имя функции сцены — в параметре data-action. -->
+  <tml:ref id="hit"
+    tml:on-click="self.call(self.action)"
+    tml:on-over="self.set('hover', true)" tml:on-out="self.set('hover', false)"
+    tml:on-down="self.set('pressed', true)" tml:on-up="self.set('pressed', false)"/>
+</svg>

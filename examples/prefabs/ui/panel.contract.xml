@@ -1,0 +1,8 @@
+<!-- Рамка попапа (v1.0): растягиваемая по обеим осям, фон — 9-slice, заголовок по центру,
+     крестик в правом верхнем углу, тело — слот content. -->
+<contract viewBox="0 0 320 240" resizable="xy" params="data-title">
+  <image id="bg" slices="true"/>
+  <text id="title" anchor="0.5 0"/>
+  <use id="close" href="icon-button.svg" anchor="1 0"/>
+  <g id="content" slot="true" empty="true"/>
+</contract>

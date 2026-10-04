@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "sourceMap": false,
+    "rootDir": "..",
+    "outDir": "../dist/edit/types",
+    "paths": {
+      "@trempel/scene": ["../src/index.ts"],
+      "@trempel/scene/core": ["../src/core.ts"],
+      "@trempel/scene/view": ["../view/api.ts"]
+    }
+  },
+  "include": ["lib.ts", "app/env.d.ts"],
+  "exclude": []
+}

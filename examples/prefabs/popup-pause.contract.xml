@@ -1,0 +1,10 @@
+<!-- Попап паузы: рамка-префаб растянута до 600×800, кнопки — в её слоте content. -->
+<contract viewBox="0 0 720 1000">
+  <rect id="dim"/>
+  <use id="pause" href="ui/panel.svg" anchor="0.5 0.5">
+    <use id="resumeBtn" href="ui/button.svg"/>
+    <use id="settingsBtn" href="ui/button.svg"/>
+    <use id="exitBtn" href="ui/button-green.svg"/>
+    <text id="hint"/>
+  </use>
+</contract>

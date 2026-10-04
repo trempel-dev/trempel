@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trempel edit</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <aside id="side">
+      <header>
+        <div class="title">Trempel edit</div>
+        <div id="folder" class="muted"></div>
+      </header>
+      <ul id="scenes"></ul>
+    </aside>
+
+    <main>
+      <div id="toolbar">
+        <span id="stage-title" title="Сцена (● — несохранённые правки)"><span id="scene-name"></span><span id="scene-dirty" hidden> ●</span></span>
+        <span id="readonly" class="readonly" hidden></span>
+        <span class="tools">
+          <button id="tool-select" class="on" title="Выделение (V)">V</button>
+          <button id="tool-path" title="Контур (P) — путь или линия">P</button>
+        </span>
+        <label title="Вьюпорт">
+          <select id="viewport">
+            <option value="scene">сцена</option>
+            <option value="9:16">9:16</option>
+            <option value="9:19.5">9:19.5</option>
+            <option value="3:4">3:4</option>
+            <option value="16:9">16:9</option>
+          </select>
+        </label>
+        <span class="zoom">
+          <button id="zoom-out" title="Уменьшить (−)">−</button>
+          <button id="zoom-fit" title="Вписать (⌘0)">⤢</button>
+          <button id="zoom-100" title="100% (⌘1)">1:1</button>
+          <button id="zoom-in" title="Увеличить (+)">+</button>
+        </span>
+        <span id="size" class="muted"></span>
+        <span class="grow"></span>
+        <button id="commands" title="Палитра команд (F3)">F3</button>
+        <label title="Раскладка клавиш: blender — G/R/S, Tab, ⇧D, H, A, F3; figma — V/P, стрелки, ⌘D, ⌘⇧P">
+          <select id="keymap">
+            <option value="blender">blender</option>
+            <option value="figma">figma</option>
+          </select>
+        </label>
+        <button id="undo" title="Отменить (⌘Z)">⟲</button>
+        <button id="redo" title="Повторить (⇧⌘Z)">⟳</button>
+        <span id="ref-ctl" title="Эталон: картинка под сценой по её viewBox (в файл не пишется)">
+          <button id="ref-pick">эталон…</button>
+          <input id="ref-opacity" type="range" min="0" max="100" value="50" title="Прозрачность эталона" hidden />
+          <label id="ref-over-label" title="Эталон поверх сцены (иначе — под ней)" hidden><input id="ref-over" type="checkbox" />⤒</label>
+          <button id="ref-off" class="link" title="Убрать эталон" hidden>✕</button>
+        </span>
+        <label title="Служебное: содержимое defs и маски — пунктиром"><input id="service" type="checkbox" checked /> defs</label>
+        <button id="save" title="Сохранить базу (⌘S)">сохранить<span id="dirty" hidden> ●</span></button>
+      </div>
+      <div id="stage-wrap" class="checker">
+        <div id="stage-box">
+          <div id="canvas-slot"></div>
+          <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="gizmo" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="pathtool" xmlns="http://www.w3.org/2000/svg" hidden></svg>
+        </div>
+        <div id="empty" class="muted" hidden></div>
+        <div id="opstatus" hidden></div>
+        <div id="nobase" hidden></div>
+      </div>
+    </main>
+
+    <aside id="right">
+      <section id="tree-pane">
+        <h3>Дерево <span class="muted" id="tree-hint">⇧ — добавить, двойной клик — имя</span></h3>
+        <ul id="tree" tabindex="0"></ul>
+      </section>
+      <section id="inspector-pane">
+        <h3>Инспектор <span id="insp-what" class="muted"></span></h3>
+        <div id="inspector"></div>
+      </section>
+    </aside>
+
+    <footer id="bottom">
+      <section>
+        <h3>Ошибки <span id="issue-count" class="badge"></span></h3>
+        <ul id="issues"></ul>
+      </section>
+      <section id="bottom-tabs">
+        <h3>
+          <button class="tab on" data-tab="log">Лог</button>
+          <button class="tab" data-tab="console" title="Скрипты над tml (⌘Enter), макросы — ⌘K">Консоль</button>
+          <button class="tab" data-tab="clips" title="Клипы сцены (anim/*.md, *.anim.md): проигрывание, кадр, onion, снимок для видео">Клипы</button>
+          <span class="grow"></span>
+          <button id="macros" class="link" title="Макросы папки (.trempel/macros) — ⌘K">макросы ⌘K</button>
+          <button id="clear-log" class="link">очистить</button>
+        </h3>
+        <div id="pane-log" class="pane"><ol id="log"></ol></div>
+        <div id="pane-console" class="pane" hidden>
+          <div id="console-out"></div>
+          <textarea id="console-in" rows="3"></textarea>
+        </div>
+        <div id="pane-clips" class="pane" hidden>
+          <div class="row">
+            <select id="clip-name" title="Клип"></select>
+            <button id="clip-play" title="Играть">▶</button>
+            <button id="clip-pause" title="Пауза">⏸</button>
+            <button id="clip-stop" title="Стоп — поза покоя, стадия снова правится">⏹</button>
+            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Время" />
+            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Время, с" />
+            <span id="clip-dur" class="muted"></span>
+          </div>
+          <div class="row">
+            <label><input id="clip-loop" type="checkbox" checked /> цикл</label>
+            <label>скорость
+              <select id="clip-speed">
+                <option value="0.25">×0.25</option>
+                <option value="0.5">×0.5</option>
+                <option value="0.75">×0.75</option>
+                <option value="1" selected>×1</option>
+                <option value="1.5">×1.5</option>
+                <option value="2">×2</option>
+              </select>
+            </label>
+            <label title="На паузе: кадры t−Δ (красный) и t+Δ (зелёный) поверх"><input id="clip-onion" type="checkbox" /> onion</label>
+            <label>Δ <input id="clip-onion-d" type="number" min="0.01" step="0.01" value="0.083" title="Δ, с (по умолчанию 1/12)" /></label>
+            <span id="clip-info" class="muted"></span>
+          </div>
+          <div class="row">
+            <span>снимок для видео:</span>
+            <label>фон <input id="shot-bg" type="color" value="#ffffff" /></label>
+            <label><input id="shot-transparent" type="checkbox" /> прозрачный</label>
+            <button id="shot-take" title="PNG стадии в позе покоя, 1:1 по viewBox → renders/">снять</button>
+          </div>
+        </div>
+      </section>
+    </footer>
+
+    <div id="menu" hidden></div>
+    <div id="dialog" hidden>
+      <div class="box">
+        <p id="dialog-text"></p>
+        <div class="row" id="dialog-buttons"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
