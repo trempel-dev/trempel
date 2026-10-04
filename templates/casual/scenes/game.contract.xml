@@ -1,0 +1,9 @@
+<contract viewBox="0 0 720 1280">
+  <g id="field"/>
+  <rect id="fieldBg"/>
+  <g id="board" empty="true"/>
+  <g id="target"/>
+  <g id="scorePlate"/>
+  <g id="timePlate"/>
+  <g id="pauseBtn"/>
+</contract>

@@ -1,0 +1,10 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Reward: state.reward; actions claim(), double(). -->
+  <rect id="dim"/>
+  <g id="content"/>
+  <g id="frame"/>
+  <g id="icon"/>
+  <text id="amount"/>
+  <g id="claimBtn"/>
+  <g id="doubleBtn"/>
+</contract>

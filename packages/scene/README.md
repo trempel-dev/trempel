@@ -1,0 +1,81 @@
+# Trempel
+
+An agent-first, lightweight 2D game engine on [PixiJS](https://pixijs.com):
+
+- **A scene format that is valid SVG.** The base `X.svg` is plain SVG any editor opens; behaviour lives in an heir `X.tml.svg` (`tml:` namespace: bindings, events, components, inserts) and an optional contract `X.contract.xml` that checks the view. Prefabs (`<use href>`), 9-slice, anchors, slots and shared collections (`@skin/…`) included.
+- **A runtime** that mounts a scene over a renderer backend (PixiJS out of the box), with reactive state, an expression language without `eval`, and an animation player for clips written as Markdown tables.
+- **An editor core** (`@trempel/scene/editor`) — every edit is a command an agent or a person runs the same way — and the editor page as a library (`@trempel/scene/edit`).
+
+Docs: [trempel.dev](https://trempel.dev) · format: [`docs/format/scene-format.md`](docs/format/scene-format.md) · migration: [`MIGRATION.md`](MIGRATION.md)
+
+## Install
+
+```bash
+npm install @trempel/scene pixi.js
+```
+
+`pixi.js` (v8.5+) is a peer dependency. Tools that never render import `@trempel/scene/core` — no Pixi needed.
+
+## A scene
+
+`button.svg` — the base, plain SVG:
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120">
+  <rect id="bg" width="320" height="120" rx="16" fill="#2d6cdf"/>
+  <text id="label" x="160" y="60" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="40">Play</text>
+</svg>
+```
+
+`button.tml.svg` — the heir: what the base means to the game:
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="button.svg">
+  <tml:ref id="label" tml:bind="state.clicks ? 'Again (' + state.clicks + ')' : 'Play'"/>
+  <tml:ref id="bg" tml:on-click="play()"/>
+</svg>
+```
+
+## Mount it
+
+```ts
+import { Application } from 'pixi.js';
+import { mount, PixiBackend, reactive } from '@trempel/scene';
+import base from './button.svg?raw';
+import heir from './button.tml.svg?raw';
+
+const app = new Application();
+await app.init({ width: 320, height: 120 });
+document.body.appendChild(app.canvas);
+
+const state = reactive({ clicks: 0 });
+const scene = mount({
+  base,
+  heir,
+  backend: new PixiBackend(),
+  container: app.stage,
+  context: { state, play: () => state.clicks++ },
+});
+await scene.ready;
+```
+
+Every problem (XML, merge, contract, expressions) is collected and reported together; nothing is evaluated with `eval`.
+
+## In the repository
+
+`@trempel/scene` lives in `packages/scene` of the Trempel monorepo; the commands run from the repository root:
+
+```bash
+npm install
+npm test               # unit tests (no browser)
+npm run test:e2e       # editor and view:shot in headless Chromium
+npm run view -- packages/scene/examples/motion           # scene viewer
+npm run edit -- packages/scene/examples/prefabs          # editor page on a dev server
+npm run check -- packages/scene/examples/motion          # validate scenes and clips from the CLI
+```
+
+**Open a scene anywhere.** `npm run flatten -- packages/scene/examples/prefabs/menu.svg --out menu.svg --embed` (bin `trempel-flatten` in the package) turns a scene — heir, prefabs, 9-slice, slots, `@skin/…` collection links — into one vanilla SVG that any browser and Figma draw.
+
+## License
+
+MIT © 2026 Denys Vynohradskyi

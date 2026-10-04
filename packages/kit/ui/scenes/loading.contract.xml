@@ -1,0 +1,8 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Loading overlay: kit only. -->
+  <rect id="bg"/>
+  <g id="content"/>
+  <text id="title"/>
+  <g id="bar"/>
+  <text id="label"/>
+</contract>

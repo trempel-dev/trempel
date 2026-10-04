@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Kit template: loading / title screen — an OVERLAY (overlays: { loading: { …, boot: true } })
+       over the boot; progress = kit.progress; hide it with game.hideOverlay('loading'). -->
+  <rect id="bg" x="0" y="0" width="720" height="1280" fill="#1b2131" data-fill="bg" data-stretch="xy"/>
+  <g id="content" transform="translate(360,640)" data-anchor="0.5 0.5">
+    <text id="title" x="0" y="-160" text-anchor="middle" font-size="84" font-weight="bold" fill="#f2f4f8" data-color="onBg" data-font="heading" data-fit="640">MY GAME</text>
+    <g id="bar" transform="translate(0,120)" data-w="440" data-h="36">
+      <rect x="-220" y="-18" width="440" height="36" rx="18" fill="#d5d9e2"/>
+    </g>
+    <text id="label" x="0" y="196" text-anchor="middle" font-size="30" fill="#9aa3b5" data-color="onBg.muted" data-font="text">LOADING</text>
+  </g>
+</svg>

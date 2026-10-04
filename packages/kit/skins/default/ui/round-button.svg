@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" data-action="continue">
+  <image id="bg" href="art/round-button.png" x="0" y="0" width="96" height="96" />
+  <g id="icon" />
+  <rect id="hit" x="0" y="0" width="96" height="96" fill="#000000" opacity="0" />
+</svg>

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<contract viewBox="0 0 240 88" params="data-label data-action" resizable="x">
+  <image id="bg" slices="true" />
+  <text id="label" />
+  <rect id="hit" />
+</contract>

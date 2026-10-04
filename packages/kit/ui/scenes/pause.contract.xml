@@ -1,0 +1,10 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Pause: actions restart(), toMenu(); settingsBtn opens popups.settings. -->
+  <rect id="dim"/>
+  <g id="content"/>
+  <g id="frame"/>
+  <g id="resumeBtn"/>
+  <g id="restartBtn"/>
+  <g id="menuBtn"/>
+  <g id="settingsBtn"/>
+</contract>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="settings.svg">
+  <!-- Only kit built-ins: toggleSfx/toggleMusic, setSfx/setMusic (slider actions), close; kit.sfx/kit.music. -->
+  <tml:ref id="frame" tml:type="ui-popup-frame" tml:bind-title="t('ui.settings')"/>
+  <tml:ref id="sfxLabel" tml:bind="t('ui.sound')"/>
+  <tml:ref id="sfxToggle" tml:type="ui-toggle" tml:bind-checked="kit.sfx > 0" tml:on-click="toggleSfx()"/>
+  <tml:ref id="sfxSlider" tml:type="ui-slider" tml:action="setSfx" tml:bind-value="kit.sfx"/>
+  <tml:ref id="musicLabel" tml:bind="t('ui.music')"/>
+  <tml:ref id="musicToggle" tml:type="ui-toggle" tml:bind-checked="kit.music > 0" tml:on-click="toggleMusic()"/>
+  <tml:ref id="musicSlider" tml:type="ui-slider" tml:action="setMusic" tml:bind-value="kit.music"/>
+  <tml:ref id="closeBtn" tml:type="ui-button" tml:bind-text="t('ui.ok')" tml:on-click="close('settings')"/>
+</svg>

@@ -1,0 +1,12 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Result: state.won, state.stars, state.score, state.best; actions restart(), toMenu(). #fx — confetti goes here. -->
+  <rect id="dim"/>
+  <g id="content"/>
+  <g id="frame"/>
+  <g id="stars"/>
+  <text id="score"/>
+  <text id="best"/>
+  <g id="restartBtn"/>
+  <g id="menuBtn"/>
+  <g id="fx" empty="true"/>
+</contract>

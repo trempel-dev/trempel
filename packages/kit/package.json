@@ -1,0 +1,96 @@
+{
+  "name": "@trempel/kit",
+  "version": "1.2.0",
+  "description": "Trempel kit: a game kit on top of Trempel scenes — platform adapters (web, YouTube Playables, mock), game loop, tweens and clips, event player, state machine, event bus, screens and popups, layout (fit policies, safe area), UI components and skins, a default skin, bundle loader, sound, particles, save, i18n, ads, QA helpers, build gates.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Denys Vynohradskyi",
+  "homepage": "https://trempel.dev",
+  "repository": {
+    "type": "git",
+    "url": "github:trempel-dev/trempel",
+    "directory": "packages/kit"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "import": "./dist/vite/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./e2e": {
+      "types": "./dist/qa/e2e.d.ts",
+      "import": "./dist/qa/e2e.js"
+    },
+    "./package.json": "./package.json",
+    "./ui/*": "./ui/*",
+    "./skin-cli": {
+      "types": "./dist/cli/skin.d.ts",
+      "import": "./dist/cli/skin.js"
+    },
+    "./skins/*": "./skins/*"
+  },
+  "bin": {
+    "trempel-skin": "dist/cli/skin.js"
+  },
+  "files": [
+    "dist",
+    "ui",
+    "!ui/scenes/trempel.view.ts",
+    "skins",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/ui-scenes.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@schmooky/zvuk": "~1.14.1",
+    "fflate": "^0.8.2"
+  },
+  "peerDependencies": {
+    "@trempel/scene": "^1.2.0",
+    "pixi.js": "^8.19.0",
+    "vite": "^6.0.0",
+    "sharp": "^0.34.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "sharp": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@trempel/scene": "^1.2.0",
+    "@types/node": "^22.0.0",
+    "pixi.js": "^8.19.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "@playwright/test": "^1.55.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pixijs",
+    "game",
+    "kit",
+    "playables",
+    "trempel"
+  ]
+}

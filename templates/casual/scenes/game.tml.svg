@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="game.svg">
+  <tml:ref id="scorePlate" tml:type="ui-plate" tml:bind-text="t('score', {n: state.score})"/>
+  <tml:ref id="timePlate" tml:type="ui-plate" tml:bind-text="state.time | int"/>
+  <tml:ref id="pauseBtn" tml:type="ui-icon-button" tml:on-click="pause()"/>
+  <tml:ref id="target" tml:on-click="hit()"/>
+</svg>

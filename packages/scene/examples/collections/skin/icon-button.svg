@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" width="88" height="88" data-action="continue">
+  <image id="bg" href="art/icon-button.png" x="0" y="0" width="88" height="88" />
+  <g id="icon" />
+  <rect id="hit" x="0" y="0" width="88" height="88" fill="#000000" opacity="0" />
+</svg>

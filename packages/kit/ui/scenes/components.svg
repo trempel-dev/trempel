@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Kit UI components showcase (trempel view gallery). Every component is centred on its node. -->
+  <rect id="bg" x="0" y="0" width="720" height="1280" fill="#1b2131" data-fill="bg" data-stretch="xy"/>
+  <g id="btn0" transform="translate(190,70)" data-w="300" data-h="88" data-variant="primary" data-fx="press"><rect x="-150" y="-44" width="300" height="88" rx="44" fill="#3d7bfd"/><text x="0" y="12" text-anchor="middle" font-size="34" fill="#fff">PRIMARY</text></g>
+  <g id="btn1" transform="translate(530,70)" data-w="300" data-h="88" data-variant="secondary" data-fx="press"><rect x="-150" y="-44" width="300" height="88" rx="44" fill="#3d7bfd"/><text x="0" y="12" text-anchor="middle" font-size="34" fill="#fff">SECONDARY</text></g>
+  <g id="btn2" transform="translate(190,180)" data-w="300" data-h="88" data-variant="danger" data-fx="press"><rect x="-150" y="-44" width="300" height="88" rx="44" fill="#3d7bfd"/><text x="0" y="12" text-anchor="middle" font-size="34" fill="#fff">DANGER</text></g>
+  <g id="btn3" transform="translate(530,180)" data-w="300" data-h="88" data-variant="neutral" data-fx="press"><rect x="-150" y="-44" width="300" height="88" rx="44" fill="#3d7bfd"/><text x="0" y="12" text-anchor="middle" font-size="34" fill="#fff">NEUTRAL</text></g>
+  <g id="btnOff" transform="translate(190,290)" data-w="300" data-h="88" data-variant="primary"><text x="0" y="12" text-anchor="middle" font-size="34" fill="#fff">DISABLED</text></g>
+  <g id="plate" transform="translate(530,290)" data-w="300" data-h="80"><text x="0" y="12" text-anchor="middle" font-size="34">LEVEL 7</text></g>
+  <g id="icon0" transform="translate(85,410)" data-size="88" data-icon="close" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon1" transform="translate(195,410)" data-size="88" data-icon="pause" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon2" transform="translate(305,410)" data-size="88" data-icon="play" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon3" transform="translate(415,410)" data-size="88" data-icon="settings" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon4" transform="translate(525,410)" data-size="88" data-icon="back" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon5" transform="translate(635,410)" data-size="88" data-icon="home" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon6" transform="translate(85,520)" data-size="88" data-icon="restart" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon7" transform="translate(195,520)" data-size="88" data-icon="sound-on" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon8" transform="translate(305,520)" data-size="88" data-icon="sound-off" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon9" transform="translate(415,520)" data-size="88" data-icon="music-on" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon10" transform="translate(525,520)" data-size="88" data-icon="music-off" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon11" transform="translate(635,520)" data-size="88" data-icon="hint" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon12" transform="translate(85,630)" data-size="88" data-icon="video" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon13" transform="translate(195,630)" data-size="88" data-icon="plus" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon14" transform="translate(305,630)" data-size="88" data-icon="check" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon15" transform="translate(415,630)" data-size="88" data-icon="lock" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon16" transform="translate(525,630)" data-size="88" data-icon="star" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="icon17" transform="translate(635,630)" data-size="88" data-icon="menu" data-fx="press"><rect x="-44" y="-44" width="88" height="88" rx="44" fill="#e4e7ee"/></g>
+  <g id="toggle" transform="translate(85,740)" data-size="88" data-on="sound-on" data-off="sound-off"></g>
+  <g id="badge" transform="translate(200,740)" data-size="64"><text x="0" y="10" text-anchor="middle" font-size="32">3</text></g>
+  <g id="panel" transform="translate(480,760)" data-w="380" data-h="120" data-variant="dark"></g>
+  <g id="progress" transform="translate(360,860)" data-w="600" data-h="36"></g>
+  <g id="slider" transform="translate(360,930)" data-w="560" data-h="44" data-segments="17" data-knob="64"></g>
+  <g id="stars" transform="translate(200,1060)" data-count="3" data-size="90"></g>
+  <g id="slot0" transform="translate(420,1060)" data-size="104" data-icon="84" data-src="portrait.png"></g>
+  <g id="slot1" transform="translate(540,1060)" data-size="104" data-icon="84" data-src="portrait.png"></g>
+  <g id="slot2" transform="translate(660,1060)" data-size="104" data-icon="84" data-src="portrait.png"></g>
+  <g id="frame" transform="translate(360,1190)" data-w="640" data-h="100" data-title-h="0"></g>
+  <text id="caption" x="360" y="1202" text-anchor="middle" font-size="30" fill="#1f2430" data-color="onSurface" data-font="text">ui-popup-frame · skin: default</text>
+</svg>

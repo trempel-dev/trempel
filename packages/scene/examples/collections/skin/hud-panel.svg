@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 136" width="360" height="136" data-resizable="xy">
+  <image id="bg" href="art/hud-panel.png" x="0" y="0" width="360" height="136" data-slices="30 30 30 30" />
+</svg>

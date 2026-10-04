@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Kit template: result popup — win/lose title, stars, score, best, restart, menu. -->
+  <rect id="dim" x="0" y="0" width="720" height="1280" fill="#0b0e14" data-fill="dim" opacity="0.6" data-stretch="xy"/>
+  <g id="content" transform="translate(360,640)" data-anchor="0.5 0.5">
+    <g id="frame" data-w="600" data-h="720" data-title-w="420">
+      <rect x="-300" y="-360" width="600" height="720" rx="40" fill="#f6f7fa"/>
+      <text x="0" y="-344" text-anchor="middle" font-size="44" font-weight="bold" fill="#1f2430">YOU WIN!</text>
+    </g>
+    <g id="stars" transform="translate(0,-170)" data-count="3" data-size="120"/>
+    <text id="score" x="0" y="-20" text-anchor="middle" font-size="48" font-weight="bold" fill="#1f2430" data-color="onSurface" data-font="heading">SCORE 0</text>
+    <text id="best" x="0" y="40" text-anchor="middle" font-size="32" fill="#6b7280" data-color="muted" data-font="text">BEST 0</text>
+    <g id="restartBtn" transform="translate(0,140)" data-w="400" data-h="104" data-variant="secondary" data-fx="press" data-sound="click">
+      <rect x="-200" y="-52" width="400" height="104" rx="52" fill="#24a865"/>
+      <text x="0" y="15" text-anchor="middle" font-size="42" font-weight="bold" fill="#ffffff">RESTART</text>
+    </g>
+    <g id="menuBtn" transform="translate(0,262)" data-w="400" data-h="96" data-variant="neutral" data-fx="press" data-sound="click">
+      <rect x="-200" y="-48" width="400" height="96" rx="48" fill="#e4e7ee"/>
+      <text x="0" y="14" text-anchor="middle" font-size="38" font-weight="bold" fill="#1f2430">MENU</text>
+    </g>
+    <g id="fx"/>
+  </g>
+</svg>

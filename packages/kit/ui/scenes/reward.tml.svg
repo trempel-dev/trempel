@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="reward.svg">
+  <!-- Needs state.reward (text: '+10'); actions claim(), double() (→ game.ads.rewarded()). -->
+  <tml:ref id="frame" tml:type="ui-popup-frame" tml:bind-title="t('ui.reward')"/>
+  <tml:ref id="icon" tml:type="ui-stars" tml:value="1"/>
+  <tml:ref id="amount" tml:bind="state.reward"/>
+  <tml:ref id="claimBtn" tml:type="ui-button" tml:bind-text="t('ui.claim')" tml:on-click="claim()"/>
+  <tml:ref id="doubleBtn" tml:type="ui-button" tml:bind-text="t('ui.double')" tml:visible="kit.ads" tml:on-click="double()"/>
+</svg>
