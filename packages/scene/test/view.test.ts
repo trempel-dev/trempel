@@ -167,8 +167,8 @@ describe('view — session', () => {
     const log: string[] = [];
     let real = 0;
     const s = openScene({
-      sources: { base: BASE, heir: heir(`<tml:ref id="back" tml:on-click="play(state.stake, 'x') || count()"/><tml:ref id="label" tml:bind="t('hi')"/>`) },
-      state: '{"stake":2}',
+      sources: { base: BASE, heir: heir(`<tml:ref id="back" tml:on-click="play(state.level, 'x') || count()"/><tml:ref id="label" tml:bind="t('hi')"/>`) },
+      state: '{"level":2}',
       backend: createMockBackend(),
       context: () => ({ count: () => ++real }),
       onLog: (e) => log.push(`${e.node} ${e.expr} → ${e.calls.join(', ')}`),
@@ -178,7 +178,7 @@ describe('view — session', () => {
     expect(hasErrors(s.issues)).toBe(false);
     byId(s.scene!.root as MockNode, 'back')!.clicks.forEach((c) => c());
     expect(real).toBe(1);
-    expect(log).toEqual([`#back play(state.stake, 'x') || count() → play(2, "x")`]);
+    expect(log).toEqual([`#back play(state.level, 'x') || count() → play(2, "x")`]);
     expect(s.log).toHaveLength(1);
   });
 

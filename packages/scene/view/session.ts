@@ -60,7 +60,7 @@ export interface LogEntry {
   node: string;
   /** Its tml:on-click expression. */
   expr: string;
-  /** Stub calls the handler made, e.g. `play()`, `stake(1, "x")`. */
+  /** Stub calls the handler made, e.g. `play()`, `buy(1, "x")`. */
   calls: string[];
 }
 
