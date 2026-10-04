@@ -67,6 +67,8 @@ export class Editor {
   clipSources: { md: Record<string, string> } = { md: {} };
 
   listing: FolderListing = { name: '', files: [], module: null, writable: false };
+  /** v1.1: files of the project's collections, as `@name/…` (prefabs placed from the palette's collection groups). */
+  collectionFiles: string[] = [];
   scenes: SceneEntry[] = [];
   entry: SceneEntry | null = null;
   doc: EditorDocument | null = null;
@@ -168,6 +170,13 @@ export class Editor {
   async loadFolder(): Promise<void> {
     this.listing = await this.io.list('');
     this.folderIssue = this.listing.error ? { level: 'warn', kind: 'base', message: this.listing.error } : null;
+    const coll: string[] = [];
+    for (const name of Object.keys(this.listing.collections ?? {})) {
+      const l = await this.io.list(`@${name}`).catch(() => null);
+      if (l?.error) this.folderIssue ??= { level: 'warn', kind: 'collection', message: `@${name}: ${l.error}` };
+      coll.push(...(l?.files ?? []));
+    }
+    this.collectionFiles = coll;
     this.scenes = discoverScenes(this.listing.files);
     if (this.entry) this.entry = this.scenes.find((s) => s.id === this.entry!.id) ?? this.entry;
     this.emit('scenes');
@@ -290,7 +299,7 @@ export class Editor {
   async loadPrefabs(base?: string, contract?: string): Promise<void> {
     const entry = this.entry;
     if (!entry) return;
-    const listed = new Set(this.listing.files);
+    const listed = new Set(this.allFiles());
     const deps = new Set<string>();
     const load = async (path: string): Promise<SceneSource | null> => {
       const stem = sceneStem(path);
@@ -306,7 +315,7 @@ export class Editor {
 
   /** A scene of the folder by its base path, read through the cache (null — not in the folder). */
   private async ioScene(path: string): Promise<SceneSource | null> {
-    const listed = new Set(this.listing.files);
+    const listed = new Set(this.allFiles());
     const stem = sceneStem(path);
     const get = (f: string): Promise<string | undefined> => (listed.has(f) ? this.readCached(f).catch(() => undefined) : Promise.resolve(undefined));
     const [b, h, c] = await Promise.all([get(`${stem}.svg`), readHeirAsync(get, stem), get(`${stem}.contract.xml`)]);
@@ -331,16 +340,25 @@ export class Editor {
 
   /** The runtime's loader (URLs under the folder's URL) over the cache. */
   private renderLoader() {
-    return folderSceneLoader(this.io.folderUrl(), this.listing.files, (rel) => this.readCached(rel));
+    return folderSceneLoader(this.io.folderUrl(), this.allFiles(), (rel) => this.readCached(rel), this.listing.collections);
   }
 
-  /** Scenes of the folder that can be placed as prefabs (not the open one), folder-relative base paths. */
+  /** The folder's files and the collections' (`@name/…`). */
+  allFiles(): string[] {
+    return this.collectionFiles.length ? [...this.listing.files, ...this.collectionFiles] : this.listing.files;
+  }
+
+  /**
+   * Scenes that can be placed as prefabs (not the open one), folder-relative base paths; v1.1 — then
+   * the scenes of each collection (`@skin/button.svg`), the palette's groups.
+   */
   prefabCandidates(): string[] {
     const out: string[] = [];
     for (const s of this.scenes) {
       if (s.id === this.entry?.id) continue;
       out.push(s.base ?? `${s.id}.svg`);
     }
+    for (const s of discoverScenes(this.collectionFiles)) out.push(s.base ?? `${s.id}.svg`);
     return out;
   }
 
@@ -526,6 +544,7 @@ export class Editor {
       wrapRegistry: (r) => (standIns = new StandInRegistry(r)),
       hooks: { onIssue: () => this.emit('issues') },
       loadScene: this.renderLoader(),
+      collections: this.listing.collections,
     });
     this.session = opened.session;
     this.fit = opened.fit;

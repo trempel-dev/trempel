@@ -3,7 +3,7 @@
 Лёгкий agent-first 2D-движок на PixiJS: формат сцен как валидный SVG (+ namespace `tml:`), рантайм, плеер анимаций, ядро редактора и страница редактора. npm-пакет `@trempel/scene`.
 
 ## Спека
-Единственный источник истины по формату — `docs/format/scene-format.md` (v1.0; в конце — короткий changelog версий). Двухдокументная модель: стерильная база `X.svg` (ванильный SVG) + наследник `X.tml.svg` (`tml:extends` / `<tml:ref>` / `tml:insert`) + контракт `X.contract.xml`; клипы — md-клипы (`anim/*.md`, `X.anim.md`) → anim.json. Миграция потребителей по версиям — `MIGRATION.md` (§10 — переход на имена Trempel). Scope строгий: в формат идёт только то, что нужно реальным сценам; партиклы, plist, экспорт чужих форматов, layouts, inputs, foreach, themes — не делать.
+Единственный источник истины по формату — `docs/format/scene-format.md` (v1.1; в конце — короткий changelog версий). Двухдокументная модель: стерильная база `X.svg` (ванильный SVG) + наследник `X.tml.svg` (`tml:extends` / `<tml:ref>` / `tml:insert`) + контракт `X.contract.xml`; клипы — md-клипы (`anim/*.md`, `X.anim.md`) → anim.json. Миграция потребителей по версиям — `MIGRATION.md` (§10 — переход на имена Trempel, §11 — коллекции). Коллекции: `@имя/путь` → папка из `.trempel/project.mdz` корня проекта (`src/href.ts`, `src/project.ts`, Node — `src/node/project.ts`). Scope строгий: в формат идёт только то, что нужно реальным сценам; партиклы, plist, экспорт чужих форматов, layouts, inputs, foreach, themes — не делать.
 
 ## Совместимость
 Старые имена формата (префикс, наследник, модуль просмотрщика, папка редактора) читаются один релиз с предупреждением — весь этот слой в `src/compat.ts` (+ `test/compat.test.ts`); конвертер — `scripts/migrate-tml.mjs`. Больше нигде старые имена не упоминаются. API без алиасов.
@@ -18,11 +18,11 @@ Node 20+, TS 5.x strict, ESM. pixi.js >= 8.5.0 (peer). Vite (dev-страниц�
 - `npm run dev` — vite, примеры `examples/*/index.html`
 - `npm run view -- <папка>` — просмотрщик сцен (`view/`, в пакет не входит); `npm run view:shot -- <сцена> --out x.png` — headless-снимок + JSON ошибок
 - `npm run edit -- <папка>` — страница редактора на dev-сервере (`edit/`); как библиотека — `@trempel/scene/edit` (`mountEditor` + `SceneIO` хоста)
-- `npm run check -- <папка | X.svg> [--anim anim/x.md]` — чекер сцены и клипов; `npm run anim:compile -- anim/x.md [--tex "art/{}.png"]` — md-клипы → json
+- `npm run check -- <папка | X.svg> [--anim anim/x.md]` — чекер сцены и клипов; `npm run flatten -- <сцена> --out x.svg [--embed]` — сцена → ванильный SVG (`src/flatten.ts`, CLI `src/node/flatten-cli.ts`); `node scripts/migrate-collections.mjs <папка>` — относительные ссылки → `@имя/…`; `npm run anim:compile -- anim/x.md [--tex "art/{}.png"]` — md-клипы → json
 - `@trempel/scene/editor` — ядро редактора (`editor/`, README там); `npm run editor:commands` — пересобрать список команд в `editor/README.md` и `edit/API.md`
 
 ## Раскладка
-- `src/` — ядро и рантайм (`core.ts` — без Pixi, `index.ts` — + PixiBackend); `src/md/` — разбор md-клипов; `src/compat.ts` — старые имена формата.
+- `src/` — ядро и рантайм (`core.ts` — без Pixi, `index.ts` — + PixiBackend); `src/md/` — разбор md-клипов; `src/compat.ts` — старые имена формата; `src/node/` — Node-часть (`@trempel/scene/node`: project.mdz, flatten в файл).
 - `editor/` — ядро редактора (команды, документ базы с минимальным диффом).
 - `edit/` — страница редактора (`app/`), dev-сервер (`io-dev.ts`), библиотека (`lib.ts`).
 - `view/` — просмотрщик и `view:shot`.

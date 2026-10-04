@@ -11,7 +11,8 @@
 // <scene> is any file of the scene (X.svg, X.tml.svg, X.contract.xml, X.state.json) or its stem;
 // a folder holding scene.svg / scene.tml.svg means that scene.
 // The scene folder is --dir, else the nearest ancestor (up to the project root) holding a
-// trempel.view.ts, else the scene's own folder. X.state.json next to the scene is used unless
+// trempel.view.ts, else — v1.1 — the Trempel project root (the folder with .trempel/project.mdz:
+// its collections and every file under it are served), else the scene's own folder. X.state.json next to the scene is used unless
 // --state is given.
 //
 // stdout: one JSON object { scene, dir, out, viewport, width, height, errors, warnings, stubs }
@@ -44,12 +45,14 @@ function fail(message, code = 2) {
 
 /**
  * Nearest folder from `start` up holding a consumer module (trempel.view.ts — the plugin picks the
- * exact file); stops at a project root (package.json / .git).
+ * exact file); stops at a project root (package.json / .git), v1.1 — at a Trempel project root
+ * (.trempel/project.mdz), which is the folder then.
  */
 function findViewRoot(start) {
   let d = start;
   for (;;) {
     if (readdirSync(d).some((f) => f.endsWith('.view.ts'))) return d;
+    if (existsSync(join(d, '.trempel', 'project.mdz'))) return d;
     if (existsSync(join(d, 'package.json')) || existsSync(join(d, '.git'))) return null;
     const up = dirname(d);
     if (up === d) return null;

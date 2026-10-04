@@ -5,7 +5,7 @@
 
 import { defineWorkspace } from 'vitest/config';
 
-const E2E = ['edit/e2e/**/*.spec.ts', 'test/view-shot.test.ts'];
+const E2E = ['edit/e2e/**/*.spec.ts', 'test/view-shot.test.ts', 'test/flatten-shot.test.ts'];
 
 export default defineWorkspace([
   {

@@ -33,6 +33,10 @@
 // v0.9.1 (geom/hit.ts): `MountedScene.hitTest(id, x, y)` / `hitTestAll(x, y)` and
 // `ComponentContext.hitTest` — by the geometry of the document (scene coordinates, the transform
 // chain), hidden nodes included (display="none" is not drawn, but is hit and measured).
+//
+// v1.1 (href.ts, project.ts): `collections` (name → folder URL) — an href `@name/path` becomes
+// `<folder URL>/path` before baseUrl / resolveHref (images, bound values, prefabs, components); an
+// unknown name is a mount error, not a silent 404.
 
 import { applyBindings, bindingErrors, evalAt, failed, type ExpressionErrorOptions } from './binding.js';
 import { parseContract } from './contract.js';
@@ -47,7 +51,8 @@ import { parse, parseHeir, type InstanceScope, type SceneNode } from './parser.j
 import { reactive } from './reactive.js';
 import { parseBlend, parseTint, parseViews, parseZ, propErrors, singleImage } from './props.js';
 import { effect } from './reactive.js';
-import { resolveHref } from './href.js';
+import { expandCollection, resolveHref } from './href.js';
+import { collectionErrors } from './project.js';
 import { componentParam, Registry } from './registry.js';
 import type { ComponentInstance } from './registry.js';
 import type { NodeHandle, PointerKind, RendererBackend } from './render/backend.js';
@@ -81,20 +86,28 @@ export interface MountOptions extends ExpressionErrorOptions {
   loadScene?: SceneLoader | AsyncSceneLoader;
   /** v0.9: URL of the scene document for prefab hrefs (default: baseUrl / resolveHref as for images). */
   sceneUrl?: string;
+  /**
+   * v1.1: collections — name → URL of its folder (absolute, or relative to the scene document like
+   * any href). `@name/path` resolves to `<URL>/path` before baseUrl / resolveHref. The Node tools
+   * read them from `.trempel/project.mdz`; in the browser the host passes them.
+   */
+  collections?: Record<string, string>;
 }
 
 /** What the prefab loader gets for a path relative to the scene's folder. */
 function sceneUrlOf(opts: MountOptions): (rel: string) => string {
-  if (opts.sceneUrl) return (rel) => resolveHref(rel, opts.sceneUrl);
+  const { sceneUrl, collections } = opts;
+  if (sceneUrl) return (rel) => resolveHref(expandCollection(rel, collections), sceneUrl);
   return hrefResolver(opts) ?? ((rel) => rel);
 }
 
 /** The scene's href resolver, or null when hrefs pass through verbatim. */
 function hrefResolver(opts: MountOptions): ((href: string) => string) | null {
-  const { baseUrl, resolveHref: map } = opts;
-  if (!baseUrl && !map) return null;
+  const { baseUrl, resolveHref: map, collections } = opts;
+  if (!baseUrl && !map && !collections) return null;
   return (href) => {
-    const abs = baseUrl ? resolveHref(href, baseUrl) : href;
+    const own = expandCollection(href, collections);
+    const abs = baseUrl ? resolveHref(own, baseUrl) : own;
     return map ? map(abs) : abs;
   };
 }
@@ -578,7 +591,7 @@ export function mountScene(svg: string, opts: MountOptions): MountedScene {
   const tree = parse(svg);
   const errors: string[] = [];
   if (hasInstances(tree)) errors.push(...expandInstances(tree, { loadScene: opts.loadScene as SceneLoader | undefined, url: sceneUrlOf(opts) }));
-  errors.push(...geometryErrors(tree), ...propErrors(tree), ...bindingErrors(tree));
+  errors.push(...geometryErrors(tree), ...propErrors(tree), ...bindingErrors(tree), ...collectionErrors(tree, opts.collections));
   if (errors.length) throw new TrempelError(errors);
   return buildScene(tree, opts);
 }
@@ -601,6 +614,7 @@ export function mount(args: MountArgsLoose): MountedScene {
     errors.push(...geometryErrors(c.tree));
     errors.push(...propErrors(c.tree));
     errors.push(...bindingErrors(c.tree));
+    errors.push(...collectionErrors(c.tree, opts.collections));
   }
   const deduped = [...new Set(errors)];
   if (deduped.length || !c.tree) throw new TrempelError(deduped.length ? deduped : ['сцена пуста']);

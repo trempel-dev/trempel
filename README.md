@@ -2,7 +2,7 @@
 
 An agent-first, lightweight 2D game engine on [PixiJS](https://pixijs.com):
 
-- **A scene format that is valid SVG.** The base `X.svg` is plain SVG any editor opens; behaviour lives in an heir `X.tml.svg` (`tml:` namespace: bindings, events, components, inserts) and an optional contract `X.contract.xml` that checks the view. Prefabs (`<use href>`), 9-slice, anchors and slots included.
+- **A scene format that is valid SVG.** The base `X.svg` is plain SVG any editor opens; behaviour lives in an heir `X.tml.svg` (`tml:` namespace: bindings, events, components, inserts) and an optional contract `X.contract.xml` that checks the view. Prefabs (`<use href>`), 9-slice, anchors, slots and shared collections (`@skin/…`) included.
 - **A runtime** that mounts a scene over a renderer backend (PixiJS out of the box), with reactive state, an expression language without `eval`, and an animation player for clips written as Markdown tables.
 - **An editor core** (`@trempel/scene/editor`) — every edit is a command an agent or a person runs the same way — and the editor page as a library (`@trempel/scene/edit`).
 
@@ -71,6 +71,8 @@ npm run view -- examples/motion           # scene viewer
 npm run edit -- examples/prefabs          # editor page on a dev server
 npm run check -- examples/motion          # validate scenes and clips from the CLI
 ```
+
+**Open a scene anywhere.** `npm run flatten -- examples/prefabs/menu.svg --out menu.svg --embed` (bin `trempel-flatten` in the package) turns a scene — heir, prefabs, 9-slice, slots, `@skin/…` collection links — into one vanilla SVG that any browser and Figma draw.
 
 ## License
 

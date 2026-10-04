@@ -1,6 +1,8 @@
 // prefabs.ts — the prefab palette (⌘P, v0.9): every scene of the open folder (and of the folders the
 // consumer module names in `prefabs`) as a card with a preview; drag a card onto the stage — an
 // instance at the drop point (prefab.instantiate), Enter / double click — at the view's centre.
+// v1.1: the scenes of each collection of the project follow as a group of their own (`@skin`); an
+// instance placed from it is written as `href="@skin/…"`.
 //
 // Previews are drawn by the same runtime as the stage (the scene at its rest pose, its own state
 // file ignored) into an offscreen container and kept by the hash of the scene's documents — a
@@ -100,7 +102,17 @@ export class PrefabPalette {
   private draw(): void {
     this.items = this.list();
     this.cards.replaceChildren();
+    let group: string | null = null;
     this.items.forEach((p, i) => {
+      const g = /^@[a-z][a-z0-9-]*/.exec(p)?.[0] ?? '';
+      if (g !== group) {
+        if (g || group !== null) {
+          const head = h('div', 'group', g || 'папка');
+          head.dataset.group = g;
+          this.cards.append(head);
+        }
+        group = g;
+      }
       const card = h('div', i === this.picked ? 'card sel' : 'card');
       card.dataset.prefab = p;
       card.draggable = true;
@@ -152,6 +164,7 @@ export class PrefabPalette {
         docUrl: ed.io.url(prefab),
         viewport: { kind: 'size', w: THUMB.w, h: THUMB.h },
         loadScene: ed.sceneLoaderForRender(),
+        collections: ed.listing.collections,
       });
       const url = await ed.app.renderer.extract.base64({ target: holder, frame: new Rectangle(0, 0, THUMB.w, THUMB.h) });
       holder.destroy({ children: true });

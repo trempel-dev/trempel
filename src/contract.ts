@@ -352,12 +352,28 @@ function patternErrors(base: SceneNode, p: ContractPattern): string[] {
   return errors;
 }
 
-/** Same prefab file? Hrefs compared as normalized paths. */
-const sameHref = (a: string, b: string): boolean => resolveHref(a, '_') === resolveHref(b, '_');
+/** Same prefab file? Hrefs compared as normalized paths (v1.1: resolved — `@skin/x.svg` and its plain path match). */
+function sameHref(a: string, b: string, resolve?: (href: string) => string): boolean {
+  const norm = (h: string): string => {
+    const n = resolveHref(h, '_');
+    if (!resolve) return n;
+    try {
+      return resolve(n);
+    } catch {
+      return n; // an unknown collection is reported where the prefab loads
+    }
+  };
+  return norm(a) === norm(b);
+}
 
 export interface CheckContractOptions {
   /** Ask the base to be sterile (default true; false for an inherited base — tml:extends chain). */
   sterile?: boolean;
+  /**
+   * v1.1: the scene's href → the file it means (collections expanded): instance hrefs are compared
+   * by it, so `@skin/panel.svg` and the same file by its relative path are one prefab.
+   */
+  resolveHref?: (href: string) => string;
 }
 
 /** Validate a base tree against a contract, collecting every violation. */
@@ -386,7 +402,7 @@ export function checkContract(base: SceneNode, contract: Contract, opts: CheckCo
     if (cn.tag === 'use') {
       const href = node.instance?.href ?? (node.tag === 'use' ? node.attrs.href : undefined);
       if (href == null) errors.push(`#${cn.id}: контракт ждёт инстанс <use href="${cn.href}">, а в базе <${node.tag}>.`);
-      else if (!sameHref(href, cn.href!)) errors.push(`#${cn.id}: ждали ${cn.href}, а это ${href}.`);
+      else if (!sameHref(href, cn.href!, opts.resolveHref)) errors.push(`#${cn.id}: ждали ${cn.href}, а это ${href}.`);
     } else if (node.tag !== cn.tag) {
       errors.push(`#${cn.id}: контракт ждёт <${cn.tag}>, а в базе <${node.tag}>.`);
     }

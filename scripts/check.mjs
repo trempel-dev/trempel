@@ -14,13 +14,17 @@
 // non-zero on any problem. With --anim, also compiles the clips and checks their targets and paths
 // against the merged scene. For CI and the "designer saved → pipeline complains BEFORE it ships" loop.
 //
+// v1.1: `@name/…` hrefs resolve by the project's collections (.trempel/project.mdz in the nearest
+// ancestor of the scene); an unknown collection is an error.
+//
 // Imports the compiled Pixi-free core (dist/core.js — the package's `@trempel/scene/core` entry); the
 // `check` npm script builds first.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
-import { bindingErrors, compileClipsResult, composeScene, geometryErrors, heirSuffix, propErrors, readHeir, sceneStem } from '../dist/core.js';
+import { bindingErrors, collectionErrors, compileClipsResult, composeScene, expandCollection, geometryErrors, heirSuffix, propErrors, readHeir, sceneStem, usedCollections } from '../dist/core.js';
+import { loadProject } from '../dist/node/project.js';
 
 const cwd = process.env.INIT_CWD ?? process.cwd();
 const args = process.argv.slice(2);
@@ -57,6 +61,12 @@ if (!dir) {
 const errors = [];
 let tree = null;
 let checked = [];
+const used = new Set();
+
+/** v1.1: the project's collections (name → absolute folder), from the scene (or clip) location. */
+const project = loadProject(resolve(cwd, dir ?? dirname(animPath)));
+errors.push(...project.errors);
+const collections = project.collections;
 
 /** Synchronous loader over the file system: `X.svg` → X.svg, X.tml.svg, X.contract.xml (absent — undefined). */
 const fileLoader = (url) => {
@@ -76,12 +86,14 @@ function checkScene(stem, label) {
   const out = [];
   let t = null;
   try {
-    const c = composeScene({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url: (rel) => resolve(dirname(stem), rel) });
+    const url = (rel) => resolve(dirname(stem), expandCollection(rel, collections));
+    const c = composeScene({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url });
     out.push(...c.errors.parse, ...c.errors.contract, ...c.errors.merge, ...c.errors.prefab);
     t = c.tree;
     if (t) {
       // defs / clipPath / clip-path / geometry data (v0.7); v0.8 attributes; expressions — over the expanded tree.
-      out.push(...geometryErrors(t), ...propErrors(t), ...bindingErrors(t));
+      out.push(...geometryErrors(t), ...propErrors(t), ...bindingErrors(t), ...collectionErrors(t, collections));
+      for (const name of usedCollections(t)) used.add(name);
     }
   } catch (e) {
     out.push(e.message);
@@ -143,6 +155,7 @@ if (unique.length === 0) {
   const scenes = checked.length > 1 ? `${checked.length} scenes: ` : '';
   const parts = [dir && `${scenes}base + prefabs + heir + contract + geometry + v0.8 attributes + expressions`, animPath && `${clipCount} clip(s)`].filter(Boolean);
   console.log(`✓ ${what}: valid (${parts.join('; ')}).`);
+  if (used.size) console.log(`  использует коллекции: ${[...used].sort().map((n) => `@${n}`).join(', ')}`);
   process.exit(0);
 }
 

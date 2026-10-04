@@ -7,6 +7,8 @@
 import { Application, Container, Graphics, Rectangle } from 'pixi.js';
 import { ClipPlayer, compileSceneClips } from '../clips';
 import { clipFiles, type SceneEntry } from '../discover';
+import { fetchSceneLoader } from '../../src/core.js';
+import type { ProjectInfo } from '../plugin';
 import { clearContainer, createStageRuntime, folderSceneLoader, loadViewModule, type Opened, type StageRuntime } from '../runtime';
 import type { LogEntry, OpenInput, ViewIssue, ViewSession } from '../session';
 import { parseViewport, viewportLabel, type StageFit, type Viewport } from '../viewport';
@@ -15,11 +17,27 @@ let runtime: StageRuntime;
 
 async function loadModule(): Promise<void> {
   const { config, issue } = await loadViewModule(() => import('virtual:trempel-view-module'));
-  runtime = createStageRuntime(config, issue, new URL(FILES, location.origin).href);
+  runtime = createStageRuntime(config, issue, folderUrl());
 }
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const FILES = '/__tml/files/';
-const fileUrl = (rel: string): string => new URL(FILES + rel.split('/').map(encodeURIComponent).join('/'), location.origin).href;
+/** v1.1: the project as the server sees it (the folder under the project root, collections). */
+let project: ProjectInfo | null = null;
+const abs = (path: string): string => new URL(path, location.origin).href;
+const enc = (rel: string): string => rel.split('/').map(encodeURIComponent).join('/');
+/** URL of the scene folder: under the project root, so hrefs leaving the folder still load. */
+const folderUrl = (): string => abs(project?.folderUrl ?? FILES);
+/** URL of a folder file, or of a collection file (`@name/…`). */
+const fileUrl = (rel: string): string => {
+  const m = /^@([a-z][a-z0-9-]*)\/(.*)$/.exec(rel);
+  if (m && project?.collections[m[1]]) return abs(project.collections[m[1]] + enc(m[2]));
+  return new URL(enc(rel), folderUrl()).href;
+};
+/** Collection URLs for mount (absolute). */
+const collectionUrls = (): Record<string, string> | undefined =>
+  project && Object.keys(project.collections).length ? Object.fromEntries(Object.entries(project.collections).map(([k, v]) => [k, abs(v)])) : undefined;
+/** Files of the collections, as `@name/…` (prefab documents load from them). */
+let collectionFiles: string[] = [];
 
 // ---- state of the page ------------------------------------------------------------------------
 
@@ -77,8 +95,13 @@ async function text(rel: string | undefined): Promise<string | undefined> {
 /** Open a scene into `target` (cleared first): fetch, mount, place, wait for textures. */
 async function openInto(target: Container, entry: SceneEntry, state: string | undefined, vp: Viewport, hooks: Partial<Pick<OpenInput, 'onIssue' | 'onLog'>> = {}): Promise<Opened> {
   const [base, heir, contract] = await Promise.all([text(entry.base), text(entry.heir), text(entry.contract)]);
-  const loadScene = folderSceneLoader(new URL(FILES, location.origin).href, folderFiles, async (rel) => (await text(rel))!);
-  return runtime.openInto(target, { id: entry.id, sources: { base, heir, contract }, docUrl: fileUrl(entry.base ?? entry.heir ?? entry.id), state, viewport: vp, hooks, loadScene });
+  const collections = collectionUrls();
+  const listed = folderSceneLoader(folderUrl(), [...folderFiles, ...collectionFiles], async (rel) => (await text(rel))!, collections);
+  // v1.1: a prefab outside the folder but inside the project root (a relative ../ path) — fetched as is.
+  const rootUrl = abs(project?.rootUrl ?? FILES);
+  const fetched = fetchSceneLoader();
+  const loadScene = async (url: string) => (await listed(url)) ?? (url.startsWith(rootUrl) && !url.startsWith(folderUrl()) ? fetched(url) : null);
+  return runtime.openInto(target, { id: entry.id, sources: { base, heir, contract }, docUrl: fileUrl(entry.base ?? entry.heir ?? entry.id), state, viewport: vp, hooks, loadScene, collections });
 }
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -86,6 +109,8 @@ const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 // ---- the scene mode -----------------------------------------------------------------------------
 
 let extraIssues: ViewIssue[] = [];
+/** v1.1: problems of .trempel/project.mdz — shown with every scene. */
+let projectIssues: ViewIssue[] = [];
 /** Click log of the current scene — survives state applies and reopens, cleared on scene change. */
 let clicks: LogEntry[] = [];
 
@@ -207,7 +232,7 @@ function badge(issues: ViewIssue[]): HTMLElement {
 }
 
 function allIssues(): ViewIssue[] {
-  return [...extraIssues, ...(session?.issues ?? [])];
+  return [...projectIssues, ...extraIssues, ...(session?.issues ?? [])];
 }
 
 function renderList(): void {
@@ -363,11 +388,18 @@ function bindControls(): void {
 
 async function loadList(): Promise<void> {
   const r = await fetch('/__tml/scenes');
-  const data = (await r.json()) as { name: string; module: string | null; scenes: SceneEntry[]; files?: string[]; error?: string };
+  const data = (await r.json()) as { name: string; module: string | null; scenes: SceneEntry[]; files?: string[]; error?: string; project?: ProjectInfo };
   scenes = data.scenes;
   folderFiles = data.files ?? [];
+  project = data.project ?? null;
+  collectionFiles = [];
+  for (const name of Object.keys(project?.collections ?? {})) {
+    const l = await fetch(`/__tml/list?dir=${encodeURIComponent(`@${name}`)}`, { cache: 'no-store' });
+    if (l.ok) collectionFiles.push(...(((await l.json()) as { files?: string[] }).files ?? []));
+  }
   $('folder').textContent = `${data.name}${data.module ? ` · ${data.module}` : ''}`;
   if (data.error) extraIssues = [{ level: 'error', kind: 'base', message: data.error }];
+  projectIssues = (project?.errors ?? []).map((message) => ({ level: 'error', kind: 'collection', message }));
   if (current) current = scenes.find((s) => s.id === current!.id) ?? null;
   $('empty').hidden = scenes.length > 0;
   $('empty').textContent = scenes.length ? '' : 'В папке нет сцен (X.svg / X.tml.svg).';
@@ -466,9 +498,8 @@ function exposeApi(): void {
 // ---- boot ---------------------------------------------------------------------------------------
 
 async function boot(): Promise<void> {
-  await Promise.all([initPixi(), loadModule()]);
+  await Promise.all([initPixi(), loadList().then(loadModule)]);
   bindControls();
-  await loadList();
   exposeApi();
   if (params.has('headless')) return; // the shot drives the page
   const wanted = scenes.find((s) => s.id === params.get('scene'));

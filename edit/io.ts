@@ -15,6 +15,11 @@ export interface FolderListing {
   writable: boolean;
   /** Listing problem (the folder is gone…). */
   error?: string;
+  /**
+   * v1.1: collections of the project — name → absolute URL of its folder (ends with '/'). Their
+   * files are listed by `list('@name')` as `@name/…`; read / url take such paths too.
+   */
+  collections?: Record<string, string>;
 }
 
 export interface FileChange {
@@ -27,7 +32,8 @@ export interface FileChange {
 export interface SceneIO {
   /**
    * List the folder (`dir` — a subfolder, '' — the folder itself). Paths are relative to the folder;
-   * dot-folders are skipped unless named by `dir` (the macros: `.trempel/macros`).
+   * dot-folders are skipped unless named by `dir` (the macros: `.trempel/macros`). v1.1: `@name` —
+   * the files of a collection, as `@name/…`.
    */
   list(dir?: string): Promise<FolderListing>;
   /** Text of a file. @throws when it cannot be read. */
@@ -71,8 +77,9 @@ export { clipFiles } from '../view/discover';
 /** Raster/vector images an `<image href>` can take. */
 export const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'svg'];
 
-/** `file` (relative to the folder) as seen from the folder of `from` (a scene base): for href. */
+/** `file` (relative to the folder) as seen from the folder of `from` (a scene base): for href. A collection file (`@skin/…`) is written as is. */
 export function relativeTo(from: string, file: string): string {
+  if (/^@[a-z][a-z0-9-]*\//.test(file)) return file;
   const a = from.split('/').slice(0, -1);
   const b = file.split('/');
   let i = 0;

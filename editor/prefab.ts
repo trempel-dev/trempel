@@ -156,7 +156,7 @@ function bakeLayout(g: SceneNode, attrs: Record<string, string>): SceneNode[] {
 
 /** `file` (relative to the scene's folder) as written in a document at `doc` (also relative to it). */
 function relFrom(doc: string, file: string): string {
-  if (/^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/|#)/.test(file)) return file;
+  if (/^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/|#|@[a-z])/.test(file)) return file; // v1.1: a collection href stays as written
   const a = rebase(doc, '_').split('/').slice(0, -1);
   const b = rebase(file, '_').split('/');
   let i = 0;

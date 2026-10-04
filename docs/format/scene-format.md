@@ -1,7 +1,7 @@
-# Trempel scene format — v1.0
+# Trempel scene format — v1.1
 
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 1.0. When this document and the code disagree, the code in `src/` is
+npm package `@trempel/scene` 1.1. When this document and the code disagree, the code in `src/` is
 authoritative and this document is the bug.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes
@@ -13,6 +13,7 @@ are plain text that an agent (or a person) writes and reviews, and that any SVG 
 | `@trempel/scene/core` | the renderer-agnostic core (parse, merge, contract, expressions, layout, clips, player) — no `pixi.js` import; for CLIs, level tools, tests |
 | `@trempel/scene/editor` | the editor core: a document model with undoable commands |
 | `@trempel/scene/edit` | the editor app (page, style sheet, library entry) |
+| `@trempel/scene/node` | Node side (v1.1): the project file and its collections on disk, `flattenFile`; bin `trempel-flatten` |
 
 Runtime dependencies are `@xmldom/xmldom` and `svg-path-properties`; `pixi.js` (^8.5) is an
 optional peer. No part of the runtime uses `eval` or `new Function`: scenes run under a strict
@@ -443,7 +444,8 @@ Every document is addressed by its path from the top scene's folder. Hrefs insid
 (`<image href>`, `data-views`, nested `<use>`, `tml:href`, and `data-*` parameters that look like an
 image path — `.png .jpg .jpeg .webp .gif .avif .svg`) are rebased into that space on load; after
 expansion the whole tree resolves against the scene document like its own hrefs (`baseUrl` /
-`resolveHref`, §10).
+`resolveHref`, §10). A collection href (`@skin/…`, §12) is a space of its own: a prefab at
+`@skin/button.svg` rebases its relative hrefs to `@skin/art/…`.
 
 ### 6.5 Overrides and multi-level inheritance
 
@@ -837,14 +839,15 @@ await scene.ready;
 | `composeScene(input)` | parse + expand + contract + merge, errors by stage, no throw |
 
 `MountOptions`: `backend`, `context`, `registry?`, `container?`, `baseUrl?`, `resolveHref?`,
-`loadScene?`, `sceneUrl?`, `onError?`, `lenient?`; mount args add `base?`, `heir?`, `contract?`,
-`path?`.
+`loadScene?`, `sceneUrl?`, `collections?` (§12), `onError?`, `lenient?`; mount args add `base?`,
+`heir?`, `contract?`, `path?`.
 
 **Hrefs.** With `baseUrl` (the scene document's URL or path) relative image hrefs — attributes of
 base and heir, bound `href` values, hrefs components set through `ctx.backend` — resolve against it
 like in a browser; absolute ones (`scheme:`, `/path`, `#`) are untouched. `resolveHref` is applied
 after `baseUrl` (a bundler's hashed-URL table, a skin lookup). `ctx.resolveHref` exposes the same for
-assets a component loads itself. Without either, hrefs reach the backend as written.
+assets a component loads itself. Without either, hrefs reach the backend as written. A collection
+href `@name/path` is expanded first (`collections`, §12): `resolveHref` gets an ordinary path.
 
 **`MountedScene`:**
 
@@ -894,12 +897,92 @@ is a plain configuration object; every field is optional:
 | `onMount({ id, scene, state })` | seed components after each mount |
 | `background` | stage background colour |
 | `prefabs` | prefab folders for the editor palette, e.g. `['ui']` |
+| `collections` | v1.1: collection name → folder URL (relative to the scene folder, or absolute), over the project's (§12) |
 
 The editor keeps per-project data (macros) in a `.trempel/` folder.
 
 ---
 
-## 12. Invariants
+## 12. Collections — `@name/…`
+
+A shared skin, a kit and the games that use them should not reach each other through relative
+paths (`../skins/default/ui/panel.svg`): a moved folder breaks every scene, and tools do not see files
+above the scene's folder. A **collection** is a named folder; any href — `<use href>`, `<image href>`,
+`tml:href`, `data-views` variants, image parameters, bound values, a clip's `$tex` — may point into it
+as **`@name/path`** (the extension as usual: `@skin/panel.svg`, `@skin/art/icons/play.png`).
+
+- Name: `[a-z][a-z0-9-]*`. `@` at the start of a relative path means a collection, nothing else.
+- Inside a collection's file its own relative hrefs resolve as always — from that file (they stay
+  in the collection: `art/x.png` in `@skin/button.svg` is `@skin/art/x.png`; `..` never climbs out).
+  A collection file may point into itself or another collection by `@`.
+- An unknown name is an error — «коллекции `@name` нет в проекте (есть: …)» — at mount, in `check`,
+  in the viewer, never a silent 404.
+- The price, taken on purpose: a scene with `@` hrefs does not open in a browser as is. A scene with
+  prefabs does not either (an external `<use>`, 9-slice, slots) — `flatten` (§13) makes the vanilla
+  SVG of any scene.
+
+**Where they are declared.** `.trempel/project.mdz` in the **project root** — the nearest ancestor of
+the scene holding that file (none — no collections). md blocks, read by the core's md parser:
+
+```
+# Trempel project
+
+## collections
+$skin: skins/default/ui
+$kit: npm:@trempel/kit/ui
+```
+
+A value is a folder **from the project root**, or `npm:<package>/<subfolder>` — the package's folder
+found by Node resolution from the root (`node_modules` up the tree). Other sections are notes.
+
+**Resolution.** `@name/path` → `<collection folder URL>/path`, **before** `baseUrl` / `resolveHref`
+(the host's table gets an ordinary path, bundler hash tables keep working). The runtime in a browser
+looks nothing up: the host passes `collections: Record<string, string>` (name → folder URL, absolute
+or relative to the scene document) to `mount*`; the viewer / editor take it from `trempel.view.ts`
+(`defineView({ collections })`, overriding single names of the project's). The Node tools (`view`,
+`view:shot`, `edit`, `check`, `flatten`, `migrate-collections`) read `project.mdz` themselves.
+
+**Contract.** A `<use>` line's `href` is compared by the resolved file: `@skin/panel.svg` and the
+same file by its relative path are one prefab.
+
+**Core API:** `expandCollection(href, collections)`, `collectionOf(href)`, `parseProject(text)`,
+`collectionErrors(tree, collections)`, `usedCollections(tree)`; Node (`@trempel/scene/node`):
+`loadProject(dir)` → `{ root, collections: name → absolute folder, errors }`, `collectionPath(file, collections)`.
+
+---
+
+## 13. Tools
+
+| Command | What it does |
+|---|---|
+| `npm run check -- <folder \| X.svg> [--anim anim/x.md]` | the mount pipeline without rendering (parse, prefabs, contract, merge, geometry, attributes, expressions, collections); clips against the scene |
+| `npm run view -- <folder>` / `npm run edit -- <folder>` | the viewer / the editor on a dev server; serves the project root and the collections' folders (anything else — 403) |
+| `npm run view:shot -- <scene> --out x.png` | a headless PNG + JSON of the scene's problems; the folder — `--dir`, else the nearest `trempel.view.ts`, else the project root |
+| `npm run flatten -- <scene> --out x.svg [--embed] [--state s.json]` | **open the scene anywhere:** one vanilla SVG (bin `trempel-flatten`) |
+| `node scripts/migrate-collections.mjs <folder> [--dry-run]` | relative links into a collection → `@name/…` (MIGRATION §11) |
+
+**`flatten`** builds the scene with the runtime itself over a recording backend and writes what it
+would draw at the scene's own size as plain SVG that any browser and Figma draw:
+
+- the heir merged, prefab instances expanded into `<g>` (ids with the instance prefix, as at run
+  time), slots filled;
+- `data-slices` — the picture as 9 pieces, each a nested `<svg x y width height viewBox="sx sy sw sh"
+  preserveAspectRatio="none">` around the one `<image>` (the raster is not cut; borders 1:1, scaled
+  down like the runtime when the box is smaller); `data-tile` — a `<pattern>`; an image's box is
+  stretched as the runtime does it (`preserveAspectRatio="none"`);
+- anchors and stretches laid out for the scene's size (resizable instances at their width/height) and
+  written as coordinates; `data-tint` — an `feColorMatrix` filter; `data-z` — sibling order; masks — a
+  `<clipPath>` per use; `data-*` and `tml:*` dropped;
+- expressions — values at a state (`--state`, else `X.state.json` next to the scene) and instance
+  parameters; an expression that reads a name nobody provides (no state, a host function) keeps the
+  base's value;
+- every `href` relative to the output file (collections resolved); `--embed` — pictures as `data:`
+  URIs, one self-contained file (what `<img src=out.svg>` needs: an SVG image loads nothing external);
+- what vanilla SVG cannot do — components with code, clips — stays as in the base, listed as warnings.
+
+---
+
+## 14. Invariants
 
 - The base is sterile: no `tml:*`. Validated, never assumed.
 - Geometry and style belong to the base; the heir does not override non-`tml` attributes (sole
@@ -914,7 +997,7 @@ project folder are still read for one release, with a deprecation warning; see M
 
 ---
 
-## 13. Changelog
+## 15. Changelog
 
 - **0.5** — two-document model: sterile base SVG + heir (`<tml:ref>`, `tml:insert`, `tml:extends`) + contract (exact node lines, `empty`, viewBox, unique ids, sterility); merge errors collected into one list.
 - **0.6** — own expression language without `eval` (grammar, pipes everywhere, `money`), full SVG `transform`, SVG-faithful rendering (opacity, display, baseline text, CSS colours, rect stroke), `MountedScene.ready`, `baseUrl`/`resolveHref`, contract viewBox rules (`any`, lists, `aspect`) and pattern lines (`match`, `count`, `in`, `requires`); 0.6.1: extensible `PixiBackend.createImage`, loud runtime expression errors (`onError`, `lenient`).
@@ -922,3 +1005,4 @@ project folder are still read for one release, with a deprecation warning; see M
 - **0.8** — `mix-blend-mode`, `data-tint`, `data-z`, `data-views`, `data-pivot`; clip columns `tint`, `z`, `skewX`/`skewY`, `view`.
 - **0.9** — prefabs: `<use href>` instances with parameters and `self`, composite ids, multi-level `tml:extends`, `tml:href`, pointer events, `tml:bind-view`, contract `<use>` lines and `params`, scene loaders and `mountAsync`; 0.9.1: stroke dashes/caps/joins and `pathLength`, hidden-but-hittable geometry, geometry hit test, clip columns `dash`/`strokeWidth`/`strokeAlpha`, `$tex` in md clips, nested contract lines.
 - **1.0** — 9-slice (`data-slices`) and tiling (`data-tile`), boxes with `data-anchor`/`data-stretch`/`data-size`, resizable prefabs (`data-resizable`, `<use width height>`), slots (`tml:slot`), clip columns `width`/`height`, `resize`/`setSize`/`sizeOf`; the format is published as Trempel (`tml:` namespace, `*.tml.svg` heirs, `trempel.view.ts`, `.trempel/`).
+- **1.1** — collections: `@name/path` hrefs into named folders (`.trempel/project.mdz`, folders from the project root or `npm:` packages), `collections` in `MountOptions` / `defineView`, resolved before `baseUrl`/`resolveHref`, unknown name — an error, contract `href` compared by the resolved file; the dev server serves the project root and the collections; the editor's palette groups a collection's prefabs and writes `@name/…`; `flatten` — any scene as one vanilla SVG (`--embed`, `--state`; `@trempel/scene/node`, bin `trempel-flatten`); `migrate-collections.mjs`.

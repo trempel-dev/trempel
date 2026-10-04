@@ -3,7 +3,13 @@
 //
 //   GET /__tml/scenes        → { name, module, scenes: SceneEntry[] } (rescanned per request)
 //   GET /__tml/files/<path>  → a file of the scene folder (documents, art, fonts, macros)
-//   GET /__tml/list?dir=<sub> → { files } below a subfolder (relative to the folder; `.trempel/macros`)
+//   GET /__tml/root/<path>   → v1.1: a file of the project root (`.trempel/project.mdz` above the
+//                              folder; no project — the folder): the folder is `<root>/<dir>/…`, so
+//                              relative hrefs that leave the folder still load
+//   GET /__tml/c/<name>/<path> → v1.1: a file of the collection `name` (project.mdz); anything outside
+//                              the root and the collections — 403
+//   GET /__tml/list?dir=<sub> → { files } below a subfolder (relative to the folder; `.trempel/macros`);
+//                              `dir=@name` — the files of a collection, as `@name/…`
 //   import 'virtual:trempel-view-module' → the folder's trempel.view.ts default export, or null
 //   ws 'tml:changed'         → a scene file changed on disk (the page reopens the scene);
 //                              { file, hash } — a write of our own (same hash) is not announced
@@ -15,6 +21,7 @@ import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, sta
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import type { Plugin } from 'vite';
 import { isHeirFile, legacyName, VIEW_MODULE, VIEW_MODULES } from '../src/compat.js';
+import { loadProject, isInside, type Project } from '../src/node/project.js';
 import { discoverScenes, SKIP_DIRS, type SceneEntry } from './discover';
 
 export const MODULE_NAME = VIEW_MODULE;
@@ -76,6 +83,69 @@ export interface ViewPluginOptions {
   module?: string;
   /** Accept POST /__tml/write (the editor). */
   writable?: boolean;
+  /** v1.1: the project (root, collections); default — `.trempel/project.mdz` found above `dir`. */
+  project?: Project;
+}
+
+/** What the page learns about the project (in /__tml/scenes). */
+export interface ProjectInfo {
+  /** URL of the scene folder (under /__tml/root/), ends with '/'. */
+  folderUrl: string;
+  /** URL of the project root (the folder itself without a project), ends with '/'. */
+  rootUrl: string;
+  /** Collection name → its folder URL (/__tml/c/<name>/). */
+  collections: Record<string, string>;
+  /** Problems of .trempel/project.mdz. */
+  errors: string[];
+}
+
+const ROOT = '/__tml/root/';
+const COLL = '/__tml/c/';
+const enc = (rel: string): string => rel.split('/').map(encodeURIComponent).join('/');
+
+/** The folder's project as the server uses it: root (the folder without a project), collections. */
+export function serverProject(dir: string, project?: Project): { root: string; dirRel: string; project: Project } {
+  const p = project ?? loadProject(dir);
+  const root = p.root && isInside(p.root, dir) ? resolve(p.root) : resolve(dir);
+  const dirRel = relative(root, resolve(dir)).split(sep).join('/');
+  return { root, dirRel: dirRel ? `${dirRel}/` : '', project: p };
+}
+
+export function projectInfo(dir: string, project?: Project): ProjectInfo {
+  const { dirRel, project: p } = serverProject(dir, project);
+  return {
+    folderUrl: ROOT + enc(dirRel),
+    rootUrl: ROOT,
+    collections: Object.fromEntries(Object.keys(p.collections).map((name) => [name, `${COLL}${name}/`])),
+    errors: p.errors,
+  };
+}
+
+/**
+ * The file a GET under /__tml/root/ or /__tml/c/ means: { file } inside the root / the collection,
+ * { status: 403 } outside, { status: 404 } — an unknown collection; null — not such a URL.
+ */
+export function servedFile(pathname: string, root: string, collections: Record<string, string>): { file: string } | { status: 403 | 404; error: string } | null {
+  let base: string;
+  let rel: string;
+  if (pathname.startsWith(ROOT)) {
+    base = root;
+    rel = pathname.slice(ROOT.length);
+  } else if (pathname.startsWith(COLL)) {
+    const rest = pathname.slice(COLL.length);
+    const i = rest.indexOf('/');
+    const name = decodeURIComponent(i < 0 ? rest : rest.slice(0, i));
+    if (!Object.prototype.hasOwnProperty.call(collections, name)) return { status: 404, error: `коллекции @${name} нет в проекте` };
+    base = collections[name];
+    rel = i < 0 ? '' : rest.slice(i + 1);
+  } else return null;
+  const file = resolve(base, decodeURIComponent(rel));
+  if (!isInside(base, file) || file === resolve(base)) return { status: 403, error: `${decodeURIComponent(rel)}: вне корня проекта и коллекций` };
+  // dot-folders (.git, .env…) and node_modules / dist of the project are not served
+  if (relative(base, file).split(sep).some((p) => (p.startsWith('.') && p !== '.trempel') || SKIP_DIRS.has(p))) {
+    return { status: 403, error: `${decodeURIComponent(rel)}: служебная папка` };
+  }
+  return { file };
 }
 
 /** Content hash the editor and the watcher compare (sha1, hex). */
@@ -140,6 +210,14 @@ export function findModule(dir: string, module?: string): string | null {
 export function trempelView(opts: ViewPluginOptions): Plugin {
   const dir = resolve(opts.dir);
   const mod = findModule(dir, opts.module);
+  const served = serverProject(dir, opts.project);
+  const collections = served.project.collections;
+  /** A changed file → its name for the page: folder-relative, or `@name/…` in a collection. */
+  const changedName = (file: string): string | null => {
+    if (file.startsWith(dir + sep)) return relative(dir, file).split(sep).join('/');
+    for (const [name, cdir] of Object.entries(collections)) if (isInside(cdir, file)) return `@${name}/${relative(cdir, file).split(sep).join('/')}`;
+    return null;
+  };
 
   return {
     name: 'trempel-view',
@@ -155,8 +233,10 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
       /** Hashes of our own writes, by absolute file: their change events are not news. */
       const own = new Map<string, string>();
       server.watcher.add(dir);
+      for (const cdir of Object.values(collections)) server.watcher.add(cdir);
       server.watcher.on('change', (file) => {
-        if (file.startsWith(dir + sep) && /\.(svg|xml|json|md)$/.test(file)) {
+        const name = changedName(file);
+        if (name != null && /\.(svg|xml|json|md)$/.test(file)) {
           let hash = '';
           try {
             hash = textHash(readFileSync(file));
@@ -165,7 +245,7 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
           }
           if (hash && own.get(file) === hash) return;
           own.delete(file);
-          server.ws.send({ type: 'custom', event: 'tml:changed', data: { file: relative(dir, file).split(sep).join('/'), hash } });
+          server.ws.send({ type: 'custom', event: 'tml:changed', data: { file: name, hash } });
         }
       });
 
@@ -183,11 +263,15 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
           }
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.setHeader('Cache-Control', 'no-store');
-          res.end(JSON.stringify({ name: basename(dir), module: mod ? basename(mod) : null, scenes, files, writable: !!opts.writable, error }));
+          const project = projectInfo(dir, served.project);
+          res.end(JSON.stringify({ name: basename(dir), module: mod ? basename(mod) : null, scenes, files, writable: !!opts.writable, error, project }));
           return;
         }
         if (url.pathname === '/__tml/list') {
-          const files = listSubdir(dir, url.searchParams.get('dir') ?? '');
+          const sub = url.searchParams.get('dir') ?? '';
+          const coll = /^@([a-z][a-z0-9-]*)\/?(.*)$/.exec(sub);
+          const own = coll && Object.prototype.hasOwnProperty.call(collections, coll[1]);
+          const files = coll ? (own ? (listSubdir(collections[coll[1]], coll[2])?.map((f) => `@${coll[1]}/${f}`) ?? null) : null) : listSubdir(dir, sub);
           res.statusCode = files ? 200 : 403;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.setHeader('Cache-Control', 'no-store');
@@ -217,12 +301,23 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
             .catch((e: unknown) => send(500, { error: e instanceof Error ? e.message : String(e) }));
           return;
         }
-        if (url.pathname.startsWith('/__tml/files/')) {
+        const hit = servedFile(url.pathname, served.root, collections);
+        if (hit && 'status' in hit) {
+          res.statusCode = hit.status;
+          res.end(hit.error);
+          return;
+        }
+        if (hit || url.pathname.startsWith('/__tml/files/')) {
           const rel = decodeURIComponent(url.pathname.slice('/__tml/files/'.length));
-          const file = resolve(dir, rel);
-          if (!file.startsWith(dir + sep) || !existsSync(file) || !statSync(file).isFile()) {
+          const file = hit ? hit.file : resolve(dir, rel);
+          if (!hit && !file.startsWith(dir + sep)) {
+            res.statusCode = 403;
+            res.end(`${rel}: вне папки сцен`);
+            return;
+          }
+          if (!existsSync(file) || !statSync(file).isFile()) {
             res.statusCode = 404;
-            res.end(`not found: ${rel}`);
+            res.end(`not found: ${hit ? url.pathname : rel}`);
             return;
           }
           res.setHeader('Content-Type', TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream');

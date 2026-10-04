@@ -42,6 +42,10 @@ export { Registry, componentParam } from './registry.js';
 export type { ComponentContext, ComponentInit, ComponentInstance, ComponentFactory } from './registry.js';
 
 export { mountScene, mount, mountAsync, mountTree } from './scene.js';
+export { sceneNames, exprNames } from './names.js';
+// v1.1: a scene → one vanilla SVG (the Node CLI: @trempel/scene/node flattenFile, trempel-flatten).
+export { flattenScene, flattenLeftovers } from './flatten.js';
+export type { FlattenInput, FlattenResult } from './flatten.js';
 export type { MountOptions, MountArgs, MountArgsLoose, MountedScene } from './scene.js';
 
 export type { RendererBackend, NodeHandle, Bounds, ClipShape, PointerKind } from './render/backend.js';
@@ -69,7 +73,10 @@ export { slotContractErrors } from './contract.js';
 
 export { parseTransform, multiply, localMatrix, apply, IDENTITY } from './transform.js';
 export type { Matrix } from './transform.js';
-export { resolveHref } from './href.js';
+export { resolveHref, expandCollection, collectionOf, unknownCollection, COLLECTION_NAME } from './href.js';
+// v1.1 collections: `.trempel/project.mdz`, unknown-collection checks.
+export { parseProject, parseNpmRef, collectionErrors, usedCollections, PROJECT_FILE } from './project.js';
+export type { ProjectFile, CollectionSpec } from './project.js';
 
 export { Animator } from './anim/player.js';
 export type { Clock, SpeedSource, PlayOptions, Handle, ClipSpec, AnimatorOptions } from './anim/player.js';

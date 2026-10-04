@@ -24,6 +24,9 @@
 // tree resolves against the top scene's document like any of its own hrefs. Parameters are
 // strings: a value that looks like an image path (…png/jpg/webp/gif/avif/svg) is rebased too.
 // The loader receives `url(rel)` — mount gives it the scene's baseUrl / resolveHref.
+//
+// v1.1 collections: `@name/…` is a space of its own — a prefab at `@skin/button.svg` rebases its
+// relative hrefs to `@skin/art/…`, `url(rel)` (mount: collections → folder URLs) maps them to files.
 
 import { readHeirAsync } from './compat.js';
 import { checkContract, parseContract, slotContractErrors, type Contract } from './contract.js';
@@ -461,9 +464,10 @@ export function composeScene(input: ComposeInput): Composed {
   const src: SceneSource = { base: input.base, heir: input.noHeir ? undefined : input.heir, contract: input.contract };
   if (input.noHeir && input.base == null) src.heir = input.heir; // an extends-only scene has no base without it
   let contract: Contract | null = null;
+  const url = input.url;
   const res = r.doc(src, rel, [rel], errors, (d) => {
     contract = d.contract;
-    if (d.contract) errors.contract.push(...checkContract(d.tree, d.contract, { sterile: !d.inherited }));
+    if (d.contract) errors.contract.push(...checkContract(d.tree, d.contract, { sterile: !d.inherited, resolveHref: url }));
   });
   return { tree: res?.tree ?? null, contract, errors };
 }

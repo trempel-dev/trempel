@@ -12,18 +12,18 @@
 
 import {
   bindingErrors,
-  compile,
+  collectionErrors,
+  expandCollection,
   composeScene,
   geometryErrors,
   propErrors,
   ExpressionRuntimeError,
   TrempelError,
-  isExprKey,
   mountTree,
-  paramName,
   parseHeir,
   reactive,
   resolveHref,
+  sceneNames,
   type SceneLoader,
   type MountedScene,
   type NodeHandle,
@@ -31,7 +31,6 @@ import {
   type RendererBackend,
   type SceneNode,
 } from '../src/core.js';
-import type { Node as ExprNode } from '../src/expr.js';
 import { parseViewBox, type ViewBox } from './viewport.js';
 
 export type IssueKind =
@@ -40,6 +39,7 @@ export type IssueKind =
   | 'contract'
   | 'merge'
   | 'prefab' // v0.9: an instance (<use href>) or the tml:extends chain
+  | 'collection' // v1.1: an href into a collection the project does not declare
   | 'expression' // syntax, unknown pipe
   | 'runtime' // expression failed while running (onError)
   | 'component' // registry / component factory
@@ -85,6 +85,8 @@ export interface OpenInput {
   sceneUrl?: string;
   /** v0.9: the scene's path (`ui/button.svg`) — cycles of tml:extends. */
   path?: string;
+  /** v1.1: collections — name → folder URL (`@name/x` → `<URL>/x`, before baseUrl / resolveHref). */
+  collections?: Record<string, string>;
   /** Consumer context next to `state`. */
   context?: (state: Record<string, unknown>) => Record<string, unknown>;
   /** Readiness gives up after this long (a warning, not a hang). Default 15 s. */
@@ -117,82 +119,8 @@ export interface ViewSession {
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/** Free names of an expression AST (what it reads from the context). */
-function freeNames(n: ExprNode, out: Set<string>): void {
-  switch (n.k) {
-    case 'name':
-      out.add(n.name);
-      return;
-    case 'member':
-      freeNames(n.obj, out);
-      if (typeof n.prop !== 'string') freeNames(n.prop, out);
-      return;
-    case 'call':
-      freeNames(n.callee, out);
-      n.args.forEach((a) => freeNames(a, out));
-      return;
-    case 'unary':
-      freeNames(n.arg, out);
-      return;
-    case 'binary':
-    case 'logical':
-      freeNames(n.l, out);
-      freeNames(n.r, out);
-      return;
-    case 'cond':
-      freeNames(n.test, out);
-      freeNames(n.a, out);
-      freeNames(n.b, out);
-      return;
-    case 'array':
-      n.items.forEach((x) => freeNames(x, out));
-      return;
-    case 'object':
-      n.props.forEach(([, v]) => freeNames(v, out));
-      return;
-    case 'lit':
-      return;
-  }
-}
-
-/** Every context name a (merged) tree's expressions use, plus on-click sources by node id. */
-export function sceneNames(tree: SceneNode): { names: string[]; clicks: Map<string, string> } {
-  const names = new Set<string>();
-  const clicks = new Map<string, string>();
-  const add = (src: string): void => {
-    try {
-      freeNames(compile(src).ast, names);
-    } catch {
-      // syntax errors are reported by bindingErrors / the expansion
-    }
-  };
-  // v0.9: what `self.call(self.x)` calls is the value of parameter x — a name of the scene's context.
-  const calls = new Set<string>();
-  const visit = (n: SceneNode): void => {
-    for (const [k, v] of Object.entries(n.tml)) {
-      if (!isExprKey(k)) continue;
-      add(v);
-      for (const m of v.matchAll(/self\.call\(\s*self\.(\w+)/g)) calls.add(m[1]);
-      if (k === 'on-click' && n.attrs.id) clicks.set(n.attrs.id, v);
-    }
-    n.children.forEach(visit);
-  };
-  visit(tree);
-  const params: Record<string, string>[] = [Object.fromEntries(Object.entries(tree.attrs).filter(([k]) => k.startsWith('data-')))];
-  const collect = (n: SceneNode): void => {
-    if (n.instance) {
-      params.push(n.instance.params);
-      for (const v of Object.values(n.instance.params)) if (v.startsWith('=')) add(v.slice(1));
-    }
-    n.children.forEach(collect);
-  };
-  collect(tree);
-  for (const p of params) {
-    for (const [k, v] of Object.entries(p)) if (calls.has(paramName(k)) && /^[A-Za-z_$][\w$]*$/.test(v)) names.add(v);
-  }
-  names.delete('self'); // the runtime gives it (instances; a prefab opened alone — its root's defaults)
-  return { names: [...names].sort(), clicks };
-}
+/** Every context name a (merged) tree's expressions use (moved to the core, v1.1 — flatten stubs them too). */
+export { sceneNames };
 
 const fmtArg = (v: unknown): string => {
   try {
@@ -260,7 +188,8 @@ export function openScene(input: OpenInput): ViewSession {
       loadScene: input.loadScene,
       url: (rel) => {
         const doc = input.sceneUrl ?? input.baseUrl;
-        return doc ? resolveHref(rel, doc) : rel;
+        const own = expandCollection(rel, input.collections);
+        return doc ? resolveHref(own, doc) : own;
       },
     });
   const full = compose(false);
@@ -284,6 +213,11 @@ export function openScene(input: OpenInput): ViewSession {
   }
   if (!tree) return session;
   session.viewBox = parseViewBox(tree.attrs.viewBox);
+  const unknown = collectionErrors(tree, input.collections);
+  if (unknown.length) {
+    err('collection', unknown);
+    return session;
+  }
   // What mount() would refuse to build (geometry, v0.8 attributes): listed, nothing drawn.
   const hard = [...geometryErrors(tree), ...propErrors(tree)];
   if (hard.length) {
@@ -345,7 +279,8 @@ export function openScene(input: OpenInput): ViewSession {
 
   let opened = false;
   const res = (href: string): string => {
-    const abs = input.baseUrl ? resolveHref(href, input.baseUrl) : href;
+    const own = expandCollection(href, input.collections);
+    const abs = input.baseUrl ? resolveHref(own, input.baseUrl) : own;
     return input.resolveHref ? input.resolveHref(abs) : abs;
   };
   try {
@@ -361,6 +296,7 @@ export function openScene(input: OpenInput): ViewSession {
       container: input.container,
       baseUrl: input.baseUrl,
       resolveHref: input.resolveHref,
+      collections: input.collections,
       onError: (info) => add({ level: 'error', kind: 'runtime', message: new ExpressionRuntimeError(info).message }, opened),
     });
   } catch (e) {

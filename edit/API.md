@@ -79,7 +79,7 @@ interface Tml {
   /** «Снимок для видео»: the rest pose (a clip is stopped) at 1:1 on `background` (null —
    *  transparent; omitted — the panel's) → renders/<scene>-<time>.png; returns its path. */
   snapshot(opts?: { background?: string | null }): Promise<string>;
-  /** Prefabs (v0.9): list() — scenes to place ("ui/button.svg"); place(prefab, at?) — a <use> at a scene
+  /** Prefabs (v0.9): list() — scenes to place ("ui/button.svg"; v1.1 — a collection's too, "@skin/button.svg"); place(prefab, at?) — a <use> at a scene
    *  point (default: view centre), selected; open(node) — its prefab; extract(node, href) — <g> → prefab. */
   readonly prefabs: { list(): string[]; place(prefab: string, at?: { x: number; y: number }): Promise<CommandResult | null>; open(node: string): Promise<boolean>; extract(node: string, href: string): Promise<CommandResult | null> };
   /** Macros of the folder: list, run by name (file name or title), re-read. */

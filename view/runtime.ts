@@ -7,7 +7,7 @@
 
 import { Container } from 'pixi.js';
 import { createDefaultRegistry, PixiBackend, readHeirAsync, sceneStem } from '@trempel/scene';
-import { preloadScenes, type AsyncSceneLoader, type Registry, type RendererBackend } from '../src/core.js';
+import { expandCollection, preloadScenes, type AsyncSceneLoader, type Registry, type RendererBackend } from '../src/core.js';
 import type { ViewConfig } from './api';
 import { openScene, type OpenInput, type SceneSources, type ViewIssue, type ViewSession } from './session';
 import { fitStage, type StageFit, type ViewBox, type Viewport } from './viewport';
@@ -37,22 +37,47 @@ export interface OpenIntoInput {
   fallbackBox?: ViewBox;
   /** v0.9: prefab documents by URL (resolved against docUrl) — see folderSceneLoader. */
   loadScene?: AsyncSceneLoader;
+  /**
+   * v1.1: collections of the project — name → absolute folder URL (the dev server's, the host's).
+   * The module's `collections` override single names.
+   */
+  collections?: Record<string, string>;
 }
 
 /**
  * A loader over a scene folder (v0.9): a URL under `folderUrl` → the folder-relative stem → its
  * base / heir / contract among `files` (only listed files are read). Anything else — null.
+ * v1.1: `collections` (name → folder URL): a URL under a collection's folder → `@name/<path>`
+ * (listed in `files` with that prefix).
  */
-export function folderSceneLoader(folderUrl: string, files: string[], read: (rel: string) => Promise<string>): AsyncSceneLoader {
+export function folderSceneLoader(folderUrl: string, files: string[], read: (rel: string) => Promise<string>, collections: Record<string, string> = {}): AsyncSceneLoader {
   const listed = new Set(files);
+  const roots: [string, string][] = [[folderUrl, ''], ...Object.entries(collections).map(([name, url]): [string, string] => [url.endsWith('/') ? url : `${url}/`, `@${name}/`])];
+  roots.sort((a, b) => b[0].length - a[0].length);
   return async (url) => {
-    if (!url.startsWith(folderUrl)) return null;
-    const rel = url.slice(folderUrl.length).split(/[?#]/)[0].split('/').map(decodeURIComponent).join('/');
+    const hit = roots.find(([u]) => url.startsWith(u));
+    if (!hit) return null;
+    const rel = hit[1] + url.slice(hit[0].length).split(/[?#]/)[0].split('/').map(decodeURIComponent).join('/');
     const stem = sceneStem(rel);
     const get = (f: string): Promise<string | undefined> => (listed.has(f) ? read(f) : Promise.resolve(undefined));
     const [base, heir, contract] = await Promise.all([get(`${stem}.svg`), readHeirAsync(get, stem), get(`${stem}.contract.xml`)]);
     return base != null || heir != null ? { base, heir, contract } : null;
   };
+}
+
+/**
+ * The collections a scene mounts with: the host's (absolute URLs), with the module's on top (its
+ * URLs relative to the scene folder, like its fonts). Undefined — the scene has none.
+ */
+export function collectionUrls(
+  host: Record<string, string> | undefined,
+  module: Record<string, string> | undefined,
+  folderUrl: string,
+): Record<string, string> | undefined {
+  if (!host && !module) return undefined;
+  const out: Record<string, string> = { ...host };
+  for (const [name, url] of Object.entries(module ?? {})) out[name] = new URL(url.endsWith('/') ? url : `${url}/`, folderUrl).href;
+  return out;
 }
 
 export interface StageRuntime {
@@ -140,9 +165,16 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
       }
       const sceneUrl = input.docUrl;
       const path = `${input.id}.svg`;
+      const collections = collectionUrls(input.collections, config.collections, folderUrl);
       let loadScene;
       if (input.loadScene) {
-        const url = (rel: string): string => new URL(rel, sceneUrl).href;
+        const url = (rel: string): string => {
+          try {
+            return new URL(expandCollection(rel, collections), sceneUrl).href;
+          } catch {
+            return rel; // an unknown collection — the session reports it
+          }
+        };
         loadScene = await preloadScenes({ ...input.sources, path, url }, input.loadScene);
       }
       const s = openScene({
@@ -150,6 +182,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
         loadScene,
         sceneUrl,
         path,
+        collections,
         state: input.state,
         backend: input.wrapBackend ? input.wrapBackend(backend) : backend,
         registry: input.wrapRegistry ? input.wrapRegistry(registry) : registry,

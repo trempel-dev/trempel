@@ -61,6 +61,12 @@ export interface ViewConfig {
    * (`../kit/ui`) is named in the palette as not reachable.
    */
   prefabs?: string[];
+  /**
+   * v1.1: collections for this folder — name → folder URL (relative to the scene folder, or
+   * absolute). The tools read `.trempel/project.mdz` themselves; a name given here overrides the
+   * project's (a skin under test, a CDN).
+   */
+  collections?: Record<string, string>;
 }
 
 export function defineView(config: ViewConfig): ViewConfig {
