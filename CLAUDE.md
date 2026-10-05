@@ -1,6 +1,6 @@
 # Trempel — project context
 
-Лёгкий agent-first 2D-движок на PixiJS. Монорепа (npm workspaces): `@trempel/scene` 2.0.0, `@trempel/kit` 1.3.0 (шаблон следует за китом):
+Лёгкий agent-first 2D-движок на PixiJS. Монорепа (npm workspaces): `@trempel/scene` 2.0.0, `@trempel/kit` 1.4.0 (шаблон следует за китом):
 - `packages/scene` — `@trempel/scene`: формат сцен как валидный SVG (+ namespace `tml:`), рантайм, плеер анимаций, ядро редактора и страница редактора;
 - `packages/kit` — `@trempel/kit`: кит игр поверх сцен (сервисы — контракты с обязательным моком, `src/services/`; платформы web / YouTube Playables / mock — реализации платформенных контрактов, цикл, экраны и попапы, раскладка, UI-компоненты и скины, звук, частицы, сейв, гейты сборки; дефолтный скин — `skins/default/ui`, коллекция `npm:@trempel/kit/skins/default/ui`);
 - `templates/casual` — стартовый шаблон казуалки на ките (private, не публикуется); монеты — на сервисе `wallet`.
@@ -43,4 +43,5 @@ Node 22.6+ (scene сам по себе — 20+), TS 5.x strict, ESM. Dev-инс�
 - Публичная репа жанрово-нейтральна: жанровые пакеты, их компоненты, примеры и лексика живут вне этой репы, поверх `@trempel/*` по имени.
 - Рендер-агностичное ядро: логика не знает про PixiJS, общается через `RendererBackend`.
 - База стерильна: `tml:*` живут только в наследнике; редактор правит только базу.
-- Сервисы: объявить контракт без мока нельзя; `Platform`, `game.platform/save/ads` — фасады над контрактами (старые игры не меняются); dev-панель и `localStorage` моков в youtube-сборку не попадают (гейт `trempel-services`).
+- Сборки кита (любой таргет) снимают метаданные с растров без перекодирования; гейт `E_ASSET_METADATA` — метаданные или сайдкары генерации (`*.png.json`, json с `prompt`/`workflow`) в dist (`packages/kit/src/vite/metadata.ts`). Провенанс — только в приватных исходниках.
+- Сервисы: объявить контракт без мока нельзя; в dev (HMR, `__TREMPEL_DEV__`) повторный `contract()` заменяет контракт, в сборке — ошибка; `Platform`, `game.platform/save/ads` — фасады над контрактами (старые игры не меняются); dev-панель и `localStorage` моков в youtube-сборку не попадают (гейт `trempel-services`).

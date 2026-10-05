@@ -14,6 +14,7 @@ import { join, relative } from 'node:path';
 import { zipSync } from 'fflate';
 import { NS } from '@trempel/scene/core';
 import { LEGACY } from '@trempel/scene/internal/compat';
+import { scanMetadata, type CleanResult } from './metadata.js';
 
 const MiB = 1024 * 1024;
 export const LIMITS = { initialFail: 30 * MiB, initialWarn: 15 * MiB, totalFail: 250 * MiB, files: 8000, fileFail: 30 * MiB };
@@ -129,6 +130,8 @@ export interface GateOptions {
   forbid?: (string | RegExp)[];
   /** URLs of bundled libraries that are text, never requested — allowed, listed in the report. */
   libraryUrls?: string[];
+  /** What the build's metadata cleaning did (the plugin passes it; the report lists it). */
+  metadata?: CleanResult;
 }
 
 /** Group of a file under the `oneOf` directory globs: the matched directory, or null. */
@@ -185,6 +188,10 @@ export function runGates(opts: GateOptions): GateResult {
   if (files.length > LIMITS.files) fails.push(`файлов ${files.length} > 8000`);
   if (biggest && biggest.bytes >= LIMITS.fileFail) fails.push(`файл ${biggest.path} ${mib(biggest.bytes)} ≥ 30 MiB`);
 
+  // Metadata in rasters / generation sidecars (the plugin cleaned the dist before; a hit here fails too).
+  const meta = scanMetadata(dist);
+  for (const h of meta) fails.push(`E_ASSET_METADATA: ${h.file}: ${h.what}`);
+
   const code = files.filter((f) => /\.(js|mjs|html|css)$/.test(f.path)).map((f) => ({ path: f.path, text: readFileSync(join(dist, f.path), 'utf8') }));
   const { hits, namespaces, libraryUrls } = scanSterility(code, [], opts.libraryUrls);
   for (const h of hits) fails.push(`стерильность: ${h.what} в ${h.file}`);
@@ -238,6 +245,17 @@ export function runGates(opts: GateOptions): GateResult {
     `- SDK \`${SDK_URL}\` в index.html до кода игры: ${sdkAt !== -1 && (firstModule === -1 || sdkAt < firstModule) ? 'да' : 'НЕТ'}`,
     `- Пространства имён XML (идентификаторы, не запросы): ${[...namespaces].map((n) => `\`${n}\``).join(', ') || 'нет'}`,
     `- URL-строки библиотек (лицензии/предупреждения, не запросы): ${[...libraryUrls].map((n) => `\`${n}\``).join(', ') || 'нет'}`,
+    '',
+    '## Метаданные ассетов',
+    '',
+    `- Метаданные в растрах и сайдкары генерации после очистки: ${meta.length || 'нет'}`,
+    ...(opts.metadata
+      ? [
+          `- Очищено сборкой: ${opts.metadata.cleaned.length} из ${opts.metadata.rasters} растров, −${(opts.metadata.bytesBefore - opts.metadata.bytesAfter).toLocaleString('en')} байт, без перекодирования (пиксели те же)`,
+          ...opts.metadata.cleaned.slice(0, 50).map((c) => `  - \`${c.file}\`: ${[...new Set(c.removed)].join(', ')}`),
+          ...(opts.metadata.cleaned.length > 50 ? [`  - … ещё ${opts.metadata.cleaned.length - 50}`] : []),
+        ]
+      : []),
     '',
   ];
   if (fails.length || warns.length) {

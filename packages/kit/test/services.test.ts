@@ -396,3 +396,74 @@ describe('build gate', () => {
     expect(hits).toEqual([{ file: 'a.js', what: 'web-only trempel-services' }]);
   });
 });
+
+describe('HMR: a contract declared again', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const decl = (name: string, step: number, state: Record<string, unknown> = { value: 0 }) =>
+    contract(name, {
+      state,
+      events: { changed: sticky<number>('value') },
+      mock: (ctx) => ({
+        add(): number {
+          (ctx.state as { value: number }).value += step;
+          ctx.emit('changed', (ctx.state as { value: number }).value);
+          return (ctx.state as { value: number }).value;
+        },
+      }),
+    })<{ add(): number }>();
+
+  it('without the dev server (a build, tests): an error, as before', () => {
+    const name = uniq('hmr-prod');
+    decl(name, 1);
+    expect(() => decl(name, 2)).toThrow(/declared twice/);
+  });
+
+  it('dev server (__TREMPEL_DEV__, Vite HMR): replaces — the mock is the new one, state and subscriptions stay', () => {
+    vi.stubGlobal('__TREMPEL_DEV__', true);
+    const name = uniq('hmr');
+    const v1 = decl(name, 1);
+    const s = setCurrentServices(new Services({ contracts: [v1] }));
+    const seen: number[] = [];
+    s.listen(v1.events.changed, (v) => seen.push(v));
+    expect(s.get(v1).add()).toBe(1);
+    const v2 = decl(name, 10); // the module ran again
+    expect(s.get(v1).add()).toBe(11); // old references go to the new mock
+    expect(s.get(v2).add()).toBe(21);
+    expect(seen).toEqual([0, 1, 11, 21]);
+    expect(s.state(v2)).toEqual({ value: 21 });
+    expect(() => s.register(v1)).not.toThrow(); // a stale declaration is ignored
+    expect(s.get(v2).add()).toBe(31);
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringMatching(/W_CONTRACT_STATE_RESET/));
+  });
+
+  it('dev server: another state shape — the state is reset, with a warning; a provided implementation stays', () => {
+    vi.stubGlobal('__TREMPEL_DEV__', true);
+    const name = uniq('hmr-shape');
+    const v1 = decl(name, 1);
+    const s = setCurrentServices(new Services({ contracts: [v1] }));
+    s.get(v1).add();
+    decl(name, 1, { value: 0, extra: '' });
+    expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/^W_CONTRACT_STATE_RESET: .*re-declared/));
+    expect(s.state(v1)).toEqual({ value: 0, extra: '' });
+    s.provide(v1, { add: () => 42 }, 'real');
+    decl(name, 5, { value: 0, extra: '' });
+    expect(s.implName(v1)).toBe('real');
+    expect(s.get(v1).add()).toBe(42);
+  });
+
+  it('dev server: a re-run extension replaces the extension; its base re-declared first does not reset it', () => {
+    vi.stubGlobal('__TREMPEL_DEV__', true);
+    const name = uniq('hmr-ext');
+    const b1 = decl(name, 1);
+    const e1 = extend(b1, { state: { bonus: 0 }, mock: (ctx, base) => ({ ...base, bonus: () => ++ctx.state.bonus }) })<{ bonus(): number }>();
+    const s = setCurrentServices(new Services({ contracts: [e1] }));
+    s.get(e1).add();
+    s.get(e1).bonus();
+    const b2 = decl(name, 100);
+    const e2 = extend(b2, { state: { bonus: 0 }, mock: (ctx, base) => ({ ...base, bonus: () => (ctx.state.bonus += 2) }) })<{ bonus(): number }>();
+    expect(s.state(e2)).toEqual({ value: 1, bonus: 1 });
+    expect(s.get(e2).add()).toBe(101);
+    expect(s.get(e1).bonus()).toBe(3);
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringMatching(/W_CONTRACT_STATE_RESET/));
+  });
+});

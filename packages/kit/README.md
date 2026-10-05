@@ -10,7 +10,7 @@ Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`
 - **UI kit** — components (`ui-button`, `ui-toggle`, `ui-panel`, `ui-progress`, `ui-slider`, `ui-stars`…) drawn from a skin; `trempel-skin` measures a skin's art into `skin.json`.
 - **Default skin** — prefabs and art in `skins/default/ui`, used as a Trempel collection: `$skin: npm:@trempel/kit/skins/default/ui` in `.trempel/project.mdz`, then `href="@skin/button.svg"` in scenes.
 - **Loop and time** — one game loop with injectable time and pause channels; tweens, Trempel clips, an event player, a state machine, an event bus; particles; sound over zvuk with procedural placeholder sounds.
-- **Build** — `@trempel/kit/vite`: `plugins: [trempelKit()]`; `vite build --mode youtube` runs the Playables gates (size, sterility, no-eval) and writes `build-report.md`. `@trempel/kit/e2e` — Playwright helpers.
+- **Build** — `@trempel/kit/vite`: `plugins: [trempelKit()]`; every build rewrites the bundle's images without metadata (ComfyUI workflows and prompts in PNG text chunks, EXIF / XMP, C2PA — no re-encoding, the pixels stay bit-identical) and fails with `E_ASSET_METADATA` on anything left or on generation sidecars (`*.png.json`…); `vite build --mode youtube` also runs the Playables gates (size, sterility, no-eval) and writes `build-report.md`. `@trempel/kit/e2e` — Playwright helpers.
 
 ## Install
 
@@ -64,7 +64,7 @@ provide(Wallet, firebaseWallet(cfg));                  // before or after get / 
 services.mock('wallet', { latency: 300, fail: 0.2 }); // mock modes; also ?svc.wallet=fail and the dev panel (?services=1, web build only)
 ```
 
-Scenes bind the state without code: `tml:bind-text="services.wallet.balance"`. Events are on `game.bus` as `<contract>:<event>`. The kit's contracts: `lifecycle`, `save`, `audio`, `language`, `ads` (implemented by the platform adapter; `game.platform`, `game.save`, `game.ads` are facades over them), `wallet`, `iap`, `leaderboard` (mock + local: the wallet keeps its balance in the game's save). `extend(C, { mock, … })` adds to a contract (its mock is mandatory too), `adapt(C, (ctx) => impl, name)` puts another model under a contract.
+Scenes bind the state without code: `tml:bind-text="services.wallet.balance"`. Events are on `game.bus` as `<contract>:<event>`. The kit's contracts: `lifecycle`, `save`, `audio`, `language`, `ads` (implemented by the platform adapter; `game.platform`, `game.save`, `game.ads` are facades over them), `wallet`, `iap`, `leaderboard` (mock + local: the wallet keeps its balance in the game's save). `extend(C, { mock, … })` adds to a contract (its mock is mandatory too), `adapt(C, (ctx) => impl, name)` puts another model under a contract. Contract names are unique; on the dev server a contract re-declared by HMR replaces the old one (state and subscriptions stay while the state's shape is the same), in a build a second declaration is an error.
 
 A complete starting point is the casual template in this repository (`templates/casual`): menu, game screen, pause, settings, result, save, web and Playables builds with e2e tests.
 

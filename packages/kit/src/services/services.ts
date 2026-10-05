@@ -16,7 +16,7 @@
 
 import { reactive } from '@trempel/scene/core';
 import { EventBus } from '../flow/bus.js';
-import { isNamed, type AnyContract, type Api, type EventRef, type EventsOf, type Impl, type MockModes, type ServiceContext, type StateOf } from './contract.js';
+import { hmrEnabled, isNamed, latestContract, onRedeclare, type AnyContract, type Api, type EventRef, type EventsOf, type Impl, type MockModes, type ServiceContext, type StateOf } from './contract.js';
 type Handler<T> = (payload: T) => void;
 
 /** One line of the dev log: a call, its result, an event. */
@@ -127,7 +127,14 @@ export class Services {
       const had = this.entries.get(c.name);
       if (had) {
         if (had.contract === c || isBaseOf(c, had.contract)) continue;
-        if (!isBaseOf(had.contract, c)) throw new Error(`services: two different contracts named "${c.name}"`);
+        if (!isBaseOf(had.contract, c)) {
+          // Dev server: an HMR re-declaration replaces the old one; a stale one (older module) is ignored.
+          if (hmrEnabled()) {
+            if (latestContract(c.name) === c) this.replace(c);
+            continue;
+          }
+          throw new Error(`services: two different contracts named "${c.name}"`);
+        }
         // An extension replaces its base: same state object, the mock rebuilt on first use.
         had.contract = c;
         for (const [k, v] of Object.entries(structuredClone(c.state) as Record<string, unknown>)) if (!(k in had.raw)) this.scene[c.name][k] = v;
@@ -141,6 +148,36 @@ export class Services {
       this.entries.set(c.name, { contract: c, raw, provided: null, label: 'mock', impl: null, ctx: null, api: null, called: false, modes: this.pendingModes.get(c.name) ?? {}, last: new Map() });
       this.pendingModes.delete(c.name);
     }
+    return this;
+  }
+
+  /**
+   * HMR: contract `c` was declared again (dev server) — it replaces the registered one. Its state
+   * and subscriptions stay when the state's shape (keys and value types) is the same, else the
+   * state is reset to the new initial one (a warning); a mock in force is rebuilt from the new
+   * declaration, a provided implementation stays.
+   */
+  replace(c: AnyContract): this {
+    const e = this.entries.get(c.name);
+    if (!e || e.contract === c) return this;
+    const old = e.contract;
+    // A base re-declared under a registered extension: the extension's module runs again right after it.
+    if (depth(c) < depth(old)) return this;
+    e.contract = c;
+    if (!sameShape(old.state as Record<string, unknown>, c.state as Record<string, unknown>)) {
+      console.warn(`W_CONTRACT_STATE_RESET: contract "${c.name}" was re-declared (HMR) with another state shape — its state is reset`);
+      const st = this.scene[c.name];
+      for (const k of Object.keys(e.raw)) delete st[k];
+      for (const [k, v] of Object.entries(structuredClone(c.state) as Record<string, unknown>)) st[k] = v;
+      e.last.clear();
+    }
+    for (const k of Object.keys(e.modes)) if (k !== 'latency' && k !== 'fail' && !c.modes.includes(k)) delete e.modes[k];
+    if (isMockImpl(e)) {
+      const built = !!e.impl;
+      this.drop(e);
+      if (built) this.instance(e);
+    }
+    this.write({ contract: c.name, kind: 'provide', name: 'hmr' });
     return this;
   }
 
@@ -432,6 +469,20 @@ export class Services {
   }
 }
 
+/** Same keys with the same value types (an HMR re-declaration keeps the state then). */
+function sameShape(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const ka = Object.keys(a).sort();
+  const kb = Object.keys(b).sort();
+  const kind = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && kind(a[k]) === kind(b[k]));
+}
+
+function depth(c: AnyContract): number {
+  let n = 0;
+  for (let b = c.base; b; b = b.base) n++;
+  return n;
+}
+
 function isBaseOf(base: AnyContract, c: AnyContract): boolean {
   for (let b = c.base; b; b = b.base) if (b === (base as unknown)) return true;
   return false;
@@ -441,6 +492,10 @@ function isBaseOf(base: AnyContract, c: AnyContract): boolean {
 
 let current = new Services();
 let adopted = false;
+// Dev server: a contract re-declared by HMR replaces the old one in the running game's registry.
+onRedeclare((c) => {
+  if (current.has(c.name)) current.replace(c);
+});
 
 /** The registry of the running game (createGame adopts it); outside a game — a standalone one. */
 export function currentServices(): Services {

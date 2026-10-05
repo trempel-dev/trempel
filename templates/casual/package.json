@@ -1,6 +1,6 @@
 {
   "name": "@trempel/template-casual",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "description": "Trempel kit template: an empty casual game — loading, menu, game screen stub, pause, settings, win/lose, save, restart; coins on the wallet service; web and YouTube Playables builds.",
@@ -13,7 +13,7 @@
     "test:e2e": "npm run build:web && npm run build:yt && playwright test"
   },
   "dependencies": {
-    "@trempel/kit": "^1.3.0",
+    "@trempel/kit": "^1.4.0",
     "@trempel/scene": "^2.0.0",
     "pixi.js": "^8.19.0"
   }

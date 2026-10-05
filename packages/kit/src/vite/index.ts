@@ -8,11 +8,18 @@
 //     (no-eval), and zvuk's Page Visibility listener (disabled by the kit at
 //     runtime, but the API name must not ship), then runs the Playables gates after the build
 //     (size, sterility, no-eval) — a failed gate fails the build;
-//   - outDir: dist-web / dist-yt; Pixi in its own chunk (top-level await in main.ts is safe).
+//   - outDir: dist-web / dist-yt; Pixi in its own chunk (top-level await in main.ts is safe);
+//   - every build (web, youtube, any target): the rasters of the dist are rewritten without
+//     metadata (ComfyUI workflows / prompts in PNG text chunks, EXIF / XMP, C2PA — ./metadata.ts),
+//     then the metadata gate: anything left, or a generation sidecar (*.png.json…) — E_ASSET_METADATA,
+//     the build fails. The dev server cleans nothing;
+//   - dev server: __TREMPEL_DEV__ is true — a contract re-declared by HMR replaces the old one.
 
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Plugin, UserConfig } from 'vite';
 import { runGates, SDK_URL } from './gates.js';
+import { cleanAssets, metadataError, scanMetadata, type CleanResult } from './metadata.js';
 
 export interface TrempelKitPluginOptions {
   /** Globs (relative to the youtube dist) loaded after gameReady — excluded from the initial bundle. */
@@ -36,9 +43,10 @@ export function trempelKit(opts: TrempelKitPluginOptions = {}): Plugin[] {
     name: 'trempel-kit:config',
     config(_user, env): UserConfig {
       youtube = env.mode === 'youtube';
+      const dev = JSON.stringify(env.command === 'serve');
       return {
         base: './',
-        define: { __TREMPEL_TARGET__: JSON.stringify(youtube ? 'youtube' : 'web') },
+        define: { __TREMPEL_TARGET__: JSON.stringify(youtube ? 'youtube' : 'web'), __TREMPEL_DEV__: dev },
         build: {
           outDir: youtube ? 'dist-yt' : 'dist-web',
           emptyOutDir: true,
@@ -51,7 +59,7 @@ export function trempelKit(opts: TrempelKitPluginOptions = {}): Plugin[] {
           // (`const game = await createGame(...)` in main.ts).
           rollupOptions: { output: { manualChunks: (id: string) => (/[\\/]node_modules[\\/]pixi\.js[\\/]/.test(id) ? 'pixi' : undefined) } },
         },
-        optimizeDeps: { esbuildOptions: { define: { __TREMPEL_TARGET__: JSON.stringify(youtube ? 'youtube' : 'web') } } },
+        optimizeDeps: { esbuildOptions: { define: { __TREMPEL_TARGET__: JSON.stringify(youtube ? 'youtube' : 'web'), __TREMPEL_DEV__: dev } } },
       };
     },
     configResolved(c) {
@@ -97,9 +105,16 @@ export function trempelKit(opts: TrempelKitPluginOptions = {}): Plugin[] {
     closeBundle: {
       sequential: true,
       handler() {
-        if (!youtube || opts.gates === false) return;
         const dist = resolve(root, outDir);
-        const r = runGates({ dist, lazy: opts.lazy, oneOf: opts.oneOf, forbid: opts.forbid, libraryUrls: opts.libraryUrls, report: resolve(root, 'build-report.md') });
+        // closeBundle runs after a failed build too: nothing written, nothing to check.
+        if (!existsSync(dist)) return;
+        // Every target: metadata out of the rasters, then the metadata gate (before the youtube zip).
+        const clean: CleanResult = cleanAssets(dist);
+        const left = scanMetadata(dist);
+        if (left.length) this.error(metadataError(left));
+        if (clean.rasters) console.log(`✓ kit assets: ${clean.rasters} rasters, metadata dropped from ${clean.cleaned.length} (${((clean.bytesBefore - clean.bytesAfter) / 1024).toFixed(1)} KiB)`);
+        if (!youtube || opts.gates === false) return;
+        const r = runGates({ dist, lazy: opts.lazy, oneOf: opts.oneOf, forbid: opts.forbid, libraryUrls: opts.libraryUrls, report: resolve(root, 'build-report.md'), metadata: clean });
         const sum = `initial ${(r.initial / 1048576).toFixed(2)} MiB${r.worstOneOf ? ` (with ${r.worstOneOf.dir})` : ''}, total ${(r.total / 1048576).toFixed(2)} MiB, ${r.files} files`;
         for (const w of r.warns) this.warn(w);
         if (!r.ok) {
@@ -115,3 +130,5 @@ export function trempelKit(opts: TrempelKitPluginOptions = {}): Plugin[] {
 
 export { runGates, scanSterility, globRe, oneOfGroup, SDK_URL, LIMITS } from './gates.js';
 export type { GateOptions, GateResult, SterilityHit } from './gates.js';
+export { cleanAssets, scanMetadata, metadataError, stripPng, stripJpeg, stripWebp, stripImage, METADATA_CODE } from './metadata.js';
+export type { CleanResult, CleanedFile, MetadataHit, Stripped } from './metadata.js';

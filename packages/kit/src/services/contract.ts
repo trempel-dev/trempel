@@ -12,6 +12,17 @@
 // Events: `sticky<T>(stateKey?)` — a state stands behind it: a new subscriber gets the current
 // value at once (the last emitted one, else `state[stateKey]`), then the changes; `once<T>()` —
 // one-off, never replayed. On the kit's bus they are `<contract>:<event>`.
+//
+// Names are unique. On the dev server (the kit's Vite plugin defines __TREMPEL_DEV__) a module
+// re-run by HMR declares its contract again: the new declaration replaces the old one in the
+// running game's registry (services.ts); in a build a second declaration is an error.
+
+declare const __TREMPEL_DEV__: boolean | undefined;
+
+/** Dev server (Vite HMR): a re-declared contract replaces the old one instead of failing. */
+export function hmrEnabled(): boolean {
+  return typeof __TREMPEL_DEV__ !== 'undefined' && __TREMPEL_DEV__ === true;
+}
 
 /** Mock modes of a contract (services.mock(name, modes), ?svc.<name>=…, the dev panel). */
 export interface MockModes {
@@ -120,6 +131,26 @@ export type EventsOf<C> = C extends Contract<infer _M, infer _S, infer E> ? E : 
 
 const NAME = /^[a-z][a-z0-9-]*$/;
 const names = new Set<string>();
+const extended = new Set<string>();
+/** The newest declaration per name (an HMR re-declaration is newer than the one a registry holds). */
+const latest = new Map<string, AnyContract>();
+const redeclared = new Set<(c: AnyContract) => void>();
+
+/** The newest declaration of a contract name (HMR). */
+export function latestContract(name: string): AnyContract | undefined {
+  return latest.get(name);
+}
+
+/** Watch HMR re-declarations (the registry of the running game replaces the contract). */
+export function onRedeclare(fn: (c: AnyContract) => void): () => void {
+  redeclared.add(fn);
+  return () => redeclared.delete(fn);
+}
+
+function declared(c: AnyContract, again: boolean): void {
+  latest.set(c.name, c);
+  if (again) for (const f of redeclared) f(c);
+}
 
 function eventRefs(name: string, events: Events): Record<string, EventRef<unknown>> {
   const out: Record<string, EventRef<unknown>> = {};
@@ -144,7 +175,8 @@ export function contract<S extends object = Record<string, never>, E extends Eve
 ): <M extends object = R>(...check: R extends M ? [] : [never]) => Contract<M, S, E> {
   if (!NAME.test(name)) throw new Error(`contract "${name}": the name must match [a-z][a-z0-9-]*`);
   checkMock(name, spec?.mock);
-  if (names.has(name)) throw new Error(`contract "${name}" is declared twice (contract names are unique)`);
+  const again = names.has(name);
+  if (again && !hmrEnabled()) throw new Error(`contract "${name}" is declared twice (contract names are unique)`);
   names.add(name);
   const c = Object.freeze({
     name,
@@ -153,6 +185,7 @@ export function contract<S extends object = Record<string, never>, E extends Eve
     modes: Object.freeze([...(spec.modes ?? [])]),
     mock: spec.mock,
   });
+  declared(c as AnyContract, again);
   return (() => c) as never;
 }
 
@@ -178,6 +211,10 @@ export function extend<M0 extends object, S0 extends object, E0 extends Events, 
     mock,
     base,
   });
+  // HMR: the extension's module ran again (dev only — extending one name twice is legal in a build).
+  const again = hmrEnabled() && extended.has(base.name);
+  extended.add(base.name);
+  declared(c as AnyContract, again);
   return (() => c) as never;
 }
 
