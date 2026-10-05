@@ -4,8 +4,13 @@
 // and resize, sound unlock and settings, input, save, i18n, ads, QA probe.
 //
 // Contract with scenes: every scene mounts with the context
-//   { state, kit, t, show, popup, close, pause, resume, toggleSfx, toggleMusic, ...actions }
-// so `tml:on-click="popup('settings')"` and `tml:bind="t('score', {n: state.score})"` work.
+//   { state, kit, services, t, show, popup, close, pause, resume, toggleSfx, toggleMusic, ...actions }
+// so `tml:on-click="popup('settings')"`, `tml:bind="t('score', {n: state.score})"` and
+// `tml:bind-text="services.wallet.balance"` work.
+//
+// Services (1.3): every external thing is a contract with a mandatory mock (./services). The
+// platform adapter of the build target implements lifecycle / save / audio / language / ads;
+// game.platform, game.save and game.ads are facades over those contracts.
 //
 // The skin (tokens, art roles) and the kit's UI components (ui-button, ui-slot…) with every
 // scene; fit policies, the safe area and the PLAYFIELD (screen minus the HUD the game declares);
@@ -41,14 +46,23 @@ import { Popups, type PopupAnim, type PopupLayer } from './ui/popups.js';
 import { readSafeArea } from './ui/safe-area.js';
 import { Screen, type SceneSource, type ScreenHooks } from './ui/screen.js';
 import { Screens } from './ui/screens.js';
+import type { AnyContract, Impl } from './services/contract.js';
+import { platformFacade, platformProviders } from './services/platform.js';
+import { adoptServices, parseModeQuery, type Services } from './services/services.js';
+import { AdsService, KIT_CONTRACTS } from './services/standard.js';
 import { DEFAULT_SKIN } from './ui/skin/default.js';
 import { Skin } from './ui/skin/skin.js';
 
 declare const __TREMPEL_TARGET__: string | undefined;
 
+/** A screen's code: built when its scene mounts; inject() / listen() in its fields resolve there. */
+export type Controller = () => unknown;
+
 export interface ScreenSpec extends SceneSource {
   /** Scale mode of the canvas (default 'expand'). */
   mode?: CanvasMode;
+  /** Controller (`() => new MenuScreen()`), constructed at mount — game.controller(name). */
+  controller?: Controller;
   /** Asset bundle loaded before the first show. */
   bundle?: string;
   /** Mount on first show instead of at boot (its art leaves the initial bundle). */
@@ -59,6 +73,7 @@ export interface ScreenSpec extends SceneSource {
 
 export interface OverlaySpec extends SceneSource {
   mode?: CanvasMode;
+  controller?: Controller;
   /** Shown from the first frame (a loading / title screen over the boot); hide it with game.overlays.hide(). */
   boot?: boolean;
   onShow?: () => void;
@@ -67,6 +82,7 @@ export interface OverlaySpec extends SceneSource {
 
 export interface PopupSpec extends SceneSource {
   mode?: CanvasMode;
+  controller?: Controller;
   anim?: PopupAnim;
   layer?: PopupLayer;
   onShow?: () => void;
@@ -173,8 +189,13 @@ export interface GameConfig<S extends object, D extends object> {
    * (loop, tweens, fx, renderer, resolve) — Trempel's ComponentContext has none of them.
    */
   components?: Record<string, ComponentFactory> | ((kit: KitServices) => Record<string, ComponentFactory>);
-  /** Platform adapter (default: the one of the build target). */
+  /** Platform adapter (default: the one of the build target): implements lifecycle, save, audio, language, ads. */
   platform?: Platform;
+  /** The game's contracts (the kit's own are always registered): inject() of any other fails at mount. */
+  services?: AnyContract[];
+  /** Implementations over the mocks: [Contract, impl, name?] (after the platform's). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  provide?: (readonly [AnyContract, Impl<any, any, any>] | readonly [AnyContract, Impl<any, any, any>, string])[];
   /** Element (or selector) to put the canvas in (default: #app, else body). */
   parent?: HTMLElement | string;
   /** Per-frame game update (stops on pause). */
@@ -211,6 +232,7 @@ export interface KitServices {
   sound: Sound;
   app: Application;
   resolve: (href: string) => string;
+  services: Services;
 }
 
 /** Host events on the bus. */
@@ -226,6 +248,15 @@ export interface KitEvents {
   layout: LayoutEvent;
   'overlay:show': { name: string };
   'overlay:hide': { name: string };
+  // The kit's contracts (services): `<contract>:<event>`; listen(Wallet.events.changed, …) is the typed way.
+  'lifecycle:pause': undefined;
+  'lifecycle:resume': undefined;
+  'audio:changed': boolean;
+  'language:changed': string;
+  'ads:changed': boolean;
+  'wallet:changed': number;
+  'wallet:spent': { amount: number; reason?: string };
+  'iap:purchased': { id: string };
   [intent: `intent:${string}`]: unknown;
 }
 
@@ -245,6 +276,8 @@ export interface Game<S extends object, D extends object> {
   readonly ads: Ads;
   readonly input: Input;
   readonly bus: EventBus<KitEvents>;
+  /** The game's contracts: get / provide / state / mock (also the module-level `services`). */
+  readonly services: Services;
   readonly loader: Loader;
   readonly screens: Screens;
   readonly popups: Popups;
@@ -269,6 +302,8 @@ export interface Game<S extends object, D extends object> {
   hideOverlay(name: string, opts?: OverlayHide): Promise<void>;
   /** Screen by name (`game.screen('game').byId('board')`). */
   screen(name: string): Screen;
+  /** The controller of a screen / popup / overlay (its spec's `controller`); popups: 'popup:<name>'. */
+  controller<T = unknown>(name: string): T;
   /** Pause / resume the game channel (+ the 'pause' popup when declared). */
   pause(): void;
   resume(): void;
@@ -304,7 +339,25 @@ function parentOf(p: HTMLElement | string | undefined): HTMLElement {
 }
 
 export async function createGame<S extends object, D extends object = Record<string, never>>(cfg: GameConfig<S, D>): Promise<Game<S, D>> {
-  const platform = cfg.platform ?? createPlatform({ saveKey: cfg.saveKey });
+  // Services: the kit's contracts + the game's; the build target's platform adapter implements the
+  // platform ones (unless provided before createGame), then the game's overrides.
+  const bus = new EventBus<KitEvents>();
+  const services = adoptServices();
+  services.bus = bus as never;
+  services.register(...KIT_CONTRACTS, ...(cfg.services ?? []));
+  const source = cfg.platform ?? createPlatform({ saveKey: cfg.saveKey });
+  for (const [c, impl] of platformProviders(source)) if (services.implName(c) === 'mock') services.provide(c, impl);
+  for (const [c, impl, label] of cfg.provide ?? []) services.provide(c, impl, label);
+  if (typeof __TREMPEL_TARGET__ === 'undefined' || __TREMPEL_TARGET__ !== 'youtube') {
+    for (const [name, modes] of Object.entries(parseModeQuery(location.search))) {
+      try {
+        services.mock(name, modes);
+      } catch (e) {
+        console.warn(`kit: ?svc.${name}: ${(e as Error).message}`);
+      }
+    }
+  }
+  const platform = platformFacade(services, source);
   await platform.init();
 
   const parent = parentOf(cfg.parent);
@@ -372,18 +425,25 @@ export async function createGame<S extends object, D extends object = Record<str
   const sound = new Sound({ sounds: cfg.sounds, music: cfg.music, resolve });
   const saveOpts = {
     version: cfg.save?.version ?? 1,
-    defaults: { ...(cfg.save?.defaults ?? ({} as D)), sfx: 1, music: 1 },
+    // `svc` — what contracts persist (ctx.store): the wallet's balance, owned purchases…
+    defaults: { ...(cfg.save?.defaults ?? ({} as D)), sfx: 1, music: 1, svc: {} },
     migrate: cfg.save?.migrate,
   };
   const save = new Save<D & { sfx: number; music: number }>(platform, saveOpts);
   await save.load();
+  type WithSvc = { svc?: Record<string, unknown> };
+  services.store = {
+    get: (name) => (save.data as WithSvc).svc?.[name],
+    set: (name, v) => void save.update((d) => ({ ...d, svc: { ...((d as WithSvc).svc ?? {}), [name]: JSON.parse(JSON.stringify(v ?? null)) } })),
+  };
+  // Awake of the services: every implementation is built (the wallet reads its balance) before the scenes bind.
+  services.start();
   kit.sfx = save.data.sfx;
   kit.music = save.data.music;
   sound.setVolumes(kit.sfx, kit.music);
   setProgress(70);
 
   const state = reactive(cfg.state);
-  const bus = new EventBus<KitEvents>();
   const fx = new Fx(app.renderer as Renderer, resolve);
   loop.add((dt) => fx.update(dt), 'ui');
   const backendOpts: KitBackendOptions = { fontFamily: cfg.fontFamily, skin, slices: cfg.slices };
@@ -402,12 +462,13 @@ export async function createGame<S extends object, D extends object = Record<str
       }
     },
   });
-  const context: Record<string, unknown> = { state, kit, t: i18n.t };
-  kit.ads = ads.available;
+  const context: Record<string, unknown> = { state, kit, services: services.scene, t: i18n.t };
+  services.listen(AdsService.events.changed, (on) => (kit.ads = on));
   const registry = new Registry();
   if (skin) for (const [name, f] of Object.entries(uiComponents({ skin, tweens, context }))) registry.register(name, f);
-  const comps = typeof cfg.components === 'function' ? cfg.components({ loop, tweens, fx, sound, app, resolve }) : (cfg.components ?? {});
-  for (const [name, f] of Object.entries(comps)) registry.register(name, f);
+  const comps = typeof cfg.components === 'function' ? cfg.components({ loop, tweens, fx, sound, app, resolve, services }) : (cfg.components ?? {});
+  // The game's components are owners: inject() / listen() in them resolve at mount (awake).
+  for (const [name, f] of Object.entries(comps)) registry.register(name, (ctx) => services.mount(`component ${name}${ctx.attrs.id ? '#' + ctx.attrs.id : ''}`, () => f(ctx)).value);
 
   const popups = new Popups(tweens);
   const screens = new Screens(tweens, (b) => loader.load(b));
@@ -476,10 +537,12 @@ export async function createGame<S extends object, D extends object = Record<str
     if (booted) bus.emit('layout', { width: W, height: H, playfield });
   };
 
+  const controllers = new Map<string, unknown>();
   const mountScreen = (name: string, spec: ScreenSpec | PopupSpec | OverlaySpec) => {
     const s = new Screen(name, spec, spec.mode ?? policy, deps);
     all.push(s);
     doLayout();
+    if (spec.controller) controllers.set(name, services.mount(`screen "${name}"`, spec.controller).value);
     return s;
   };
   const pendingLazy = new Map<string, ScreenSpec>();
@@ -532,7 +595,7 @@ export async function createGame<S extends object, D extends object = Record<str
   app.canvas.addEventListener('pointerdown', () => sound.unlock());
 
   game = {
-    state, kit, platform, app, loop, tweens, clips, fx, sound, save, i18n, t: i18n.t, ads, input, bus, loader, screens, popups, overlays, backend, context, skin, playfield, backdrop,
+    state, kit, platform, app, loop, tweens, clips, fx, sound, save, i18n, t: i18n.t, ads, input, bus, services, loader, screens, popups, overlays, backend, context, skin, playfield, backdrop,
     async show(name) {
       const lazy = pendingLazy.get(name);
       if (lazy) {
@@ -560,6 +623,10 @@ export async function createGame<S extends object, D extends object = Record<str
     },
     hideOverlay: (name, opts) => overlays.hide(name, opts),
     screen: (name) => screens.get(name),
+    controller<T>(name: string): T {
+      if (!controllers.has(name)) throw new Error(`game.controller: "${name}" has no controller (known: ${[...controllers.keys()].join(', ') || 'none'})`);
+      return controllers.get(name) as T;
+    },
     pause() {
       if (kit.paused) return;
       kit.paused = true;
@@ -607,6 +674,10 @@ export async function createGame<S extends object, D extends object = Record<str
   if (typeof __TREMPEL_TARGET__ === 'undefined' || __TREMPEL_TARGET__ !== 'youtube') {
     const { installProbe } = await import('./qa/probe.js');
     probeMerge = installProbe(game as unknown as Game<object, object>, cfg.cheats ?? {}, probeExtras);
+    if (new URLSearchParams(location.search).get('services') === '1') {
+      const { installServicesPanel } = await import('./services/panel.js');
+      installServicesPanel(services);
+    }
   }
   // The game's update starts last: by its first call `const game = await createGame(…)` is assigned.
   if (cfg.update) loop.add(cfg.update, 'game');

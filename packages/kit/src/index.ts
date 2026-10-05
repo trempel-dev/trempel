@@ -1,7 +1,17 @@
 // @trempel/kit — public API. Typical game: createGame({...}); everything else is optional.
 
 export { createGame } from './game.js';
-export type { Game, GameConfig, ScreenSpec, PopupSpec, OverlaySpec, KitState, KitEvents, KitServices, Actions, Playfield, LayoutEvent, HudZones } from './game.js';
+export type { Game, GameConfig, ScreenSpec, PopupSpec, OverlaySpec, Controller, KitState, KitEvents, KitServices, Actions, Playfield, LayoutEvent, HudZones } from './game.js';
+
+// Services: contracts with a mandatory mock; the kit's standard contracts.
+export {
+  contract, extend, adapt, sticky, once, Services, ServiceError, services, inject, listen, provide, currentServices, setCurrentServices, parseModeQuery,
+  Lifecycle, SaveService, AudioService, Language, AdsService, Wallet, Iap, Leaderboard, KIT_CONTRACTS, platformProviders, platformFacade,
+} from './services/index.js';
+export type {
+  Contract, AnyContract, ContractSpec, ServiceContext, EventRef, EventDecl, EventKind, MockModes, Impl, Named, Factory, Api, StateOf, EventsOf, PayloadArgs,
+  Mounted, ServiceLogEntry, ServiceStore, ServiceInfo, SpendResult, Product, PurchaseResult, LeaderEntry, Provision,
+} from './services/index.js';
 
 export { createPlatform, buildTarget, createWebPlatform, createYoutubePlatform, createMockPlatform } from './platform/index.js';
 export type { Platform, RewardedResult, MockPlatform, MockHost, WebPlatformOptions } from './platform/index.js';

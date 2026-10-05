@@ -3,6 +3,8 @@
 
 export const GOAL = 10;
 export const TIME = 15;
+/** Coins for a won round (paid into the wallet service). */
+export const REWARD = 10;
 
 export interface Round {
   score: number;
@@ -26,6 +28,9 @@ export function tick(r: Round, dt: number): Round {
   const time = Math.max(0, r.time - dt);
   return { ...r, time, over: time === 0, won: false };
 }
+
+/** Coins earned by a finished round. */
+export const reward = (r: Round): number => (r.won ? REWARD : 0);
 
 /** Stars for the result screen: 0 on a loss, 1–3 by the time left on a win. */
 export function stars(r: Round): number {

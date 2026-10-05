@@ -1,9 +1,9 @@
 # Trempel — project context
 
-Лёгкий agent-first 2D-движок на PixiJS. Монорепа (npm workspaces), версии пакетов синхронны (1.2.0):
+Лёгкий agent-first 2D-движок на PixiJS. Монорепа (npm workspaces): `@trempel/scene` 1.2.0, `@trempel/kit` 1.3.0 (шаблон следует за китом):
 - `packages/scene` — `@trempel/scene`: формат сцен как валидный SVG (+ namespace `tml:`), рантайм, плеер анимаций, ядро редактора и страница редактора;
-- `packages/kit` — `@trempel/kit`: кит игр поверх сцен (платформы web / YouTube Playables / mock, цикл, экраны и попапы, раскладка, UI-компоненты и скины, звук, частицы, сейв, гейты сборки; дефолтный скин — `skins/default/ui`, коллекция `npm:@trempel/kit/skins/default/ui`);
-- `templates/casual` — стартовый шаблон казуалки на ките (private, не публикуется).
+- `packages/kit` — `@trempel/kit`: кит игр поверх сцен (сервисы — контракты с обязательным моком, `src/services/`; платформы web / YouTube Playables / mock — реализации платформенных контрактов, цикл, экраны и попапы, раскладка, UI-компоненты и скины, звук, частицы, сейв, гейты сборки; дефолтный скин — `skins/default/ui`, коллекция `npm:@trempel/kit/skins/default/ui`);
+- `templates/casual` — стартовый шаблон казуалки на ките (private, не публикуется); монеты — на сервисе `wallet`.
 
 Пакеты ссылаются друг на друга **только по имени** (`@trempel/scene`, `@trempel/kit`), относительных импортов между пакетами нет — любой выносится `git filter-repo --subdirectory-filter` без правки кода. Ниже пути `src/`, `editor/`… — внутри `packages/scene`, если не сказано иначе.
 
@@ -30,7 +30,7 @@ Node 22.6+ (scene сам по себе — 20+), TS 5.x strict, ESM. pixi.js (pe
 - `packages/scene/src/` — ядро и рантайм (`core.ts` — без Pixi, `index.ts` — + PixiBackend); `src/md/` — разбор md-клипов; `src/compat.ts` — старые имена формата; `src/node/` — Node-часть (`@trempel/scene/node`: project.mdz, flatten в файл).
 - `packages/scene/editor/` — ядро редактора (команды, документ базы с минимальным диффом); `edit/` — страница редактора (`app/`), dev-сервер (`io-dev.ts`), библиотека (`lib.ts`); `view/` — просмотрщик и `view:shot`.
 - `packages/scene/examples/` — `motion`, `prefabs`, `finddiff`, `collections` (проект с `.trempel/project.mdz` и коллекцией `@skin`); `test/` — unit и фикстуры.
-- `packages/kit/src/` — кит (`game.ts` — `createGame`; `platform/`, `time/`, `anim/`, `flow/`, `ui/` — экраны, попапы, раскладка, компоненты, скины; `audio/`, `fx/`, `data/`, `assets/`, `qa/`, `vite/` — плагин и гейты, `cli/skin.ts`); `ui/scenes` — шаблоны экранов (`UI_SCENES`); `skins/default/ui` — дефолтный скин (префабы, контракты, арт).
+- `packages/kit/src/` — кит (`game.ts` — `createGame`; `services/` — `contract` / `services` / `inject` / `listen`, стандартные контракты, мост к `Platform`, dev-панель `?services=1`; `platform/`, `time/`, `anim/`, `flow/`, `ui/` — экраны, попапы, раскладка, компоненты, скины; `audio/`, `fx/`, `data/`, `assets/`, `qa/`, `vite/` — плагин и гейты, `cli/skin.ts`); `ui/scenes` — шаблоны экранов (`UI_SCENES`); `skins/default/ui` — дефолтный скин (префабы, контракты, арт).
 - `templates/casual/` — шаблон игры (`src/`, `scenes/`, `e2e/`).
 
 ## Инварианты
@@ -38,3 +38,4 @@ Node 22.6+ (scene сам по себе — 20+), TS 5.x strict, ESM. pixi.js (pe
 - Публичная репа жанрово-нейтральна: жанровые пакеты, их компоненты, примеры и лексика живут вне этой репы, поверх `@trempel/*` по имени.
 - Рендер-агностичное ядро: логика не знает про PixiJS, общается через `RendererBackend`.
 - База стерильна: `tml:*` живут только в наследнике; редактор правит только базу.
+- Сервисы: объявить контракт без мока нельзя; `Platform`, `game.platform/save/ads` — фасады над контрактами (старые игры не меняются); dev-панель и `localStorage` моков в youtube-сборку не попадают (гейт `trempel-services`).

@@ -1,9 +1,13 @@
 // main.ts — a casual game on the Trempel kit. Everything that is not the game (boot, platform, loading,
-// layout and the playfield, pause, settings, save, sound, input, i18n, ads, QA probe, UI kit) is
-// the kit's: one createGame() call. What is left here is the game: its rules (logic.ts), its
-// state, and the glue between the rules and the scenes.
+// layout and the playfield, pause, settings, save, sound, input, i18n, ads, services, QA probe, UI
+// kit) is the kit's: one createGame() call. What is left here is the game: its rules (logic.ts),
+// its state, and the glue between the rules and the scenes.
+//
+// Coins live in the kit's `wallet` service: the HUD binds services.wallet.balance (no code), a won
+// round pays through wallet.add(). The wallet runs on its mock (memory + the game's save) until an
+// integration provides a real one — createGame({ provide: [[Wallet, impl]] }); nothing here changes.
 
-import { createGame, UI_SCENES } from '@trempel/kit';
+import { createGame, inject, UI_SCENES, Wallet } from '@trempel/kit';
 // Scenes: sterile base (.svg) + heir (.tml.svg, logic) + contract (.contract.xml).
 import menuBase from '../scenes/menu.svg?raw';
 import menuHeir from '../scenes/menu.tml.svg?raw';
@@ -11,10 +15,12 @@ import menuContract from '../scenes/menu.contract.xml?raw';
 import gameBase from '../scenes/game.svg?raw';
 import gameHeir from '../scenes/game.tml.svg?raw';
 import gameContract from '../scenes/game.contract.xml?raw';
-import { hit, newRound, stars, tick, type Round } from './logic';
+import { hit, newRound, reward, stars, tick, type Round } from './logic';
 import { TEXTS } from './texts';
 
 let round: Round = newRound();
+// A lazy reference: resolves in the game's registry at the call.
+const wallet = inject(Wallet);
 
 const game = await createGame({
   // Reactive state: scenes bind to it (`state.score`), code writes to it. The kit's result screen
@@ -55,6 +61,8 @@ const game = await createGame({
     game.state.time = round.time;
     if (round.over) finish();
   },
+  // The game's own e2e probe: the HUD's coin counter as drawn.
+  probe: { coins: () => game.screen('game').component<{ root: { text: string } }>('coinsPlate').root.text },
   cheats: {
     win: () => {
       round = { ...round, score: 9 };
@@ -121,6 +129,8 @@ function finish(): void {
     game.state.best = round.score;
     void game.save.set({ best: round.score });
   }
+  const coins = reward(round);
+  if (coins) void wallet.add(coins, 'round');
   game.sound.play(round.won ? 'win' : 'lose');
   game.popup('result');
   if (round.won) game.fx.play('confetti', game.popups.def('result').screen.byId('fx'), 0, -200);

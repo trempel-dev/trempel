@@ -1,4 +1,6 @@
-// testing.ts — headless helpers: a mock platform and a manual loop (no Pixi, no DOM).
+// testing.ts — headless helpers: a mock platform, a manual loop, services (no Pixi, no DOM).
 export { createMockPlatform, type MockPlatform, type MockHost } from './platform/mock.js';
 export { GameLoop } from './time/loop.js';
 export { seededRandom } from './qa/random.js';
+// Services without a game: a registry, the kit's contracts and their mocks.
+export { Services, contract, extend, adapt, sticky, once, inject, listen, provide, setCurrentServices, platformProviders, platformFacade, Lifecycle, SaveService, AudioService, Language, AdsService, Wallet, Iap, Leaderboard, KIT_CONTRACTS } from './services/index.js';

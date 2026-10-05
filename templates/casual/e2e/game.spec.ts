@@ -13,7 +13,7 @@ async function click(page: Page, screen: string, id: string): Promise<void> {
 const state = (page: Page) => probe<Record<string, unknown>>(page, 'state');
 const settledPopup = (page: Page, name: string | null) => page.waitForFunction((n) => (window as any).__trempel.popup() === n, name);
 
-test('menu → game → taps score → pause/resume → win → best survives reload', async ({ page }) => {
+test('menu → game → taps score → pause/resume → win → best and coins survive reload', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('./?cheat=1');
@@ -52,10 +52,17 @@ test('menu → game → taps score → pause/resume → win → best survives re
   await settledPopup(page, 'result');
   expect(await state(page)).toMatchObject({ won: true, score: 10, best: 10 });
   expect(await probe(page, 'save')).toMatchObject({ best: 10 });
+  // The win paid into the wallet service; the HUD shows it through the binding alone.
+  await page.waitForFunction(() => (window as any).__trempel.coins() === '10');
+  const wallet = (await probe<{ name: string; impl: string; state: { balance: number } }[]>(page, 'services')).find((s) => s.name === 'wallet')!;
+  expect(wallet).toMatchObject({ impl: 'mock', state: { balance: 10 } });
+  expect(await page.locator('#trempel-services').count()).toBe(0);
 
   await page.reload();
   await waitGame(page);
   expect((await state(page)).best).toBe(10);
+  expect(await probe(page, 'coins')).toBe('10');
+  expect(await probe(page, 'save')).toMatchObject({ svc: { wallet: { balance: 10 } } });
   expect(errors).toEqual([]);
 });
 
@@ -129,5 +136,30 @@ test('v0.1 layout: resize after load (regression), playfield under the HUD, safe
   expect(notch.safe.top).toBe(44);
   expect((await node('game', 'pauseBtn')).y).toBeCloseTo(pause0.y + 44, 0);
   expect(notch.playfield.y).toBeCloseTo(before.playfield.y + 44, 0);
+  expect(errors).toEqual([]);
+});
+
+test('services: the dev panel (?services=1) and mock modes from the query', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('./?cheat=1&services=1&svc.iap=cancel&svc.wallet=latency:200');
+  await waitGame(page);
+  const panel = page.locator('#trempel-services');
+  await expect(panel).toBeVisible();
+  // Folded on a phone-sized window: open it.
+  await panel.locator('h4 button').click();
+  // Platform contracts are the web adapter's; the rest run on their mocks.
+  await expect(panel.locator('[data-contract="lifecycle"]')).toContainText('web');
+  await expect(panel.locator('[data-contract="wallet"]')).toContainText('mock');
+  type Info = { name: string; impl: string; modes: Record<string, unknown> };
+  const info = await probe<Info[]>(page, 'services');
+  expect(info.find((s) => s.name === 'wallet')!.modes).toEqual({ latency: 200 });
+  expect(info.find((s) => s.name === 'save')!.impl).toBe('web');
+  // The win pays after the mock's latency; the log shows the call.
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as any).__trempel.screen() === 'game');
+  await page.evaluate(() => (window as any).__trempel.cheats.win());
+  await page.waitForFunction(() => (window as any).__trempel.coins() === '10');
+  await expect(panel).toContainText('wallet.add');
   expect(errors).toEqual([]);
 });

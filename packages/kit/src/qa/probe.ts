@@ -1,7 +1,7 @@
 // probe.ts — web-build-only QA hooks. Loaded by createGame through a
 // dynamic import that the youtube build folds away (the build gate checks `__trempel` is absent).
 //
-//   window.__trempel       — read-only probe for e2e: state, kit, save, current screen/popup,
+//   window.__trempel       — read-only probe for e2e: state, kit, save, services, current screen/popup,
 //                            node centre in screen px, fire(input), step/advance time.
 //   window.__trempel.cheats — only with ?cheat=1: the game's cheats (createGame({ cheats })).
 //   game.probe({ name: fn }) — the game's own read-only probes (genre: level → screen, zoom…),
@@ -41,6 +41,8 @@ export function installProbe(game: Game<object, object>, cheats: Record<string, 
     layout: () => ({ playfield: { ...game.playfield.px }, safe: { ...game.playfield.safe }, width: game.app.screen.width, height: game.app.screen.height }),
     /** Re-run the layout now (after changing --trempel-safe-* in a test). */
     relayout: () => game.layout(),
+    /** Contracts: implementation, state, mock modes (services). */
+    services: () => game.services.info(),
   };
   const kitNames = new Set(Object.keys(probe));
   const merge = (more: ProbeExtras): void => {

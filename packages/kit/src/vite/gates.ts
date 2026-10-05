@@ -1,6 +1,6 @@
 // gates.ts — YouTube Playables gates over a built dist: size (initial bundle, whole bundle, file count, biggest file), sterility
 // (localStorage, Page Visibility, code from strings, external URLs except the SDK), SDK before
-// the game code, no web-only code (QA probe, fake ads). Writes `build-report.md` and `<dist>.zip`.
+// the game code, no web-only code (QA probe, fake ads, the services dev panel). Writes `build-report.md` and `<dist>.zip`.
 //
 // Initial bundle = everything in dist except files matching `lazy` globs (loaded after gameReady:
 // sounds after the first gesture, lazy screen bundles). Without `lazy` the whole dist counts.
@@ -29,8 +29,8 @@ export const XML_NAMESPACES = new Set([
   LEGACY.ns,
 ]);
 export const FORBIDDEN = ['localStorage', 'visibilitychange', 'document.hidden'];
-/** Markers of web-only code (QA probe, fake ads) that must not reach the youtube bundle. */
-export const WEB_ONLY = ['__trempel', 'fake-ad'];
+/** Markers of web-only code (QA probe, fake ads, the services dev panel) that must not reach the youtube bundle. */
+export const WEB_ONLY = ['__trempel', 'fake-ad', 'trempel-services'];
 /** Code generated from strings at runtime (needs CSP unsafe-eval). Not preceded by an identifier char or `.`. */
 export const EVAL = [
   { what: 'new Function', re: /\bnew\s+Function\s*\(/ },

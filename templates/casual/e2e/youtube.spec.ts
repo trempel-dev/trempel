@@ -17,13 +17,15 @@ test('boots under CSP without unsafe-eval, SDK lifecycle, saves via saveData, no
   await stubYoutube(page);
   await enforceCsp(page);
   await watchLocalStorage(page);
-  await page.goto('./');
+  // ?services=1 asks for the dev panel: the youtube build has none (folded away, gate-checked).
+  await page.goto('./?services=1&svc.wallet=fail');
   await waitYt(page, 'gameReady');
   const calls = await page.evaluate(() => (window as any).__yt.calls as string[]);
   expect(calls.indexOf('firstFrameReady')).toBeLessThan(calls.indexOf('gameReady'));
   expect(calls).toContain('loadData');
   expect(Object.keys(await page.evaluate(() => (window as any).__yt.cbs)).sort()).toEqual(['audio', 'pause', 'resume']);
   expect(await page.evaluate(() => typeof (window as any).__trempel)).toBe('undefined');
+  expect(await page.locator('#trempel-services').count()).toBe(0);
 
   // Menu → settings (icon top-right, anchored "1 0") → sound toggle (settings popup: content at the
   // centre, toggle at +210,−230) → saved through ytgame.saveData. Reference 720×1280, fitMin,

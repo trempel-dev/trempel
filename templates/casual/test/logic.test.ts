@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOAL, TIME, hit, newRound, stars, tick } from '../src/logic';
+import { GOAL, REWARD, TIME, hit, newRound, reward, stars, tick } from '../src/logic';
 
 describe('rules', () => {
   it('GOAL taps win', () => {
@@ -18,5 +18,9 @@ describe('rules', () => {
     const win = (time: number) => ({ ...newRound(), score: GOAL, over: true, won: true, time });
     expect(stars(win(TIME))).toBe(3);
     expect(stars(win(1))).toBe(1);
+  });
+  it('coins only for a win', () => {
+    expect(reward(tick(newRound(), 100))).toBe(0);
+    expect(reward({ ...newRound(), score: GOAL, over: true, won: true })).toBe(REWARD);
   });
 });
