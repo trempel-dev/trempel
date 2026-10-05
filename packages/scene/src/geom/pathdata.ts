@@ -8,6 +8,11 @@
 // Normalized form: absolute M, L, C, Q, A, Z only. H/V → L, S → C and T → Q (reflected control
 // point), relative → absolute, implicit repeats expanded (pairs after M are L), A with a zero radius
 // → L (SVG F.6.2).
+//
+// @internal — `@trempel/scene/internal/geom/pathdata`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): PathDataError.
+
+import { coded } from '../codes.js';
 
 /** A normalized path command: absolute coordinates, M L C Q A Z only. */
 export type PathCmd =
@@ -20,12 +25,13 @@ export type PathCmd =
 
 /** A `d` the parser could not read — `reason` for a human, `pos` (0-based) into `src`. */
 export class PathDataError extends Error {
+  readonly code = 'E_PATH_DATA' as const;
   constructor(
     readonly reason: string,
     readonly pos: number,
     readonly src: string,
   ) {
-    super(`${reason} (позиция ${pos + 1})`);
+    super(coded('E_PATH_DATA', `${reason} (col ${pos + 1})`));
     this.name = 'PathDataError';
   }
 }
@@ -47,14 +53,14 @@ export function parsePathData(d: string): PathCmd[] {
   const number = (): number => {
     NUM.lastIndex = i;
     const m = NUM.exec(d);
-    if (!m) throw new PathDataError(`ожидается число, а тут «${d.slice(i, i + 8) || 'конец строки'}»`, i, d);
+    if (!m) throw new PathDataError(`expected a number, found "${d.slice(i, i + 8) || 'the end'}"`, i, d);
     i = NUM.lastIndex;
     skip();
     return Number(m[0]);
   };
   const flag = (): number => {
     const c = d[i];
-    if (c !== '0' && c !== '1') throw new PathDataError(`флаг дуги — 0 или 1, а тут «${c ?? 'конец строки'}»`, i, d);
+    if (c !== '0' && c !== '1') throw new PathDataError(`an arc flag is 0 or 1, found "${c ?? 'the end'}"`, i, d);
     i++;
     skip();
     return c === '1' ? 1 : 0;
@@ -70,24 +76,24 @@ export function parsePathData(d: string): PathCmd[] {
   let prev = '';
 
   skip();
-  if (i >= d.length) throw new PathDataError('пустой d — нечего рисовать', 0, d);
+  if (i >= d.length) throw new PathDataError('an empty d — nothing to draw', 0, d);
   let cmd = '';
   while (i < d.length) {
     const c = d[i];
     if (/[A-Za-z]/.test(c)) {
       if (ARGS[c.toUpperCase()] === undefined) {
-        throw new PathDataError(`команда «${c}» не поддерживается (есть: M L H V C S Q T A Z)`, i, d);
+        throw new PathDataError(`the command "${c}" is not supported (commands: M L H V C S Q T A Z)`, i, d);
       }
       cmd = c;
       i++;
       skip();
     } else if (!cmd) {
-      throw new PathDataError('d должен начинаться с команды M', i, d);
+      throw new PathDataError('d must start with the command M', i, d);
     } else if (cmd === 'Z' || cmd === 'z') {
-      throw new PathDataError('после Z — числа без команды', i, d);
+      throw new PathDataError('numbers without a command after Z', i, d);
     }
     if (!out.length && cmd !== 'M' && cmd !== 'm') {
-      throw new PathDataError('d должен начинаться с команды M', i, d);
+      throw new PathDataError('d must start with the command M', i, d);
     }
 
     const up = cmd.toUpperCase();
@@ -196,7 +202,7 @@ export const GEOMETRY_TAGS = new Set(['path', 'line', 'circle', 'ellipse', 'rect
 const n = (v: string | undefined, name: string, tag: string): number => {
   if (v == null || v.trim() === '') return 0;
   const x = Number(v.trim().replace(/px$/, ''));
-  if (!Number.isFinite(x)) throw new PathDataError(`<${tag}> ${name}="${v}" — не число`, 0, v);
+  if (!Number.isFinite(x)) throw new PathDataError(`<${tag}> ${name}="${v}" — not a number`, 0, v);
   return x;
 };
 
@@ -209,7 +215,7 @@ const n = (v: string | undefined, name: string, tag: string): number => {
 export function shapeCommands(tag: string, attrs: Record<string, string>): PathCmd[] {
   switch (tag) {
     case 'path': {
-      if (attrs.d == null) throw new PathDataError('<path> без d', 0, '');
+      if (attrs.d == null) throw new PathDataError('<path> without d', 0, '');
       return parsePathData(attrs.d);
     }
     case 'line':
@@ -261,6 +267,6 @@ export function shapeCommands(tag: string, attrs: Record<string, string>): PathC
       ];
     }
     default:
-      throw new PathDataError(`<${tag}> — не геометрия (есть: ${[...GEOMETRY_TAGS].join(', ')})`, 0, '');
+      throw new PathDataError(`<${tag}> is not geometry (geometry: ${[...GEOMETRY_TAGS].join(', ')})`, 0, '');
   }
 }

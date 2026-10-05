@@ -11,7 +11,7 @@
 // pose at `t` is restored. Display only.
 
 import { Rectangle, Sprite, type Texture } from 'pixi.js';
-import type { MountedScene } from '../../src/core.js';
+import { coded, codeOf, within, type MountedScene } from '../../src/core.js';
 import { ClipPlayer, compileSceneClips, type SceneClip } from '../../view/clips';
 import type { Editor } from './editor';
 
@@ -90,7 +90,7 @@ export class Clips {
 
   private ensurePlayer(): ClipPlayer {
     const session = this.ed.session;
-    if (!session?.scene || !session.animBackend) throw new Error('сцена не нарисована — клип играть не на чем');
+    if (!session?.scene || !session.animBackend) throw new Error(coded('E_EDIT_NO_SCENE', 'the scene is not drawn — nothing to play the clip on'));
     if (!this.player || this.scene !== session.scene) {
       this.scene = session.scene;
       this.player = new ClipPlayer(session.scene, session.animBackend);
@@ -110,13 +110,13 @@ export class Clips {
       return;
     }
     const clip = this.list.find((c) => c.name === name);
-    if (!clip) throw new Error(`клипа «${name}» нет (есть: ${this.list.map((c) => c.name).join(', ') || '—'})`);
+    if (!clip) throw new Error(coded('E_EDIT_CLIP', `no clip "${name}" (clips: ${this.list.map((c) => c.name).join(', ') || '—'})`));
     this.selected = name;
     const p = this.ensurePlayer();
     try {
       p.select(clip);
     } catch (e) {
-      this.ed.log('error', `клип ${name}: ${msg(e)}`);
+      this.ed.log('error', within(`clip ${name}`, codeOf(msg(e)) ? msg(e) : coded('E_ANIM_PLAY', msg(e))));
       this.emit('state');
       return;
     }
@@ -129,7 +129,7 @@ export class Clips {
     if (name != null && name !== this.selected) this.select(name);
     if (!this.selected) {
       const first = this.list[0];
-      if (!first) throw new Error('у сцены нет клипов (anim/*.md, *.anim.md рядом)');
+      if (!first) throw new Error(coded('E_EDIT_CLIP', 'the scene has no clips (anim/*.md, *.anim.md next to it)'));
       this.select(first.name);
     }
     const p = this.ensurePlayer();
@@ -163,7 +163,7 @@ export class Clips {
 
   /** Show time t of the selected clip (paused). */
   seek(t: number): void {
-    if (!this.selected) throw new Error('клип не выбран — tml.anim.play(name) или выбор в панели «Клипы»');
+    if (!this.selected) throw new Error(coded('E_EDIT_CLIP', 'no clip selected — tml.anim.play(name) or pick one in the Clips panel'));
     const p = this.ensurePlayer();
     if (!p.current) p.select(this.current!);
     this.halt();
@@ -206,7 +206,7 @@ export class Clips {
   private pose(): void {
     if (this.active) return;
     this.active = true;
-    this.ed.setReadOnly(`▶ ${this.selected} · только просмотр (⏹ — поза покоя)`);
+    this.ed.setReadOnly(`▶ ${this.selected} · view only (⏹ — rest pose)`);
   }
 
   private halt(): void {

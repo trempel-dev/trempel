@@ -24,8 +24,12 @@
 // a box follow it through effects (backend.setProp x / y / width / height; a box child — its box).
 // Box handles are registered so the animator routes the `width` / `height` columns of an instance
 // to its box (not to the renderer's container scale).
+//
+// @internal — `@trempel/scene/internal/layout`, for the kit and the editor: no stability promise.
 
 import type { SceneNode } from './parser.js';
+import { coded, within } from './codes.js';
+import { trempelError } from './errors.js';
 import { effect, reactive } from './reactive.js';
 import type { NodeHandle, RendererBackend } from './render/backend.js';
 import { localMatrix } from './transform.js';
@@ -48,7 +52,7 @@ const numbers = (v: string): number[] | null => {
 export function parseSlices(value: string): [number, number, number, number] {
   const p = numbers(value);
   if (!p || ![1, 2, 4].includes(p.length) || p.some((n) => n < 0)) {
-    throw new Error(`data-slices="${value}" — ожидается «l t r b» (или одно число на все борта, или «гор верт»), пиксели ≥ 0.`);
+    throw trempelError('E_SLICES', `data-slices="${value}" — expected "l t r b" (or one number for all borders, or "horizontal vertical"), pixels ≥ 0.`);
   }
   if (p.length === 1) return [p[0], p[0], p[0], p[0]];
   if (p.length === 2) return [p[0], p[1], p[0], p[1]];
@@ -58,7 +62,7 @@ export function parseSlices(value: string): [number, number, number, number] {
 /** data-anchor → { x, y } in 0..1. @throws Error unless two numbers. */
 export function parseAnchor(value: string): { x: number; y: number } {
   const p = numbers(value);
-  if (!p || p.length !== 2) throw new Error(`data-anchor="${value}" — ожидается «ax ay» (два числа 0..1).`);
+  if (!p || p.length !== 2) throw trempelError('E_ANCHOR', `data-anchor="${value}" — expected "ax ay" (two numbers 0..1).`);
   return { x: p[0], y: p[1] };
 }
 
@@ -67,13 +71,13 @@ export function parseAxes(name: string, value: string): Axes {
   const v = value.trim();
   if (v === 'x' || v === 'y' || v === 'xy') return v;
   if (v === 'yx') return 'xy';
-  throw new Error(`${name}="${value}" — бывает x, y или xy.`);
+  throw trempelError('E_AXES', `${name}="${value}" — expected x, y or xy.`);
 }
 
 /** data-size="w h" → size. @throws Error unless two positive numbers. */
 export function parseSize(value: string): Size {
   const p = numbers(value);
-  if (!p || p.length !== 2 || p.some((n) => !(n > 0))) throw new Error(`data-size="${value}" — размер бокса «w h» (два положительных числа).`);
+  if (!p || p.length !== 2 || p.some((n) => !(n > 0))) throw trempelError('E_SIZE', `data-size="${value}" — a box size "w h" (two positive numbers).`);
   return { w: p[0], h: p[1] };
 }
 
@@ -138,33 +142,33 @@ export function layoutErrors(tree: SceneNode): string[] {
     const w = where(n);
     const a = n.attrs;
     if (a['data-slices'] != null) {
-      if (n.tag !== 'image') errors.push(`${w}: data-slices на <${n.tag}> — 9-slice бывает только у <image>.`);
+      if (n.tag !== 'image') errors.push(coded('E_SLICES', `${w}: data-slices on <${n.tag}> — only an <image> is a 9-slice.`));
       else {
         try {
           parseSlices(a['data-slices']);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
-      if (a['data-tile'] != null) errors.push(`${w}: data-slices и data-tile вместе не бывают — либо 9-slice, либо плитка.`);
+      if (a['data-tile'] != null) errors.push(coded('E_TILE', `${w}: data-slices and data-tile together — either a 9-slice or a tiling.`));
     }
     if (a['data-tile'] != null) {
-      if (n.tag !== 'image') errors.push(`${w}: data-tile на <${n.tag}> — плитка бывает только у <image>.`);
+      if (n.tag !== 'image') errors.push(coded('E_TILE', `${w}: data-tile on <${n.tag}> — only an <image> tiles.`));
       else {
         try {
           parseAxes('data-tile', a['data-tile']);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }
-    if (a['data-resizable'] != null && parent) errors.push(`${w}: data-resizable — атрибут корня префаба (<svg>), не узла.`);
+    if (a['data-resizable'] != null && parent) errors.push(coded('E_RESIZABLE', `${w}: data-resizable is an attribute of a prefab's root (<svg>), not of a node.`));
     const boxNeeded = n.tag === 'g' && a['data-size'] != null && (asksBox(n) || a['data-stretch'] != null);
     if (boxNeeded) {
       try {
         parseSize(a['data-size']);
       } catch (e) {
-        errors.push(`${w}: ${(e as Error).message}`);
+        errors.push(within(w, (e as Error).message));
       }
     }
     const anchor = a['data-anchor'];
@@ -173,7 +177,7 @@ export function layoutErrors(tree: SceneNode): string[] {
       try {
         parseAnchor(anchor);
       } catch (e) {
-        errors.push(`${w}: ${(e as Error).message}`);
+        errors.push(within(w, (e as Error).message));
       }
     }
     if (stretch != null) {
@@ -181,25 +185,25 @@ export function layoutErrors(tree: SceneNode): string[] {
         const axes = parseAxes('data-stretch', stretch);
         if (n.instance) {
           const r = n.instance.resizable;
-          if (!r) errors.push(`${w}: data-stretch на инстансе ${n.instance.href} — префаб не растягиваемый (нет data-resizable).`);
+          if (!r) errors.push(coded('E_STRETCH', `${w}: data-stretch on an instance of ${n.instance.href} — the prefab is not resizable (no data-resizable).`));
           else if ((has(axes, 'x') && !has(r, 'x')) || (has(axes, 'y') && !has(r, 'y'))) {
-            errors.push(`${w}: data-stretch="${stretch}" — ${n.instance.href} растягивается только по ${r}.`);
+            errors.push(coded('E_STRETCH', `${w}: data-stretch="${stretch}" — ${n.instance.href} resizes only along ${r}.`));
           }
         } else if (n.tag !== 'image' && n.tag !== 'rect' && !(n.tag === 'g' && a['data-size'] != null)) {
-          errors.push(`${w}: data-stretch на <${n.tag}> — растягиваются <image>, <rect>, <g data-size> и инстансы растягиваемых префабов.`);
+          errors.push(coded('E_STRETCH', `${w}: data-stretch on <${n.tag}> — <image>, <rect>, <g data-size> and instances of resizable prefabs stretch.`));
         } else if (n.tag !== 'g' && (a.width == null || a.height == null)) {
-          errors.push(`${w}: data-stretch без width/height — тянуть от какого размера?`);
+          errors.push(coded('E_STRETCH', `${w}: data-stretch without width/height — stretch from which size?`));
         }
       } catch (e) {
-        errors.push(`${w}: ${(e as Error).message}`);
+        errors.push(within(w, (e as Error).message));
       }
     }
     if ((anchor != null || stretch != null) && parent && parent.tag !== 'defs' && parent.tag !== 'clipPath') {
       const isRoot = parent === tree;
       if (!refBox(parent, isRoot)) {
-        const pw = isRoot ? 'корня (нет viewBox)' : `${where(parent)}`;
+        const pw = isRoot ? 'the root (no viewBox)' : `${where(parent)}`;
         errors.push(
-          `${w}: якорь без размера родителя — ${pw}: ${isRoot ? 'дайте корню viewBox' : 'дайте группе data-size="w h" (или поставьте узел в корень / в префаб)'}.`,
+          coded('E_NO_BOX', `${w}: an anchor without the parent's size — ${pw}: ${isRoot ? 'give the root a viewBox' : 'give the group data-size="w h" (or move the node to the root / into a prefab)'}.`),
         );
       }
     }
@@ -214,11 +218,11 @@ export function resizableErrors(root: SceneNode): string[] {
   try {
     parseAxes('data-resizable', raw);
   } catch (e) {
-    return [`корень <svg>: ${(e as Error).message}`];
+    return [within('root <svg>', (e as Error).message)];
   }
-  if (!viewBoxSize(root.attrs.viewBox)) return ['корень <svg>: data-resizable без viewBox — viewBox задаёт минимальный размер.'];
+  if (!viewBoxSize(root.attrs.viewBox)) return [coded('E_RESIZABLE', 'root <svg>: data-resizable without a viewBox — the viewBox sets the minimum size.')];
   if (!root.children.some((c) => stretchOf(c, root, true))) {
-    return ['корень <svg>: data-resizable без растягиваемого фона — нужен <image data-slices> (или data-stretch у фона), иначе растягивать нечего.'];
+    return [coded('E_RESIZABLE', 'root <svg>: data-resizable without a stretching background — it needs an <image data-slices> (or data-stretch on the background), else nothing stretches.')];
   }
   return [];
 }

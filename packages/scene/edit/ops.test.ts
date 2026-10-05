@@ -145,7 +145,7 @@ describe('operators without UI — tml.op (G / R / S, axes, values)', () => {
     const targets = opTargets(h.doc.scene, [h.pathOfId('arm')!, h.pathOfId('a')!], h.bounds, h.ref);
     expect(targets.map((t) => t.ref)).toEqual(['arm']);
     expect(() => applyOp(h, 'G', { nodes: ['a'] })).toThrow(/value/);
-    expect(() => applyOp(h, 'G', { value: 1 })).toThrow(/выделите/);
+    expect(() => applyOp(h, 'G', { value: 1 })).toThrow(/^E_EDIT_SELECTION: /);
     expect(() => applyOp(h, 'G', { value: 1, nodes: ['nope'] })).toThrow(/nope/);
     expect(applyOp(h, 'G', { value: 0, nodes: ['a'] })).toBeNull(); // nothing changes — no undo entry
     expect(h.doc.history).toEqual([]);
@@ -213,8 +213,8 @@ describe('the modal operator — keys, live feedback, Esc leaves no trace', () =
     expect(ops.start('G', { at: { x: 0, y: 0 } })).toBe(true);
     ops.key(key('x', 'KeyX'));
     for (const c of '120') ops.key(key(c, `Digit${c}`));
-    expect(status.textContent).toMatch(/^Сдвиг X \(лок\.\): 120 px/);
-    expect(status.textContent).toContain('Shift точно · Ctrl шаг');
+    expect(status.textContent).toMatch(/^Move X \(local\): 120 px/);
+    expect(status.textContent).toContain('Shift fine · Ctrl snap');
     ops.key(key('Enter'));
     expect(ops.active).toBe(false);
     expect(h.doc.history.length).toBe(1);
@@ -243,15 +243,15 @@ describe('the modal operator — keys, live feedback, Esc leaves no trace', () =
     const { ops, status } = stage();
     ops.start('G', { at: { x: 0, y: 0 } });
     ops.key(key('x', 'KeyX'));
-    expect(status.textContent).toMatch(/X \(лок\.\)/);
+    expect(status.textContent).toMatch(/X \(local\)/);
     ops.key(key('x', 'KeyX'));
-    expect(status.textContent).toMatch(/X \(мир\.\)/);
+    expect(status.textContent).toMatch(/X \(global\)/);
     ops.key(key('x', 'KeyX'));
-    expect(status.textContent).toMatch(/^Сдвиг: /);
+    expect(status.textContent).toMatch(/^Move: /);
     ops.key(key('5', 'Digit5'));
     ops.key(key('0', 'Digit0'));
     ops.key(key('Backspace', 'Backspace'));
-    expect(status.textContent).toMatch(/^Сдвиг X: 5 px · ввод/);
+    expect(status.textContent).toMatch(/^Move X: 5 px · typed/);
     ops.cancel();
     const m: Matrix = [Math.cos(0.3) * 2, Math.sin(0.3) * 2, -Math.sin(0.3), Math.cos(0.3), 5, 7];
     const back = pixiLocal(pixiProps(m, { x: 3, y: 4 }), { x: 3, y: 4 });
@@ -281,7 +281,7 @@ describe('keymap — two schemes', () => {
     for (const s of Object.keys(SCHEMES) as KeymapScheme[]) for (const mac of [true, false]) expect(collisions(s, mac), `${s} mac=${mac}`).toEqual([]);
     const ev = (key: string, code: string, m: Partial<KeyboardEvent> = {}) => ({ key, code, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...m });
     expect(actionOf(ev('g', 'KeyG'), 'blender', true)).toBe('op.move');
-    expect(actionOf(ev('п', 'KeyG'), 'blender', true)).toBe('op.move'); // a Russian layout: the physical key
+    expect(actionOf(ev('\u043f', 'KeyG'), 'blender', true)).toBe('op.move'); // a Russian layout: the physical key
     expect(actionOf(ev('g', 'KeyG'), 'figma', true)).toBeNull();
     expect(actionOf(ev('v', 'KeyV'), 'figma', true)).toBe('tool.select');
     expect(actionOf(ev('D', 'KeyD', { shiftKey: true }), 'blender', true)).toBe('node.duplicate');
@@ -321,7 +321,7 @@ describe('command palette form — JSON Schema fields', () => {
     expect(fieldKind({ type: 'string' })).toBe('string');
     expect(fieldKind({ type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 })).toBe('pair');
     expect(parseField({ type: 'number' }, '1,5', 'dx')).toBe(1.5);
-    expect(() => parseField({ type: 'integer' }, '1.5', 'index')).toThrow(/целое/);
+    expect(() => parseField({ type: 'integer' }, '1.5', 'index')).toThrow(/^E_EDIT_ARGS: index: expected an integer/);
     expect(parseField({ type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, '10 -4', 'translate')).toEqual([10, -4]);
     expect(parseField({ enum: ['in', 'out'] }, 'out', 'which')).toBe('out');
     expect(parseField({ type: 'boolean' }, 'false', 'keepWorld')).toBe(false);

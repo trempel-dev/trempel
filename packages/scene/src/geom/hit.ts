@@ -13,6 +13,8 @@
 // of `transform`s of the DOCUMENT is applied — a pose a clip or the host gives a node at run time is
 // not (data-pivot does not change the SVG matrix, so it changes nothing here). v1.0: what the layout
 // did (an anchor's offset, a stretched / resized image or rect) is — `adjust` (SceneLayout.placed).
+//
+// @internal — `@trempel/scene/internal/geom/hit`, for the kit and the editor: no stability promise.
 
 import type { SceneNode } from '../parser.js';
 import { parseZ } from '../props.js';

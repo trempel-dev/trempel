@@ -6,6 +6,11 @@
 //   heir `X.gml.svg`                             → `X.tml.svg`
 //   consumer module `gameml.view.ts`             → `trempel.view.ts`
 //   editor project folder `.gml/` (macros)       → `.trempel/`
+//
+// @internal — `@trempel/scene/internal/compat`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): NS, HEIR_EXT, heirFile, isHeirFile, sceneStem.
+
+import { coded, type Code } from './codes.js';
 
 export const NS = 'https://trempel.dev/ns/scene';
 export const HEIR_EXT = '.tml.svg';
@@ -30,10 +35,10 @@ export function onDeprecated(fn: (message: string) => void): void {
   told.clear();
 }
 
-function deprecated(message: string): void {
+function deprecated(code: Code, message: string): void {
   if (told.has(message)) return;
   told.add(message);
-  sink(`Trempel: устарело — ${message} (переименование: node scripts/migrate-tml.mjs <папка>)`);
+  sink(coded(code, `deprecated — ${message} (to rename: node scripts/migrate-tml.mjs <folder>)`));
 }
 
 const LEGACY_TAG = /(<\/?)gml:/g;
@@ -49,7 +54,7 @@ export function upgradeDocument(src: string): string {
     .replace(LEGACY_NS, `$1xmlns:tml$2$3${NS}$3`)
     .replace(LEGACY_TAG, '$1tml:')
     .replace(LEGACY_ATTR, '$1tml:$2');
-  if (out !== src) deprecated(`префикс gml: и xmlns ${LEGACY.ns} — пишите tml: и xmlns:tml="${NS}"`);
+  if (out !== src) deprecated('W_COMPAT_GML', `the gml: prefix and xmlns ${LEGACY.ns} — write tml: and xmlns:tml="${NS}"`);
   return out;
 }
 
@@ -68,7 +73,7 @@ export function readHeir<T extends string | null | undefined>(get: (path: string
   const own = get(heirFile(stem));
   if (own != null) return own;
   const old = get(`${stem}${LEGACY.heirExt}`);
-  if (old != null) deprecated(`${stem}${LEGACY.heirExt} — переименуйте в ${heirFile(stem)}`);
+  if (old != null) deprecated('W_COMPAT_HEIR', `${stem}${LEGACY.heirExt} — rename it to ${heirFile(stem)}`);
   return old;
 }
 
@@ -77,7 +82,7 @@ export async function readHeirAsync<T extends string | null | undefined>(get: (p
   const own = await get(heirFile(stem));
   if (own != null) return own;
   const old = await get(`${stem}${LEGACY.heirExt}`);
-  if (old != null) deprecated(`${stem}${LEGACY.heirExt} — переименуйте в ${heirFile(stem)}`);
+  if (old != null) deprecated('W_COMPAT_HEIR', `${stem}${LEGACY.heirExt} — rename it to ${heirFile(stem)}`);
   return old;
 }
 
@@ -86,8 +91,8 @@ export const VIEW_MODULES = [VIEW_MODULE, LEGACY.viewModule] as const;
 
 /** Warn that a found module / folder has the old name. */
 export function legacyName(found: string): void {
-  if (found.endsWith(LEGACY.viewModule)) deprecated(`${LEGACY.viewModule} — переименуйте в ${VIEW_MODULE}`);
-  else if (found.split('/').includes(LEGACY.projectDir)) deprecated(`папка ${LEGACY.projectDir}/ — переименуйте в ${PROJECT_DIR}/`);
+  if (found.endsWith(LEGACY.viewModule)) deprecated('W_COMPAT_VIEW_MODULE', `${LEGACY.viewModule} — rename it to ${VIEW_MODULE}`);
+  else if (found.split('/').includes(LEGACY.projectDir)) deprecated('W_COMPAT_PROJECT_DIR', `the folder ${LEGACY.projectDir}/ — rename it to ${PROJECT_DIR}/`);
 }
 
 /** Editor project folders (macros live in `<dir>/macros`): `.trempel`, then the old `.gml`. */

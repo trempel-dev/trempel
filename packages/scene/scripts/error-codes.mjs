@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+// error-codes.mjs — regenerates the "Error codes" section of docs/format/scene-format.md from the
+// catalog src/codes.ts (its `// ---- group ----` comments become the groups of the table).
+//
+//   npm run error-codes
+//
+// Only the block between the BEGIN/END markers is rewritten. test/codes.test.ts fails when the
+// section and the catalog differ.
+
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+export const BEGIN = '<!-- BEGIN codes (scripts/error-codes.mjs) -->';
+export const END = '<!-- END codes -->';
+
+/** The catalog as written in src/codes.ts: `[{ group, code, text }]` in order. */
+export function readCatalog(source) {
+  const out = [];
+  let group = '';
+  for (const line of source.split('\n')) {
+    const g = /^\s*\/\/ ---- (.+?) -+\s*$/.exec(line);
+    if (g) {
+      group = g[1];
+      continue;
+    }
+    const m = /^\s*([EW]_[A-Z0-9_]+): (['"])(.*)\2,\s*$/.exec(line);
+    if (m) out.push({ group, code: m[1], text: m[3].replace(/\\(['"\\])/g, '$1') });
+  }
+  return out;
+}
+
+/** The markdown of the section body (between the markers). */
+export function renderCodes(catalog) {
+  const cell = (t) => t.replace(/\|/g, '\\|').replace(/<[^>]+>/g, (m) => `\`${m}\``);
+  const lines = [];
+  let group = null;
+  for (const { group: g, code, text } of catalog) {
+    if (g !== group) {
+      if (group !== null) lines.push('');
+      lines.push(`**${g[0].toUpperCase()}${g.slice(1)}**`, '', '| Code | Meaning |', '|---|---|');
+      group = g;
+    }
+    lines.push(`| \`${code}\` | ${cell(text)} |`);
+  }
+  return lines.join('\n');
+}
+
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+  const codes = readFileSync(fileURLToPath(new URL('../src/codes.ts', import.meta.url)), 'utf8');
+  const docPath = fileURLToPath(new URL('../docs/format/scene-format.md', import.meta.url));
+  const doc = readFileSync(docPath, 'utf8');
+  const a = doc.indexOf(BEGIN);
+  const b = doc.indexOf(END);
+  if (a < 0 || b < a) {
+    console.error(`E_CLI: docs/format/scene-format.md: no markers ${BEGIN} … ${END}`);
+    process.exit(2);
+  }
+  const catalog = readCatalog(codes);
+  writeFileSync(docPath, `${doc.slice(0, a + BEGIN.length)}\n${renderCodes(catalog)}\n${doc.slice(b)}`);
+  console.log(`docs/format/scene-format.md: ${catalog.length} codes`);
+}

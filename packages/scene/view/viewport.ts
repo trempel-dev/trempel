@@ -4,6 +4,8 @@
 // the viewBox to that aspect (contain: the scene is fully visible, centred, at scale 1); a custom
 // W×H stage fits the scene inside it.
 
+import { coded } from '../src/core.js';
+
 export interface ViewBox {
   x: number;
   y: number;
@@ -25,7 +27,7 @@ export function parseViewport(s: string): Viewport {
     const h = Number(m[3]);
     if (w > 0 && h > 0) return m[2] === ':' ? { kind: 'aspect', w, h } : { kind: 'size', w: Math.round(w), h: Math.round(h) };
   }
-  throw new Error(`вьюпорт «${s}» не понят: ожидается scene, W:H (9:16) или WxH (1080x1920)`);
+  throw new Error(coded('E_VIEW_VIEWPORT', `viewport "${s}" not understood: expected scene, W:H (9:16) or WxH (1080x1920)`));
 }
 
 export function viewportLabel(v: Viewport): string {

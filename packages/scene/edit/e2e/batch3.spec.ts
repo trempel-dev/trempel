@@ -60,7 +60,7 @@ describe('editor e2e — batch 3-A: operators, gizmo, F3 (scene in tmp)', () => 
       expect(await e.page.isVisible('#opstatus')).toBe(true);
       await e.page.keyboard.press('x');
       await type(e, '120');
-      expect(await e.page.textContent('#opstatus')).toMatch(/^Сдвиг X \(лок\.\): 120 px/);
+      expect(await e.page.textContent('#opstatus')).toMatch(/^Move X \(local\): 120 px/);
       await e.page.keyboard.press('Enter');
       await idle(e.page);
       expect(await e.page.isVisible('#opstatus')).toBe(false);
@@ -90,7 +90,7 @@ describe('editor e2e — batch 3-A: operators, gizmo, F3 (scene in tmp)', () => 
       await overStage(e, 0.2, 0.2);
       await e.page.keyboard.press('r');
       await type(e, '45');
-      expect(await e.page.textContent('#opstatus')).toMatch(/^Поворот: 45°/);
+      expect(await e.page.textContent('#opstatus')).toMatch(/^Rotate: 45°/);
       await e.page.keyboard.press('Enter');
       await idle(e.page);
       expect(await e.page.inputValue('#inspector input[data-key="rot"]')).toBe('45');
@@ -112,7 +112,7 @@ describe('editor e2e — batch 3-A: operators, gizmo, F3 (scene in tmp)', () => 
       await e.page.mouse.move(at.x, at.y);
       await e.page.mouse.down();
       await e.page.mouse.move(at.x + 10, at.y + 25, { steps: 3 });
-      expect(await e.page.textContent('#opstatus')).toMatch(/^Поворот: /);
+      expect(await e.page.textContent('#opstatus')).toMatch(/^Rotate: /);
       await type(e, '90');
       await e.page.mouse.move(at.x + 20, at.y + 40, { steps: 2 }); // the typed value wins over the pointer
       await e.page.mouse.up();
@@ -161,12 +161,12 @@ describe('editor e2e — a heir without its own base (examples/prefabs copy)', (
   });
 
   it(
-    'ui/button-green: «наследник от button — база правится там», no red error; «открыть» opens ui/button',
+    'ui/button-green: "heir of button — the base is edited there", no red error; "open" opens ui/button',
     async () => {
       await e.page.evaluate(() => window.tml!.open('ui/button-green'));
       await idle(e.page);
       expect(await e.page.isVisible('#nobase')).toBe(true);
-      expect(await e.page.textContent('#nobase')).toContain('наследник от button');
+      expect(await e.page.textContent('#nobase')).toContain('heir of button');
       expect(await e.page.evaluate(() => window.tmlEdit!.issues().filter((i) => i.level === 'error').length)).toBe(0);
       await e.page.click('#nobase button');
       await e.page.waitForFunction(() => window.tmlEdit!.entry?.id === 'ui/button' && !!window.tmlEdit!.doc);

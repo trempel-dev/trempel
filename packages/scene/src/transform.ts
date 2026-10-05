@@ -5,6 +5,10 @@
 // right-to-left to points, i.e. composed left-to-right as in SVG). Commas and/or whitespace
 // separate arguments; editors (Figma/Illustrator/Inkscape) mostly write matrix(...).
 // Anything else is a hard error — the format never silently drops what it cannot render.
+//
+// @internal — `@trempel/scene/internal/transform`, for the kit and the editor: no stability promise.
+
+import { trempelError } from './errors.js';
 
 /** SVG matrix [a b c d e f]: x' = a·x + c·y + e, y' = b·x + d·y + f. */
 export type Matrix = [number, number, number, number, number, number];
@@ -50,17 +54,15 @@ export function parseTransform(src: string | undefined | null): Matrix {
     if (src.slice(i).trim() === '') break;
     re.lastIndex = i;
     const hit = re.exec(src);
-    if (!hit) throw new Error(`transform="${src}": не разобрать с позиции ${i + 1}.`);
+    if (!hit) throw trempelError('E_TRANSFORM', `transform="${src}": cannot be parsed from col ${i + 1}.`);
     const [, fn, rawArgs] = hit;
     const arity = ARITY[fn];
     if (!arity) {
-      throw new Error(
-        `transform="${src}": функция «${fn}» не поддерживается (есть: ${Object.keys(ARITY).join(', ')}).`,
-      );
+      throw trempelError('E_TRANSFORM', `transform="${src}": the function "${fn}" is not supported (functions: ${Object.keys(ARITY).join(', ')}).`);
     }
     const parts = rawArgs.split(/[\s,]+/).filter(Boolean);
     if (!arity.includes(parts.length) || !parts.every((p) => NUMBER.test(p))) {
-      throw new Error(`transform="${src}": ${fn}(${rawArgs.trim()}) — ожидается ${arity.join(' или ')} чис.`);
+      throw trempelError('E_TRANSFORM', `transform="${src}": ${fn}(${rawArgs.trim()}) — expected ${arity.join(' or ')} number(s).`);
     }
     const a = parts.map(Number);
     m = multiply(m, step(fn, a));

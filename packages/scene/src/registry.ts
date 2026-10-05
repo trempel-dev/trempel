@@ -1,8 +1,12 @@
 // registry.ts — registry of custom components (tml:type="...").
 // A component owns its subtree: given its config it builds nodes via the backend and
 // exposes a root handle (plus any component-specific API the controller calls).
+//
+// @internal — `@trempel/scene/internal/registry`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): Registry, ComponentContext, ComponentInit, ComponentInstance, ComponentFactory.
 
 import type { ScenePath } from './geom/path.js';
+import { trempelError } from './errors.js';
 import type { SceneNode } from './parser.js';
 import type { NodeHandle, RendererBackend } from './render/backend.js';
 
@@ -64,7 +68,7 @@ export class Registry {
   create(name: string, init: ComponentInit): ComponentInstance {
     const factory = this.factories.get(name);
     if (!factory) {
-      throw new Error(`Trempel registry error: unknown component "${name}"`);
+      throw trempelError('E_COMPONENT', `unknown component "${name}"`);
     }
     const ctx: ComponentContext = {
       ...init,
@@ -72,17 +76,17 @@ export class Registry {
       path:
         init.path ??
         ((id) => {
-          throw new Error(`Trempel component error: path("${id}") — компонент создан вне сцены, путей нет.`);
+          throw trempelError('E_COMPONENT', `path("${id}") — the component was created outside a scene, there are no paths.`);
         }),
       setView:
         init.setView ??
         ((id) => {
-          throw new Error(`Trempel component error: setView("${id}") — компонент создан вне сцены.`);
+          throw trempelError('E_COMPONENT', `setView("${id}") — the component was created outside a scene.`);
         }),
       hitTest:
         init.hitTest ??
         ((id) => {
-          throw new Error(`Trempel component error: hitTest("${id}") — компонент создан вне сцены.`);
+          throw trempelError('E_COMPONENT', `hitTest("${id}") — the component was created outside a scene.`);
         }),
     };
     return factory(ctx);

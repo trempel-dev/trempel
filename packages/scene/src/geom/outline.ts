@@ -8,6 +8,8 @@
 //   - insideOutline: point in the filled area, nonzero or evenodd.
 //
 // Used by the Pixi backend (dashed strokes), the core's hit test (geom/hit.ts) and the checker.
+//
+// @internal — `@trempel/scene/internal/geom/outline`, for the kit and the editor: no stability promise.
 
 import type { PathCmd } from './pathdata.js';
 

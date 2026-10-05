@@ -32,9 +32,14 @@
 // slotContractErrors). A resizable prefab without a stretching background is the format's error
 // (layout.ts), contract or not.
 // Wording is for a human ("#board должен быть пустым — в нём 3 узла"), not a parser.
+//
+// @internal — `@trempel/scene/internal/contract`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): parseContract, checkContract, Contract, ContractNode, ContractPattern, ViewBoxRule, CheckContractOptions.
 
 import { DOMParser } from '@xmldom/xmldom';
-import type { SceneNode } from './parser.js';
+import { refuseDoctype, type SceneNode } from './parser.js';
+import { coded } from './codes.js';
+import { trempelError } from './errors.js';
 import { resolveHref } from './href.js';
 import { baseDuplicateIdErrors, baseTmlErrors, collectIds, findById } from './tree.js';
 
@@ -114,18 +119,18 @@ const attr = (el: XmlEl, name: string): string | null => {
 };
 
 const fail = (msg: string): never => {
-  throw new Error(`Trempel contract error: ${msg}`);
+  throw trempelError('E_CONTRACT_SYNTAX', msg);
 };
 
 /** "N", "N..M", "N..", "..M" → [min, max]. */
 function parseCount(raw: string | null, where: string): [number, number] {
   if (raw == null) return [1, Infinity];
   const m = /^\s*(\d*)\s*(\.\.)?\s*(\d*)\s*$/.exec(raw);
-  if (!m || (!m[1] && !m[3])) return fail(`${where}: count="${raw}" — ожидается "N", "N..M", "N.." или "..M".`);
+  if (!m || (!m[1] && !m[3])) return fail(`${where}: count="${raw}" — expected "N", "N..M", "N.." or "..M".`);
   if (!m[2]) return [Number(m[1]), Number(m[1])];
   const min = m[1] ? Number(m[1]) : 0;
   const max = m[3] ? Number(m[3]) : Infinity;
-  if (min > max) fail(`${where}: count="${raw}" — минимум больше максимума.`);
+  if (min > max) fail(`${where}: count="${raw}" — the minimum is greater than the maximum.`);
   return [min, max];
 }
 
@@ -133,12 +138,12 @@ function parseViewBoxRule(root: XmlEl): ViewBoxRule {
   const vb = attr(root, 'viewBox');
   const aspect = attr(root, 'aspect');
   if (aspect != null) {
-    if (vb != null) fail('у <contract> либо viewBox, либо aspect — не оба.');
+    if (vb != null) fail('<contract> takes viewBox or aspect, not both.');
     const m = /^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/.exec(aspect);
-    if (!m || !Number(m[2])) return fail(`aspect="${aspect}" — ожидается "W:H", например "9:16".`);
+    if (!m || !Number(m[2])) return fail(`aspect="${aspect}" — expected "W:H", e.g. "9:16".`);
     const tolRaw = attr(root, 'tolerance') ?? '0';
     const t = /^\s*(\d+(?:\.\d+)?)\s*(%?)\s*$/.exec(tolRaw);
-    if (!t) return fail(`tolerance="${tolRaw}" — ожидается число или процент, например "3%".`);
+    if (!t) return fail(`tolerance="${tolRaw}" — expected a number or a percentage, e.g. "3%".`);
     const tolerance = t[2] ? Number(t[1]) / 100 : Number(t[1]);
     return { kind: 'aspect', ratio: Number(m[1]) / Number(m[2]), label: aspect.trim(), tolerance };
   }
@@ -146,13 +151,14 @@ function parseViewBoxRule(root: XmlEl): ViewBoxRule {
   if (vb.trim() === 'any' || vb.trim() === '*') return { kind: 'any' };
   const values = vb.split('|').map(normVB);
   for (const v of values) {
-    if (parseVB(v) == null) fail(`viewBox="${vb}": "${v}" — ожидается "minX minY ширина высота".`);
+    if (parseVB(v) == null) fail(`viewBox="${vb}": "${v}" — expected "minX minY width height".`);
   }
   return { kind: 'oneOf', values };
 }
 
 /** Parse scene.contract.xml into a {@link Contract}. @throws on malformed structure. */
 export function parseContract(xml: string): Contract {
+  refuseDoctype(xml);
   const errors: string[] = [];
   const parser = new DOMParser({
     onError: (level, message) => {
@@ -161,12 +167,12 @@ export function parseContract(xml: string): Contract {
   });
   const doc = parser.parseFromString(xml, 'text/xml');
   if (errors.length) {
-    throw new Error(`Trempel contract error: malformed XML — ${errors.join('; ')}`);
+    throw trempelError('E_XML', `contract: malformed XML — ${errors.join('; ')}`);
   }
 
   const root = doc.documentElement as unknown as XmlEl | null;
   if (!root || root.nodeName !== 'contract') {
-    throw new Error(`Trempel contract error: root element must be <contract>`);
+    throw trempelError('E_ROOT', 'the contract root element must be <contract>');
   }
 
   const viewBoxRule = parseViewBoxRule(root);
@@ -185,14 +191,14 @@ export function parseContract(xml: string): Contract {
       const attrsRaw = attr(el, 'attrs');
       const attrs = attrsRaw != null ? attrsRaw.split(/[\s,]+/).filter(Boolean) : undefined;
       const hasChildren = Array.from(el.childNodes).some((c) => c.nodeType === ELEMENT_NODE);
-      if (id && match) fail(`<${tag} id="${id}">: id и match вместе не бывают — либо узел, либо шаблон.`);
+      if (id && match) fail(`<${tag} id="${id}">: id and match together — a line is either a node or a pattern.`);
       if (match) {
         try {
           new RegExp(`^(?:${match})$`);
         } catch {
-          fail(`<${tag} match="${match}">: это не регулярное выражение.`);
+          fail(`<${tag} match="${match}">: not a regular expression.`);
         }
-        if (hasChildren) fail(`<${tag} match="${match}">: внутри шаблона узлов не бывает.`);
+        if (hasChildren) fail(`<${tag} match="${match}">: a pattern has no children.`);
         const [min, max] = parseCount(attr(el, 'count'), `<${tag} match="${match}">`);
         const p: ContractPattern = { tag, match, min, max, empty };
         const inId = attr(el, 'in') ?? parentId;
@@ -204,32 +210,32 @@ export function parseContract(xml: string): Contract {
         continue;
       }
       if (!id) {
-        throw new Error(`Trempel contract error: <${tag}> is missing an id (или match для шаблона)`);
+        throw trempelError('E_CONTRACT_SYNTAX', `<${tag}> is missing an id (or match for a pattern).`);
       }
       const node: ContractNode = attrs?.length ? { tag, id, empty, attrs } : { tag, id, empty };
       if (tag === 'use') {
         const href = attr(el, 'href');
-        if (!href) fail(`<use id="${id}">: нет href — какой префаб ждём.`);
+        if (!href) fail(`<use id="${id}">: no href — which prefab is expected?`);
         node.href = href!;
       }
       if (parentId) node.in = parentId;
       const anchor = attr(el, 'anchor');
       if (anchor != null) {
         const p = anchor.trim().split(/[\s,]+/).map(Number);
-        if (p.length !== 2 || !p.every(Number.isFinite)) fail(`<${tag} id="${id}" anchor="${anchor}">: ожидается «ax ay».`);
+        if (p.length !== 2 || !p.every(Number.isFinite)) fail(`<${tag} id="${id}" anchor="${anchor}">: expected "ax ay".`);
         node.anchor = [p[0], p[1]];
       }
       if (attr(el, 'slices') === 'true') {
-        if (tag !== 'image') fail(`<${tag} id="${id}" slices="true">: 9-slice бывает только у <image>.`);
+        if (tag !== 'image') fail(`<${tag} id="${id}" slices="true">: only an <image> is a 9-slice.`);
         node.slices = true;
       }
       if (attr(el, 'slot') === 'true') {
-        if (tag !== 'g') fail(`<${tag} id="${id}" slot="true">: слот это группа <g>.`);
+        if (tag !== 'g') fail(`<${tag} id="${id}" slot="true">: a slot is a <g> group.`);
         node.slot = true;
       }
       nodes.push(node);
       if (hasChildren) {
-        if (empty) fail(`<${tag} id="${id}" empty="true">: пустой узел, а внутри него в контракте узлы.`);
+        if (empty) fail(`<${tag} id="${id}" empty="true">: an empty node with contract lines inside it.`);
         visit(el, id);
       }
     }
@@ -240,12 +246,12 @@ export function parseContract(xml: string): Contract {
   const params = attr(root, 'params');
   if (params != null) {
     out.params = params.split(/[\s,]+/).filter(Boolean);
-    for (const p of out.params) if (!/^data-[\w-]+$/.test(p)) fail(`params="${params}": «${p}» — параметр это data-*.`);
+    for (const p of out.params) if (!/^data-[\w-]+$/.test(p)) fail(`params="${params}": "${p}" — a parameter is a data-* attribute.`);
   }
   const resizable = attr(root, 'resizable');
   if (resizable != null) {
     const v = resizable.trim() === 'yx' ? 'xy' : resizable.trim();
-    if (v !== 'x' && v !== 'y' && v !== 'xy') fail(`resizable="${resizable}" — бывает x, y или xy.`);
+    if (v !== 'x' && v !== 'y' && v !== 'xy') fail(`resizable="${resizable}" — expected x, y or xy.`);
     out.resizable = v as 'x' | 'y' | 'xy';
   }
   return out;
@@ -263,21 +269,21 @@ function viewBoxErrors(base: SceneNode, rule: ViewBoxRule): string[] {
   const actual = base.attrs.viewBox;
   if (rule.kind === 'none') return [];
   if (actual == null || parseVB(actual) == null) {
-    return [`У базы нет корректного viewBox ("${actual ?? '(нет)'}"), а контракт его требует.`];
+    return [coded('E_CONTRACT_VIEWBOX', `the base has no valid viewBox ("${actual ?? '(none)'}"), and the contract requires one.`)];
   }
   if (rule.kind === 'any') return [];
   if (rule.kind === 'oneOf') {
     if (rule.values.includes(normVB(actual))) return [];
     return rule.values.length === 1
-      ? [`viewBox базы "${actual}" не совпадает с контрактным "${rule.values[0]}".`]
-      : [`viewBox базы "${actual}" не из разрешённых: ${rule.values.map((v) => `"${v}"`).join(', ')}.`];
+      ? [coded('E_CONTRACT_VIEWBOX', `the base viewBox "${actual}" differs from the contract's "${rule.values[0]}".`)]
+      : [coded('E_CONTRACT_VIEWBOX', `the base viewBox "${actual}" is not one of: ${rule.values.map((v) => `"${v}"`).join(', ')}.`)];
   }
   const [, , w, h] = parseVB(actual)!;
   const ratio = w / h;
   if (h > 0 && Math.abs(ratio / rule.ratio - 1) <= rule.tolerance + 1e-9) return [];
-  const pct = rule.tolerance ? ` (допуск ${+(rule.tolerance * 100).toFixed(2)}%)` : '';
+  const pct = rule.tolerance ? ` (tolerance ${+(rule.tolerance * 100).toFixed(2)}%)` : '';
   return [
-    `viewBox базы "${actual}" — пропорция ${w}:${h} ≈ ${ratio.toFixed(4)}, а контракт ждёт ${rule.label} ≈ ${rule.ratio.toFixed(4)}${pct}.`,
+    coded('E_CONTRACT_VIEWBOX', `the base viewBox "${actual}" has the ratio ${w}:${h} ≈ ${ratio.toFixed(4)}, the contract expects ${rule.label} ≈ ${rule.ratio.toFixed(4)}${pct}.`),
   ];
 }
 
@@ -285,18 +291,12 @@ function viewBoxErrors(base: SceneNode, rule: ViewBoxRule): string[] {
 const missingAttrs = (node: SceneNode, want: string[] | undefined): string[] =>
   (want ?? []).filter((a) => node.attrs[a] === undefined);
 
-const attrError = (id: string, a: string): string => `#${id}: нет ${a} — его ждёт контракт.`;
+const attrError = (id: string, a: string): string => coded('E_CONTRACT_ATTR', `#${id}: no ${a} — the contract requires it.`);
 
-const plural = (n: number, one: string, few: string, many: string): string => {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-};
+const children = (n: number): string => `${n} ${n === 1 ? 'child' : 'children'}`;
 
 const countText = (min: number, max: number): string =>
-  min === max ? `ровно ${min}` : max === Infinity ? `не меньше ${min}` : min === 0 ? `не больше ${max}` : `от ${min} до ${max}`;
+  min === max ? `exactly ${min}` : max === Infinity ? `at least ${min}` : min === 0 ? `at most ${max}` : `${min} to ${max}`;
 
 /** Violations of one pattern family. */
 function patternErrors(base: SceneNode, p: ContractPattern): string[] {
@@ -309,7 +309,7 @@ function patternErrors(base: SceneNode, p: ContractPattern): string[] {
   if (p.in) {
     const hosts = findById(base, p.in);
     if (hosts.length === 0) {
-      return [`Шаблон ${p.match}: контейнер #${p.in}, в котором должны лежать узлы, в базе не найден.`];
+      return [coded('E_CONTRACT_MISSING', `pattern ${p.match}: the container #${p.in} its nodes must lie in is not in the base.`)];
     }
     scope = hosts[0];
   }
@@ -320,7 +320,7 @@ function patternErrors(base: SceneNode, p: ContractPattern): string[] {
     const m = re.exec(id);
     if (!m) continue;
     if (!inside.has(node)) {
-      errors.push(`#${id}: узлы по шаблону ${p.match} должны лежать внутри #${p.in}, а этот — снаружи.`);
+      errors.push(coded('E_CONTRACT_PLACE', `#${id}: nodes of the pattern ${p.match} must lie inside #${p.in}, this one is outside.`));
       continue;
     }
     matched.push({ id, node, groups: m.slice(1) });
@@ -328,24 +328,22 @@ function patternErrors(base: SceneNode, p: ContractPattern): string[] {
 
   const n = matched.length;
   if (n < p.min || n > p.max) {
-    errors.push(
-      `Узлов по шаблону ${p.match}${p.in ? ` в #${p.in}` : ''} — ${n}, а контракт ждёт ${countText(p.min, p.max)}.`,
-    );
+    errors.push(coded('E_CONTRACT_COUNT', `pattern ${p.match}${p.in ? ` in #${p.in}` : ''} matches ${n} node(s), the contract expects ${countText(p.min, p.max)}.`));
   }
 
   for (const { id, node, groups } of matched) {
     if (node.tag !== p.tag) {
-      errors.push(`#${id}: по шаблону ${p.match} ожидается <${p.tag}>, а в базе <${node.tag}>.`);
+      errors.push(coded('E_CONTRACT_TAG', `#${id}: the pattern ${p.match} expects <${p.tag}>, the base has <${node.tag}>.`));
     }
     if (p.empty && node.children.length) {
       const k = node.children.length;
-      errors.push(`#${id} должен быть пустым — в нём ${k} ${plural(k, 'дочерний узел', 'дочерних узла', 'дочерних узлов')}.`);
+      errors.push(coded('E_CONTRACT_EMPTY', `#${id} must be empty — it has ${children(k)}.`));
     }
     for (const a of missingAttrs(node, p.attrs)) errors.push(attrError(id, a));
     if (p.requires) {
       const partner = p.requires.replace(/\$(\d)/g, (_, d: string) => groups[Number(d) - 1] ?? '');
       if (!ids.has(partner)) {
-        errors.push(`#${id}: к нему нужен парный узел #${partner} (requires="${p.requires}") — в базе его нет.`);
+        errors.push(coded('E_CONTRACT_PARTNER', `#${id} needs the partner node #${partner} (requires="${p.requires}") — the base does not have it.`));
       }
     }
   }
@@ -391,43 +389,40 @@ export function checkContract(base: SceneNode, contract: Contract, opts: CheckCo
   for (const cn of contract.nodes) {
     const matches = findById(base, cn.id);
     if (matches.length === 0) {
-      errors.push(`#${cn.id}: контракт требует <${cn.tag} id="${cn.id}">, но такого узла в базе нет.`);
+      errors.push(coded('E_CONTRACT_MISSING', `#${cn.id}: the contract requires <${cn.tag} id="${cn.id}">, the base does not have it.`));
       continue;
     }
     if (matches.length > 1) {
-      errors.push(`#${cn.id}: узел встречается ${matches.length} раз — id должен быть уникален.`);
+      errors.push(coded('E_CONTRACT_TWICE', `#${cn.id}: the node occurs ${matches.length} times — an id must be unique.`));
       continue;
     }
     const node = matches[0];
     if (cn.tag === 'use') {
       const href = node.instance?.href ?? (node.tag === 'use' ? node.attrs.href : undefined);
-      if (href == null) errors.push(`#${cn.id}: контракт ждёт инстанс <use href="${cn.href}">, а в базе <${node.tag}>.`);
-      else if (!sameHref(href, cn.href!, opts.resolveHref)) errors.push(`#${cn.id}: ждали ${cn.href}, а это ${href}.`);
+      if (href == null) errors.push(coded('E_CONTRACT_TAG', `#${cn.id}: the contract expects an instance <use href="${cn.href}">, the base has <${node.tag}>.`));
+      else if (!sameHref(href, cn.href!, opts.resolveHref)) errors.push(coded('E_CONTRACT_TAG', `#${cn.id}: expected an instance of ${cn.href}, this is ${href}.`));
     } else if (node.tag !== cn.tag) {
-      errors.push(`#${cn.id}: контракт ждёт <${cn.tag}>, а в базе <${node.tag}>.`);
+      errors.push(coded('E_CONTRACT_TAG', `#${cn.id}: the contract expects <${cn.tag}>, the base has <${node.tag}>.`));
     }
     if (cn.empty && node.children.length) {
-      errors.push(
-        `#${cn.id} должен быть пустым — в нём ${node.children.length} ` +
-          `дочерн${node.children.length === 1 ? 'ий узел' : 'их узла(ов)'}; компонент их перезапишет.`,
-      );
+      errors.push(coded('E_CONTRACT_EMPTY', `#${cn.id} must be an empty group — it has ${children(node.children.length)}; the component will overwrite them.`));
     }
     for (const a of missingAttrs(node, cn.attrs)) errors.push(attrError(cn.id, a));
     if (cn.anchor) {
       const raw = node.attrs['data-anchor'];
       const got = raw?.trim().split(/[\s,]+/).map(Number);
-      if (raw == null) errors.push(`#${cn.id}: нет data-anchor — контракт ждёт якорь «${cn.anchor.join(' ')}».`);
+      if (raw == null) errors.push(coded('E_CONTRACT_ATTR', `#${cn.id}: no data-anchor — the contract expects the anchor "${cn.anchor.join(' ')}".`));
       else if (!got || got.length !== 2 || Math.abs(got[0] - cn.anchor[0]) > 1e-9 || Math.abs(got[1] - cn.anchor[1]) > 1e-9) {
-        errors.push(`#${cn.id}: data-anchor="${raw}", а контракт ждёт «${cn.anchor.join(' ')}».`);
+        errors.push(coded('E_CONTRACT_ATTR', `#${cn.id}: data-anchor="${raw}", the contract expects "${cn.anchor.join(' ')}".`));
       }
     }
     if (cn.slices && node.attrs['data-slices'] == null) {
-      errors.push(`#${cn.id}: нет data-slices — контракт ждёт растягиваемую картинку (9-slice).`);
+      errors.push(coded('E_CONTRACT_ATTR', `#${cn.id}: no data-slices — the contract expects a stretchable picture (9-slice).`));
     }
     if (cn.in) {
       const host = findById(base, cn.in);
       if (host.length === 1 && host[0] !== node && !collectIds(host[0]).some((e) => e.node === node)) {
-        errors.push(`#${cn.id}: по контракту лежит внутри #${cn.in}, а в базе — снаружи.`);
+        errors.push(coded('E_CONTRACT_PLACE', `#${cn.id}: the contract puts it inside #${cn.in}, in the base it is outside.`));
       }
     }
   }
@@ -437,15 +432,15 @@ export function checkContract(base: SceneNode, contract: Contract, opts: CheckCo
 
   // v0.9: a prefab's required parameters have defaults on its root.
   for (const p of contract.params ?? []) {
-    if (base.attrs[p] === undefined) errors.push(`корень <svg>: нет ${p} — параметр префаба (params), дайте значение по умолчанию.`);
+    if (base.attrs[p] === undefined) errors.push(coded('E_CONTRACT_ATTR', `root <svg>: no ${p} — a prefab parameter (params); give it a default.`));
   }
 
   // v1.0: a resizable prefab.
   if (contract.resizable) {
     const raw = base.attrs['data-resizable'];
     const got = raw?.trim() === 'yx' ? 'xy' : raw?.trim();
-    if (raw == null) errors.push(`корень <svg>: нет data-resizable — контракт ждёт растягиваемый префаб (${contract.resizable}).`);
-    else if (got !== contract.resizable) errors.push(`корень <svg>: data-resizable="${raw}", а контракт ждёт «${contract.resizable}».`);
+    if (raw == null) errors.push(coded('E_CONTRACT_ATTR', `root <svg>: no data-resizable — the contract expects a resizable prefab (${contract.resizable}).`));
+    else if (got !== contract.resizable) errors.push(coded('E_CONTRACT_ATTR', `root <svg>: data-resizable="${raw}", the contract expects "${contract.resizable}".`));
   }
 
   // 4. All base ids unique. 5. Base sterile. (Shared wording with merge → dedup at mount.)
@@ -465,7 +460,7 @@ export function slotContractErrors(tree: SceneNode, contract: Contract): string[
     if (!cn.slot) continue;
     const found = findById(tree, cn.id);
     if (found.length !== 1) continue; // existence is the base check's
-    if (found[0].tml.slot === undefined) errors.push(`#${cn.id}: контракт ждёт слот — пометьте группу в наследнике: <tml:ref id="${cn.id}" tml:slot="${cn.id}"/>.`);
+    if (found[0].tml.slot === undefined) errors.push(coded('E_CONTRACT_SLOT', `#${cn.id}: the contract expects a slot — mark the group in the heir: <tml:ref id="${cn.id}" tml:slot="${cn.id}"/>.`));
   }
   return errors;
 }

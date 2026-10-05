@@ -6,6 +6,7 @@
 
 import type { JSONSchema7 } from '../../editor/index.js';
 import { openPalette, type PaletteItem } from './palette';
+import { coded } from '../../src/core.js';
 
 export interface CommandEntry {
   /** Registry name ('node.setId') or a pseudo-command ('op:G', 'macro:<name>'). */
@@ -35,7 +36,7 @@ export function commandItems(registry: Record<string, { describe: string }>, ext
 }
 
 export function openCommandPalette(registry: Record<string, { describe: string }>, extra: CommandEntry[]): Promise<string | null> {
-  return openPalette({ placeholder: 'Команда, оператор, макрос… (имя или описание)', items: commandItems(registry, extra), empty: 'команд нет' });
+  return openPalette({ placeholder: 'Command, operator, macro… (name or description)', items: commandItems(registry, extra), empty: 'no commands' });
 }
 
 type Kind = 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'pair' | 'json';
@@ -63,7 +64,7 @@ export function parseField(s: JSONSchema7, raw: string, name: string): unknown {
     case 'number':
     case 'integer': {
       const v = Number(text.replace(',', '.'));
-      if (!Number.isFinite(v) || (kind === 'integer' && !Number.isInteger(v))) throw new Error(`${name}: ожидается ${kind === 'integer' ? 'целое ' : ''}число`);
+      if (!Number.isFinite(v) || (kind === 'integer' && !Number.isInteger(v))) throw new Error(coded('E_EDIT_ARGS', `${name}: expected ${kind === 'integer' ? 'an integer' : 'a number'}`));
       return v;
     }
     case 'enum': {
@@ -72,7 +73,7 @@ export function parseField(s: JSONSchema7, raw: string, name: string): unknown {
     }
     case 'pair': {
       const v = text.split(/[\s,;]+/).map(Number);
-      if (v.length !== 2 || !v.every(Number.isFinite)) throw new Error(`${name}: два числа через пробел`);
+      if (v.length !== 2 || !v.every(Number.isFinite)) throw new Error(coded('E_EDIT_ARGS', `${name}: two numbers separated by a space`));
       return v;
     }
     default:
@@ -114,7 +115,7 @@ export function openCommandForm(name: string, describe: string, schema: JSONSche
         inp.spellcheck = false;
         if (kind === 'number' || kind === 'integer') inp.inputMode = 'decimal';
         inp.value = def === undefined ? '' : Array.isArray(def) ? def.join(' ') : typeof def === 'object' ? JSON.stringify(def) : String(def);
-        inp.placeholder = kind === 'pair' ? 'x y' : s.description ?? (kind === 'json' ? 'JSON или текст' : kind);
+        inp.placeholder = kind === 'pair' ? 'x y' : s.description ?? (kind === 'json' ? 'JSON or text' : kind);
         input = inp;
       }
       input.name = key;
@@ -125,9 +126,9 @@ export function openCommandForm(name: string, describe: string, schema: JSONSche
     }
     const err = h('div', 'err');
     const buttons = h('div', 'row buttons');
-    const ok = h('button', 'on', 'выполнить') as HTMLButtonElement;
+    const ok = h('button', 'on', 'run') as HTMLButtonElement;
     ok.type = 'submit';
-    const cancel = h('button', '', 'отмена') as HTMLButtonElement;
+    const cancel = h('button', '', 'cancel') as HTMLButtonElement;
     cancel.type = 'button';
     buttons.append(cancel, ok);
     box.append(err, buttons);
@@ -149,7 +150,7 @@ export function openCommandForm(name: string, describe: string, schema: JSONSche
           if (v !== undefined) args[k] = v;
         }
         const missing = [...required].filter((k) => args[k] === undefined);
-        if (missing.length) throw new Error(`не заполнено: ${missing.join(', ')}`);
+        if (missing.length) throw new Error(coded('E_EDIT_ARGS', `not filled in: ${missing.join(', ')}`));
         done(args);
       } catch (x) {
         err.textContent = x instanceof Error ? x.message : String(x);

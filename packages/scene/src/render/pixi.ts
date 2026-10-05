@@ -42,6 +42,9 @@
 //
 // whenReady() resolves once every texture load started so far has settled (rejects with the
 // list of hrefs that failed), so mount() can hand the host a "scene is fully drawn" promise.
+//
+// @internal — `@trempel/scene/internal/render/pixi`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): PixiBackend, PixiBackendOptions, FontMetricsFn, ImageNode.
 
 import {
   Assets,
@@ -61,7 +64,8 @@ import {
   type LineJoin,
   type TextStyleFontWeight,
 } from 'pixi.js';
-import { TrempelError } from '../errors.js';
+import { TrempelError, trempelError } from '../errors.js';
+import { coded, within } from '../codes.js';
 import { dashes, flatten, outlineLength, type Polyline } from '../geom/outline.js';
 import { shapeCommands, type PathCmd } from '../geom/pathdata.js';
 import { parseAxes, parseSlices } from '../layout.js';
@@ -211,7 +215,7 @@ export class PixiBackend implements RendererBackend {
         this.place(node, localMatrix(attrs, false), local(false));
         break;
       default:
-        throw new Error(`PixiBackend: cannot create node for tag <${tag}>`);
+        throw trempelError('E_BACKEND', `PixiBackend: cannot create a node for the tag <${tag}>`);
     }
 
     if (attrs.opacity != null) node.alpha = num(attrs.opacity, 1);
@@ -239,7 +243,7 @@ export class PixiBackend implements RendererBackend {
         return;
       case 'mix-blend-mode': {
         const mode = BLEND[String(value)];
-        if (!mode) throw new Error(`PixiBackend: mix-blend-mode="${String(value)}" — бывает ${Object.keys(BLEND).join(', ')}.`);
+        if (!mode) throw trempelError('E_BLEND', `PixiBackend: mix-blend-mode="${String(value)}" — expected ${Object.keys(BLEND).join(', ')}.`);
         obj.blendMode = mode as Container['blendMode'];
         return;
       }
@@ -254,9 +258,9 @@ export class PixiBackend implements RendererBackend {
     const field = STROKE_PROPS[path];
     if (field) {
       const st = this.shapes.get(obj as Graphics);
-      if (!st) throw new Error(`PixiBackend: ${path} — только у геометрии (path, circle, ellipse, line, rect).`);
+      if (!st) throw trempelError('E_BACKEND', `PixiBackend: ${path} — only on geometry (path, circle, ellipse, line, rect).`);
       const v = Number(value);
-      if (!Number.isFinite(v)) throw new Error(`PixiBackend: ${path}=${String(value)} — не число.`);
+      if (!Number.isFinite(v)) throw trempelError('E_BACKEND', `PixiBackend: ${path}=${String(value)} — not a number.`);
       st[field] = v;
       this.drawShape(obj as Graphics, st);
       return;
@@ -337,7 +341,7 @@ export class PixiBackend implements RendererBackend {
     }
     if (!clip) return;
     if (!host.allowChildren) {
-      throw new Error('PixiBackend: clip-path на узле без детей (спрайт/текст) — оберните его в <g>.');
+      throw trempelError('E_CLIP_PATH', 'PixiBackend: clip-path on a node without children (a sprite, a text) — wrap it in a <g>.');
     }
     const g = new Graphics();
     this.drawClip(g, clip.children, parseTransform(clip.attrs.transform));
@@ -362,7 +366,7 @@ export class PixiBackend implements RendererBackend {
       const problems = [...new Set(this.problems)];
       this.failed = new Set();
       this.problems = [];
-      throw new TrempelError([...failed.map((h) => `Текстура не загрузилась: "${h}".`), ...problems]);
+      throw new TrempelError([...failed.map((h) => coded('E_TEXTURE', `the texture did not load: "${h}".`)), ...problems]);
     }
   }
 
@@ -504,9 +508,7 @@ export class PixiBackend implements RendererBackend {
     };
     visit(obj);
     if (found.length !== 1) {
-      throw new Error(
-        `PixiBackend: href на группе — в ней ${found.length} <image>, а подменить можно, только когда картинка одна.`,
-      );
+      throw trempelError('E_BACKEND', `PixiBackend: href on a group — it holds ${found.length} <image>; a picture can be swapped only when there is one.`);
     }
     return found[0];
   }
@@ -547,7 +549,7 @@ export class PixiBackend implements RendererBackend {
       const [l, t, r, b] = state.slices;
       if (tw - l - r < 1 || th - t - b < 1) {
         this.problems.push(
-          `${state.where ?? '<image>'}: data-slices="${state.slices.join(' ')}" не помещаются в текстуру ${tw}×${th}${state.href ? ` (${state.href})` : ''} — центру нужен хотя бы 1 px.`,
+          coded('E_SLICES_FIT', `${state.where ?? '<image>'}: data-slices="${state.slices.join(' ')}" do not fit the texture ${tw}×${th}${state.href ? ` (${state.href})` : ''} — the centre needs at least 1 px.`),
         );
       }
     }
@@ -583,7 +585,7 @@ export class PixiBackend implements RendererBackend {
 
   /** v1.0: width / height of an image (its SVG box) or a rect (redrawn); false — not one of those. */
   private resize(obj: Container, path: 'width' | 'height', v: number): boolean {
-    if (!Number.isFinite(v)) throw new Error(`PixiBackend: ${path}=${String(v)} — не число.`);
+    if (!Number.isFinite(v)) throw trempelError('E_BACKEND', `PixiBackend: ${path}=${String(v)} — not a number.`);
     const img = this.images.get(obj as ImageNode);
     if (img) {
       const node = obj as ImageNode;
@@ -687,7 +689,7 @@ export class PixiBackend implements RendererBackend {
         join: (attrs['stroke-linejoin'] != null ? parseLineStyle('stroke-linejoin', attrs['stroke-linejoin']) : 'miter') as LineJoin,
       };
     } catch (e) {
-      throw new Error(`PixiBackend: ${where}: ${(e as Error).message}`);
+      throw new TrempelError([within(`PixiBackend: ${where}`, (e as Error).message)]);
     }
     this.shapes.set(g, st);
     this.drawShape(g, st);

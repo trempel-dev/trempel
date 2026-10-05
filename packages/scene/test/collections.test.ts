@@ -7,20 +7,13 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  collectionErrors,
-  composeScene,
-  expandCollection,
-  mount,
-  parseProject,
-  resolveHref,
-  TrempelError,
-  usedCollections,
-  type SceneSource,
-} from '../src/core';
+import { composeScene, expandCollection, mount, parseProject, TrempelError, type SceneSource } from '../src/core';
+import { collectionErrors, usedCollections } from '../src/project';
+import { resolveHref } from '../src/href';
 import { collectionPath, findProjectRoot, loadProject } from '../src/node/project';
 import { projectInfo, servedFile, serverProject } from '../view/plugin';
 import { createMockBackend, isMockNode, type MockNode } from './helpers/mockBackend';
+import { codesOf, thrown, withCode } from './helpers/codes';
 
 const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"';
 const svg = (body: string, root = ''): string => `<svg ${NS} viewBox="0 0 400 300"${root}>${body}</svg>`;
@@ -58,8 +51,13 @@ describe('resolveHref / expandCollection', () => {
     expect(expandCollection('@skin/art/a.png', c)).toBe('/proj/skins/ui/art/a.png');
     expect(expandCollection('@kit/b.svg', c)).toBe('https://cdn.example/kit/b.svg');
     expect(expandCollection('art/a.png', c)).toBe('art/a.png');
-    expect(() => expandCollection('@ui/a.png', c)).toThrow(/коллекции @ui нет в проекте \(есть: @kit, @skin\)/);
-    expect(() => expandCollection('@ui/a.png', undefined)).toThrow(/есть: —/);
+    const unknown = thrown(() => expandCollection('@ui/a.png', c));
+    expect(unknown).toMatchObject({ code: 'E_COLLECTION_UNKNOWN' });
+    expect(unknown.message).toContain('@ui');
+    expect(unknown.message).toContain('@kit, @skin');
+    const none = thrown(() => expandCollection('@ui/a.png', undefined));
+    expect(none).toMatchObject({ code: 'E_COLLECTION_UNKNOWN' });
+    expect(none.message).toContain('—');
   });
 });
 
@@ -76,10 +74,8 @@ describe('.trempel/project.mdz', () => {
   it('bad names, empty values, absolute paths, repeats — errors', () => {
     const p = parseProject('## collections\n$Skin: a\n$ok:\n$abs: /x\n$a: one\n$a: two\n');
     expect(p.collections.map((c) => c.name)).toEqual(['a']);
-    expect(p.errors.join('\n')).toMatch(/\$Skin — имя коллекции/);
-    expect(p.errors.join('\n')).toMatch(/\$ok — нужна папка/);
-    expect(p.errors.join('\n')).toMatch(/\$abs: «\/x»/);
-    expect(p.errors.join('\n')).toMatch(/\$a — коллекция объявлена дважды/);
+    expect(codesOf(p.errors)).toEqual(['E_PROJECT', 'E_PROJECT', 'E_PROJECT', 'E_PROJECT']);
+    for (const named of ['$Skin', '$ok', '$abs: "/x"', '$a']) expect(p.errors.some((e) => e.includes(named))).toBe(true);
   });
 });
 
@@ -100,8 +96,10 @@ describe('project on disk (node/project.ts)', () => {
     const p = loadProject(join(root, 'games/one'));
     expect(p.root).toBe(root);
     expect(p.collections).toEqual({ skin: join(root, 'skins/default/ui'), kit: join(root, 'node_modules/@acme/kit/ui') });
-    expect(p.errors.join('\n')).toMatch(/\$gone: папки nope нет/);
-    expect(p.errors.join('\n')).toMatch(/\$nopkg: пакет missing-pkg не найден/);
+    const errs = withCode(p.errors, 'E_PROJECT');
+    expect(errs).toHaveLength(2);
+    expect(errs.some((e) => e.includes('$gone') && e.includes('nope'))).toBe(true);
+    expect(errs.some((e) => e.includes('$nopkg') && e.includes('missing-pkg'))).toBe(true);
   });
 
   it('collectionPath: a file inside a collection → @name/…', () => {
@@ -182,13 +180,19 @@ describe('mount with collections', () => {
       err = e;
     }
     expect(err).toBeInstanceOf(TrempelError);
-    expect((err as TrempelError).errors.join('\n')).toMatch(/#a: @ui\/a\.png — коллекции @ui нет в проекте \(есть: @icons, @skin\)/);
+    const [m] = withCode((err as TrempelError).errors, 'E_COLLECTION_UNKNOWN');
+    expect(m).toContain('#a: @ui/a.png');
+    expect(m).toContain('@icons, @skin');
   });
 
   it('an unknown collection on a prefab: the instance reports it', () => {
-    expect(() =>
+    const e = thrown(() =>
       mount({ base: svg(`<use id="p" href="@nope/panel.svg"/>`), backend: createMockBackend(), context: {}, collections, loadScene, baseUrl: '/proj/game/scene.svg' }),
-    ).toThrow(/#p: префаб @nope\/panel\.svg: @nope\/panel\.svg не загрузился — коллекции @nope нет/);
+    );
+    const [m] = withCode(e.errors!, 'E_PREFAB_MISSING');
+    expect(m).toContain('#p');
+    expect(m).toContain('@nope/panel.svg');
+    expect(m).toContain('E_COLLECTION_UNKNOWN');
   });
 
   it('collectionErrors / usedCollections over a composed tree', () => {
@@ -206,6 +210,9 @@ describe('contract sameHref (v1.1): resolved paths', () => {
     const ok = composeScene({ base: svg(`<use id="p" href="@skin/panel.svg"/>`), contract, loadScene, url });
     expect(ok.errors.contract).toEqual([]);
     const other = composeScene({ base: svg(`<use id="p" href="@skin/other.svg"/>`), contract, loadScene: () => ({ base: svg('') }), url });
-    expect(other.errors.contract.join('\n')).toMatch(/#p: ждали \.\.\/skins\/ui\/panel\.svg, а это @skin\/other\.svg/);
+    const [m] = withCode(other.errors.contract, 'E_CONTRACT_TAG');
+    expect(m).toContain('#p');
+    expect(m).toContain('../skins/ui/panel.svg');
+    expect(m).toContain('@skin/other.svg');
   });
 });

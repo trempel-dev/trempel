@@ -6,7 +6,9 @@
 // (name → href table with «…»), data-pivot — the transform's pivot pair writes it (node.setPivot,
 // keepWorld); shown as the bounds' centre until set, «центр» sets it there.
 
-import { BLEND_MODES, parseBlend, parseTransform, parseViews, type SceneNode } from '../../src/core.js';
+import { coded, type SceneNode } from '../../src/core.js';
+import { BLEND_MODES, parseBlend, parseViews } from '../../src/props.js';
+import { parseTransform } from '../../src/transform.js';
 import { boxCenter, decompose, invert, apply, nodeWorld, transformArgs, type Call, type TransformParts } from '../geometry';
 import { relativeTo } from '../io';
 import type { Editor } from './editor';
@@ -62,7 +64,7 @@ export class Inspector {
     this.what.textContent = '';
     if (!ed.doc) return;
     if (ed.selection.length !== 1) {
-      box.append(h('div', 'note', ed.selection.length ? `выделено узлов: ${ed.selection.length}` : 'выделите узел на сцене или в дереве'));
+      box.append(h('div', 'note', ed.selection.length ? `nodes selected: ${ed.selection.length}` : 'select a node on the stage or in the tree'));
       return;
     }
     const path = ed.selection[0];
@@ -82,8 +84,8 @@ export class Inspector {
 
     // tag attributes
     const names = FIELDS[n.tag] ?? [];
-    if (names.length || n.tag === 'text' || n.tag === 'path') box.append(h('h4', '', 'атрибуты'));
-    if (n.tag === 'text') box.append(this.field('текст', n.text ?? '', (v) => ed.exec('node.setText', { node: ref, text: v }), 'text'));
+    if (names.length || n.tag === 'text' || n.tag === 'path') box.append(h('h4', '', 'attributes'));
+    if (n.tag === 'text') box.append(this.field('text', n.text ?? '', (v) => ed.exec('node.setText', { node: ref, text: v }), 'text'));
     for (const k of names) {
       const row = this.attrField(ref, n, k);
       if (k === 'href' && n.tag === 'image' && this.pickImage) row.append(this.hrefButton(ref));
@@ -110,13 +112,13 @@ export class Inspector {
       };
       ta.oninput = () => ta.classList.toggle('dirty', ta.value !== (n.attrs.d ?? ''));
       ta.onblur = commit;
-      box.append(h('div', 'note', 'd — ⌘Enter или уход из поля применяет'), ta);
-      const tool = h('button', '', 'контур (P)') as HTMLButtonElement;
+      box.append(h('div', 'note', 'd — ⌘Enter or leaving the field applies it'), ta);
+      const tool = h('button', '', 'contour (P)') as HTMLButtonElement;
       tool.onclick = () => ed.setTool('path');
       box.append(tool);
     }
     if (n.tag === 'line') {
-      const tool = h('button', '', 'концы (P)') as HTMLButtonElement;
+      const tool = h('button', '', 'ends (P)') as HTMLButtonElement;
       tool.onclick = () => ed.setTool('path');
       box.append(tool);
     }
@@ -145,11 +147,11 @@ export class Inspector {
     const ed = this.ed;
     const box = this.box;
     const info = ed.doc?.instance(ref) ?? null;
-    box.append(h('h4', '', 'префаб'));
+    box.append(h('h4', '', 'prefab'));
     const hrefRow = this.field('href', n.attrs.href ?? '', (v) => (v.trim() ? ed.exec('node.setAttr', { node: ref, name: 'href', value: v.trim() }) : null), 'attr:href');
     if (this.pickScene) {
       const b = h('button', 'pick', '…') as HTMLButtonElement;
-      b.title = 'Выбрать сцену папки';
+      b.title = 'Pick a scene of the folder';
       b.onclick = () => {
         void this.pickScene!().then((file) => {
           const base = ed.entry?.base;
@@ -159,39 +161,39 @@ export class Inspector {
       hrefRow.append(b);
     }
     box.append(hrefRow);
-    const open = h('button', 'link', 'открыть префаб') as HTMLButtonElement;
+    const open = h('button', 'link', 'open prefab') as HTMLButtonElement;
     open.dataset.key = 'open-prefab';
     open.onclick = () => void ed.openPrefab(path);
     box.append(open);
-    if (info && !info.expanded) box.append(h('div', 'err', 'префаб не развёрнут — см. ошибки'));
+    if (info && !info.expanded) box.append(h('div', 'err', 'prefab not expanded — see the errors'));
 
-    box.append(h('h4', '', 'параметры'));
+    box.append(h('h4', '', 'parameters'));
     for (const p of info?.params ?? []) {
       const row = this.field(p.name, p.own ? p.value : '', (v) => ed.exec('prefab.setParam', { node: ref, name: p.name, value: v === '' ? null : v }), `param:${p.name}`);
       row.classList.add('param-row');
       const label = row.querySelector('label')!;
       if (p.required) {
         label.classList.add('req');
-        label.title = 'обязательный (params контракта префаба)';
+        label.title = 'required (params of the prefab contract)';
       }
       const input = row.querySelector('input')!;
-      if (p.default != null) input.placeholder = p.default === '' ? '(пусто)' : p.default;
+      if (p.default != null) input.placeholder = p.default === '' ? '(empty)' : p.default;
       if (p.own) {
         const off = h('button', 'link', '×') as HTMLButtonElement;
-        off.title = 'снять — останется значение по умолчанию';
+        off.title = 'unset — the default value stays';
         off.onclick = () => ed.exec('prefab.setParam', { node: ref, name: p.name, value: null });
         row.append(off);
       }
       box.append(row);
     }
-    for (const m of info?.missing ?? []) box.append(h('div', 'err', `не задан ${m} — его требует ${info!.href}`));
+    for (const m of info?.missing ?? []) box.append(h('div', 'err', coded('E_PARAM_MISSING', `${m} is not set — ${info!.href} requires it`)));
     // a parameter the prefab does not declare (it may still read it through self)
     const add = h('div', 'row');
     const name = document.createElement('input');
     name.placeholder = 'data-…';
     name.dataset.key = 'param:new';
     const value = document.createElement('input');
-    value.placeholder = 'значение';
+    value.placeholder = 'value';
     const go = (): void => {
       if (name.value.trim()) ed.exec('prefab.setParam', { node: ref, name: name.value.trim(), value: value.value });
     };
@@ -204,9 +206,9 @@ export class Inspector {
     add.append(name, value);
     box.append(add);
 
-    const detach = h('button', '', 'отвязать (detach)') as HTMLButtonElement;
+    const detach = h('button', '', 'detach') as HTMLButtonElement;
     detach.dataset.key = 'detach';
-    detach.title = 'развернуть в копию <g>: дети станут редактируемыми, связь с префабом рвётся';
+    detach.title = 'expand into a <g> copy: the children become editable, the link to the prefab is cut';
     detach.onclick = () => ed.exec('prefab.detach', { node: ref });
     box.append(detach);
   }
@@ -214,13 +216,13 @@ export class Inspector {
   /** v0.9: «в префаб» — the group becomes a new file + an instance in its place. */
   private toPrefab(n: SceneNode, path: string): HTMLElement {
     const wrap = h('div');
-    wrap.append(h('h4', '', 'в префаб'));
+    wrap.append(h('h4', '', 'to prefab'));
     const row = h('div', 'row');
     const input = document.createElement('input');
     input.dataset.key = 'extract';
     input.value = `ui/${n.attrs.id}.svg`;
-    const b = h('button', '', 'создать') as HTMLButtonElement;
-    b.title = 'группа → новый файл префаба (путь от сцены) + <use> на её месте';
+    const b = h('button', '', 'create') as HTMLButtonElement;
+    b.title = 'group → a new prefab file (path relative to the scene) + a <use> in its place';
     const go = (): void => {
       if (input.value.trim()) void this.ed.extract(path, input.value.trim());
     };
@@ -265,7 +267,7 @@ export class Inspector {
   /** «…» next to href: pick a file, href = its path from the scene's folder. */
   private hrefButton(ref: string): HTMLElement {
     const b = h('button', 'pick', '…') as HTMLButtonElement;
-    b.title = 'Выбрать файл';
+    b.title = 'Pick a file';
     b.onclick = () => {
       void this.pickImage!()
         .then((file) => {
@@ -293,14 +295,14 @@ export class Inspector {
     try {
       M = parseTransform(n.attrs.transform);
     } catch (e) {
-      box.append(h('div', 'note', `transform не разобран: ${(e as Error).message}`));
+      box.append(h('div', 'note', `transform not parsed: ${(e as Error).message}`));
       return;
     }
     const own = pivotAttr(n);
     const pivot = own ?? this.defaultPivot(path);
     const parts = decompose(M, { x: pivot[0], y: pivot[1] });
     if (!parts) {
-      box.append(h('div', 'note', `${n.attrs.transform} — со скосом: части не выражают его (поле ниже правит текст)`));
+      box.append(h('div', 'note', `${n.attrs.transform} — has skew: the parts cannot express it (the field below edits the text)`));
       box.append(this.attrField(ref, n, 'transform'));
       return;
     }
@@ -341,30 +343,30 @@ export class Inspector {
     box.append(pair('scale', 'sc', parts.scale, (x, y) => send({ ...parts, scale: [x, y] })));
     // data-pivot (v0.8): written by node.setPivot keepWorld — the matrix stays, translate means another point
     const pv = pair(own ? 'pivot' : 'pivot ∘', 'pv', parts.pivot, (x, y) => ed.exec('node.setPivot', { node: ref, x: r4(x), y: r4(y) }));
-    if (!own) pv.title = 'центр bounds — в файл не пишется, пока не тронут (data-pivot)';
-    const centre = h('button', 'link', 'центр') as HTMLButtonElement;
-    centre.title = 'data-pivot = центр bounds узла';
+    if (!own) pv.title = 'the bounds centre — not written to the file until changed (data-pivot)';
+    const centre = h('button', 'link', 'centre') as HTMLButtonElement;
+    centre.title = 'data-pivot = the centre of the node bounds';
     centre.onclick = () => {
       const [x, y] = this.defaultPivot(path);
       ed.exec('node.setPivot', { node: ref, x, y });
     };
     pv.append(centre);
     if (this.pickPivot) {
-      const cursor = h('button', 'link', 'в курсор') as HTMLButtonElement;
-      cursor.title = 'пивот — в точку следующего клика на сцене (как «.»)';
+      const cursor = h('button', 'link', 'to cursor') as HTMLButtonElement;
+      cursor.title = 'pivot to the point of the next click on the stage (like ".")';
       cursor.dataset.key = 'pv:cursor';
       cursor.onclick = () => this.pickPivot?.();
       pv.append(cursor);
     }
     if (own) {
       const off = h('button', 'link', '×') as HTMLButtonElement;
-      off.title = 'снять data-pivot';
+      off.title = 'remove data-pivot';
       off.onclick = () => ed.exec('node.setAttr', { node: ref, name: 'data-pivot', value: null });
       pv.append(off);
     }
     box.append(pv);
     if (n.attrs.transform) {
-      const clear = h('button', 'link', 'снять transform') as HTMLButtonElement;
+      const clear = h('button', 'link', 'remove transform') as HTMLButtonElement;
       clear.onclick = () => ed.exec('node.setTransform', { node: ref });
       box.append(clear);
     }
@@ -387,19 +389,19 @@ export class Inspector {
   private v08(n: SceneNode, ref: string): void {
     const ed = this.ed;
     const box = this.box;
-    box.append(h('h4', '', 'наложение и порядок'));
+    box.append(h('h4', '', 'blending and order'));
     if (BLENDABLE.has(n.tag)) {
       const row = h('div', 'row');
       row.append(h('label', '', 'mix-blend-mode'));
       const sel = document.createElement('select');
       sel.dataset.key = 'blend';
-      sel.append(new Option('— (от родителя)', ''));
+      sel.append(new Option('— (from the parent)', ''));
       for (const m of BLEND_MODES) sel.append(new Option(m === 'plus-lighter' ? 'plus-lighter (add)' : m, m));
       let cur = '';
       try {
         cur = parseBlend(n.attrs.style) ?? '';
       } catch {
-        sel.append(new Option(`style="${n.attrs.style}" (ошибка)`, '?'));
+        sel.append(new Option(`style="${n.attrs.style}" (error)`, '?'));
         cur = '?';
       }
       sel.value = cur;
@@ -419,10 +421,10 @@ export class Inspector {
       color.value = v && /^#[0-9a-f]{6}$/i.test(v) ? v : '#ffffff';
       color.onchange = () => ed.exec('node.setAttr', { node: ref, name: 'data-tint', value: color.value });
       row.append(color);
-      row.append(h('span', 'muted', v ?? 'нет'));
+      row.append(h('span', 'muted', v ?? 'none'));
       if (v != null) {
         const off = h('button', 'link', '×') as HTMLButtonElement;
-        off.title = 'снять тинт';
+        off.title = 'remove tint';
         off.onclick = () => ed.exec('node.setAttr', { node: ref, name: 'data-tint', value: null });
         row.append(off);
       }
@@ -433,7 +435,7 @@ export class Inspector {
       return ed.exec('node.setAttr', { node: ref, name: 'data-z', value: t === '' ? null : Number.isInteger(Number(t)) ? Number(t) : t });
     }, 'attr:data-z');
     (z.querySelector('input') as HTMLInputElement).type = 'number';
-    z.title = 'порядок среди соседей (zIndex); пусто — порядок документа';
+    z.title = 'order among siblings (zIndex); empty — document order';
     box.append(z);
     if (n.tag === 'image') box.append(this.views(n, ref));
   }
@@ -444,23 +446,23 @@ export class Inspector {
    */
   private v10(n: SceneNode, ref: string): void {
     const box = this.box;
-    box.append(h('h4', '', 'растяжка и якоря'));
+    box.append(h('h4', '', 'stretching and anchors'));
     const add = (k: string, title: string): void => {
       const row = this.attrField(ref, n, k);
       row.title = title;
       box.append(row);
     };
     if (n.tag === 'svg') {
-      add('data-resizable', 'x | y | xy — префаб растягивается: <use width height> по этим осям; viewBox — минимум');
+      add('data-resizable', 'x | y | xy — the prefab stretches: <use width height> along these axes; the viewBox is the minimum');
       return;
     }
     if (n.tag === 'image') {
-      add('data-slices', 'l t r b — борта 9-slice в пикселях PNG (одно число — все четыре; два — гор верт)');
-      add('data-tile', 'x | y | xy — плитка вместо растяжения');
+      add('data-slices', 'l t r b — 9-slice borders in PNG pixels (one number — all four; two — horizontal vertical)');
+      add('data-tile', 'x | y | xy — tile instead of stretch');
     }
-    add('data-anchor', 'ax ay (0..1) — куда узел едет, когда бокс родителя больше эталона');
-    if (n.tag === 'image' || n.tag === 'rect' || n.tag === 'g' || n.tag === 'use') add('data-stretch', 'x | y | xy — растёт вместе с боксом родителя');
-    if (n.tag === 'g') add('data-size', 'w h — группа становится боксом для якорей детей');
+    add('data-anchor', 'ax ay (0..1) — where the node moves when the parent box grows past its design size');
+    if (n.tag === 'image' || n.tag === 'rect' || n.tag === 'g' || n.tag === 'use') add('data-stretch', 'x | y | xy — grows with the parent box');
+    if (n.tag === 'g') add('data-size', 'w h — the group becomes a box for its children anchors');
     if (n.tag === 'use') this.instanceSize(ref);
   }
 
@@ -471,7 +473,7 @@ export class Inspector {
     if (!info?.size) return;
     const row = h('div', 'row size');
     row.dataset.key = 'instance-size';
-    row.append(h('label', '', 'размер'));
+    row.append(h('label', '', 'size'));
     const axes = info.resizable ?? '';
     for (const [k, axis, v] of [['width', 'x', info.size.w], ['height', 'y', info.size.h]] as const) {
       const i = document.createElement('input');
@@ -479,7 +481,7 @@ export class Inspector {
       i.value = String(r4(v));
       i.dataset.key = `size:${k}`;
       i.disabled = !axes.includes(axis);
-      i.title = i.disabled ? `префаб не растягивается по ${axis}` : `${k} (мин. ${axis === 'x' ? info.min?.w : info.min?.h})`;
+      i.title = i.disabled ? `the prefab does not stretch along ${axis}` : `${k} (min ${axis === 'x' ? info.min?.w : info.min?.h})`;
       i.onkeydown = (e) => {
         e.stopPropagation();
         if (e.key === 'Enter') i.blur();
@@ -490,7 +492,7 @@ export class Inspector {
       };
       row.append(i);
     }
-    row.append(h('span', 'muted', axes ? `мин. ${info.min?.w}×${info.min?.h} · ${axes}` : 'не растягивается'));
+    row.append(h('span', 'muted', axes ? `min ${info.min?.w}×${info.min?.h} · ${axes}` : 'does not stretch'));
     this.box.append(row);
   }
 
@@ -498,7 +500,7 @@ export class Inspector {
   private views(n: SceneNode, ref: string): HTMLElement {
     const ed = this.ed;
     const wrap = h('div');
-    wrap.append(h('h4', '', 'data-views (варианты спрайта)'));
+    wrap.append(h('h4', '', 'data-views (sprite variants)'));
     let list: [string, string][] = [];
     try {
       list = n.attrs['data-views'] != null ? [...parseViews(n.attrs['data-views'])] : [];
@@ -533,7 +535,7 @@ export class Inspector {
     };
     const pick = (onFile: (href: string) => void): HTMLElement => {
       const b = h('button', 'pick', '…') as HTMLButtonElement;
-      b.title = 'Выбрать файл';
+      b.title = 'Pick a file';
       b.disabled = !this.pickImage;
       b.onclick = () => {
         void this.pickImage?.().then((file) => {
@@ -547,7 +549,7 @@ export class Inspector {
       const tr = document.createElement('tr');
       const set = (k: string, v: string): void => write(list.map((x, j) => (j === i ? [k, v] : x)));
       const del = h('button', 'link', '×') as HTMLButtonElement;
-      del.title = 'удалить вариант';
+      del.title = 'delete the variant';
       del.onclick = () => write(list.filter((_, j) => j !== i));
       tr.append(
         cell(input(name, `vn:${i}`, (v) => v && set(v, href))),
@@ -560,7 +562,7 @@ export class Inspector {
     // a new variant: name + «…» (or a typed href)
     const tr = document.createElement('tr');
     const kNew = input('', 'vn:new', () => {});
-    kNew.placeholder = 'имя';
+    kNew.placeholder = 'name';
     const vNew = input('', 'vh:new', () => {});
     vNew.placeholder = 'href';
     const add = (href: string): void => {
@@ -589,9 +591,9 @@ export class Inspector {
     const defs = ed.doc!.scene.children.find((c) => c.tag === 'defs');
     for (const c of defs?.children ?? []) if (c.tag === 'clipPath' && c.attrs.id) ids.push(c.attrs.id);
     const cur = /#([^'")\s]+)/.exec(n.attrs['clip-path'] ?? '')?.[1] ?? '';
-    sel.append(new Option('нет', ''));
+    sel.append(new Option('none', ''));
     for (const id of ids) sel.append(new Option(id, id));
-    if (cur && !ids.includes(cur)) sel.append(new Option(`${cur} (нет в defs)`, cur));
+    if (cur && !ids.includes(cur)) sel.append(new Option(`${cur} (not in defs)`, cur));
     sel.value = cur;
     sel.onchange = () => ed.exec('clip.assign', { node: ref, clip: sel.value || null });
     row.append(sel);
@@ -601,7 +603,7 @@ export class Inspector {
   private dataTable(n: SceneNode, ref: string): HTMLElement {
     const ed = this.ed;
     const wrap = h('div');
-    wrap.append(h('h4', '', 'data-* (параметры компонента)'));
+    wrap.append(h('h4', '', 'data-* (component parameters)'));
     const table = document.createElement('table');
     const keys = Object.keys(n.attrs).filter((k) => k.startsWith('data-') && !OWN_DATA.has(k));
     const input = (value: string, key: string, commit: (v: string) => void): HTMLInputElement => {
@@ -639,7 +641,7 @@ export class Inspector {
       });
       const vIn = input(n.attrs[k], `dv:${k}`, (v) => ed.exec('node.setAttr', { node: ref, name: k, value: v }));
       const del = h('button', 'link', '×') as HTMLButtonElement;
-      del.title = 'удалить';
+      del.title = 'delete';
       del.onclick = () => ed.exec('node.setAttr', { node: ref, name: k, value: null });
       const tds = [kIn, vIn, del].map((x) => {
         const td = document.createElement('td');
@@ -652,9 +654,9 @@ export class Inspector {
     // new parameter
     const tr = document.createElement('tr');
     const kNew = input('', 'dk:new', () => {});
-    kNew.placeholder = 'ключ';
+    kNew.placeholder = 'key';
     const vNew = input('', 'dv:new', () => {});
-    vNew.placeholder = 'значение';
+    vNew.placeholder = 'value';
     const add = h('button', 'link', '+') as HTMLButtonElement;
     const go = (): void => {
       const k = kNew.value.trim();

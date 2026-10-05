@@ -6,6 +6,7 @@ import { TrempelError } from '../src/errors';
 import { Registry } from '../src/registry';
 import type { RendererBackend } from '../src/render/backend';
 import { createMockBackend, isMockNode } from './helpers/mockBackend';
+import { rejected } from './helpers/codes';
 
 const BASE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <image id="bg" href="bg.png"/>
@@ -40,8 +41,10 @@ describe('scene readiness', () => {
   it('ready rejects with the backend error; an ignored rejection is not unhandled', async () => {
     const { backend, reject } = deferredBackend();
     const scene = mount({ base: BASE, backend, context: {} });
-    reject(new TrempelError(['Текстура не загрузилась: "bg.png".']));
-    await expect(scene.ready).rejects.toThrow(/bg\.png/);
+    reject(new TrempelError(['E_TEXTURE: the texture did not load: "bg.png".']));
+    const e = await rejected(scene.ready);
+    expect(e).toMatchObject({ code: 'E_TEXTURE' });
+    expect(e.message).toContain('bg.png');
     // a second scene nobody awaits must not raise an unhandled rejection
     const other = deferredBackend();
     mount({ base: BASE, backend: other.backend, context: {} });
@@ -121,9 +124,9 @@ describe('mount — expression errors join the merge/contract list', () => {
       err = e as TrempelError;
     }
     expect(err).toBeInstanceOf(TrempelError);
-    expect(err!.errors).toHaveLength(2);
-    expect(err!.errors[0]).toMatch(/<tml:ref id="nope">: узла с таким id нет в базе/);
-    expect(err!.errors[1]).toMatch(/^#bg tml:bind: выражение оборвалось/);
+    expect(err!.codes).toEqual(['E_REF_MISSING', 'E_EXPR_SYNTAX']);
+    expect(err!.errors[0]).toContain('<tml:ref id="nope">');
+    expect(err!.errors[1]).toContain('#bg tml:bind:');
   });
 });
 

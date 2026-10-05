@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { PROJECT_FILE, parseProject } from '../project.js';
+import { coded, within } from '../codes.js';
 
 export interface Project {
   /** The project root (the folder holding `.trempel/project.mdz`); null — no project file found. */
@@ -44,19 +45,19 @@ export function loadProject(start: string): Project {
   if (!root) return { root: null, collections: {}, errors: [] };
   const file = join(root, PROJECT_FILE);
   const parsed = parseProject(readFileSync(file, 'utf8'));
-  const out: Project = { root, collections: {}, errors: parsed.errors.map((e) => `${file}: ${e.replace(`${PROJECT_FILE}: `, '')}`) };
+  const out: Project = { root, collections: {}, errors: parsed.errors.map((e) => within(file, e.replace(`${PROJECT_FILE}: `, ''))) };
   for (const c of parsed.collections) {
     let dir: string | null;
     if (c.npm) {
       const pkg = findPackageDir(root, c.npm.pkg);
       if (!pkg) {
-        out.errors.push(`${file}: $${c.name}: пакет ${c.npm.pkg} не найден (node_modules от ${root} вверх).`);
+        out.errors.push(coded('E_PROJECT', `${file}: $${c.name}: the package ${c.npm.pkg} is not found (node_modules from ${root} up).`));
         continue;
       }
       dir = join(pkg, c.npm.sub);
     } else dir = resolve(root, c.value);
     if (!isDir(dir)) {
-      out.errors.push(`${file}: $${c.name}: папки ${c.value} нет (${dir}).`);
+      out.errors.push(coded('E_PROJECT', `${file}: $${c.name}: no folder ${c.value} (${dir}).`));
       continue;
     }
     out.collections[c.name] = dir;

@@ -8,6 +8,7 @@ import { checkContract, parseContract } from '../src/contract';
 import { parse } from '../src/parser';
 import { createTileGrid, type TileGridInstance } from './helpers/tileGrid';
 import { createMockBackend } from './helpers/mockBackend';
+import { codesOf, thrown } from './helpers/codes';
 
 const svg = (body: string): string => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">${body}</svg>`;
 const heir = (body: string): string =>
@@ -48,8 +49,12 @@ describe('MountedScene.path', () => {
   });
 
   it('an unknown id or a non-geometry node is an error', () => {
-    expect(() => scene.path('nope')).toThrow(/path\("nope"\) — узла с таким id в сцене нет/);
-    expect(() => scene.path('g')).toThrow(/#g — <g>, не геометрия/);
+    const unknown = thrown(() => scene.path('nope'));
+    expect(unknown).toMatchObject({ code: 'E_NODE' });
+    expect(unknown.message).toContain('path("nope")');
+    const group = thrown(() => scene.path('g'));
+    expect(group).toMatchObject({ code: 'E_GEOMETRY' });
+    expect(group.message).toContain('#g');
   });
 });
 
@@ -113,6 +118,11 @@ describe('contract attrs="…"', () => {
 
   it('a missing one is named with the node', () => {
     const bad = parse(svg('<g id="board" data-cols="3" data-rows="3" data-cellh="1"/><image id="o1"/>'));
-    expect(checkContract(bad, contract)).toEqual(['#board: нет data-cellw — его ждёт контракт.', '#o1: нет data-kind — его ждёт контракт.']);
+    const errs = checkContract(bad, contract);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_ATTR', 'E_CONTRACT_ATTR']);
+    expect(errs[0]).toContain('#board');
+    expect(errs[0]).toContain('data-cellw');
+    expect(errs[1]).toContain('#o1');
+    expect(errs[1]).toContain('data-kind');
   });
 });

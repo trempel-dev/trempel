@@ -8,17 +8,10 @@
 // Coordinates are the node's parent space: a move by (dx, dy) shifts the node by that much as its
 // parent sees it, whatever the node's own transform.
 
-import {
-  ALLOWED_TAGS,
-  IDENTITY,
-  multiply,
-  parsePathData,
-  parseTransform,
-  PathDataError,
-  type Matrix,
-  type PathCmd,
-  type SceneNode,
-} from '@trempel/scene/core';
+import { type SceneNode } from '@trempel/scene/core';
+import { ALLOWED_TAGS } from '@trempel/scene/internal/parser';
+import { IDENTITY, multiply, parseTransform, type Matrix } from '@trempel/scene/internal/transform';
+import { parsePathData, type PathCmd } from '@trempel/scene/internal/geom/pathdata';
 import type { Element, Node, Text } from '@xmldom/xmldom';
 import { CommandError, type Ctx } from './ctx.js';
 import { fmt, fmtCoef, num } from './num.js';
@@ -35,10 +28,10 @@ export interface CommandDef {
 
 // ---- schema pieces ---------------------------------------------------------------------------
 
-const NODE: JSONSchema7 = { type: 'string', description: 'id узла или путь индексов от корня svg ("0/3/1"; "" — корень)' };
+const NODE: JSONSchema7 = { type: 'string', description: 'node id or index path from the svg root ("0/3/1"; "" — the root)' };
 const NUMBER: JSONSchema7 = { type: 'number' };
 const XY: JSONSchema7 = { type: 'array', items: NUMBER, minItems: 2, maxItems: 2 };
-const ID: JSONSchema7 = { type: 'string', pattern: '^[A-Za-z_][\\w.-]*$', description: 'id (буква или _, затем буквы, цифры, _ . -)' };
+const ID: JSONSchema7 = { type: 'string', pattern: '^[A-Za-z_][\\w.-]*$', description: 'id (a letter or _, then letters, digits, _ . -)' };
 const INDEX: JSONSchema7 = { type: 'integer', minimum: 0 };
 
 const obj = (properties: Record<string, JSONSchema7>, required: string[] = []): JSONSchema7 => ({
@@ -58,7 +51,7 @@ function matrixOf(el: Element): Matrix {
   try {
     return parseTransform(el.getAttribute('transform'));
   } catch (e) {
-    throw new CommandError(`${where(el)}: ${(e as Error).message}`);
+    throw CommandError.from(e, where(el), 'E_TRANSFORM');
   }
 }
 
@@ -72,7 +65,7 @@ function worldOf(el: Element): Matrix {
 function invert(m: Matrix): Matrix {
   const [a, b, c, d, e, f] = m;
   const det = a * d - b * c;
-  if (Math.abs(det) < 1e-12) throw new CommandError('вырожденный transform (масштаб 0) — обратного нет');
+  if (Math.abs(det) < 1e-12) throw new CommandError('E_EDITOR_VALUE', 'a degenerate transform (scale 0) has no inverse');
   return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
 }
 
@@ -104,7 +97,7 @@ function pivotOf(el: Element): [number, number] | null {
 }
 
 function requireUniqueId(ctx: Ctx, id: string, arg = 'id'): void {
-  if (ctx.byId(id).length) throw new CommandError(`${arg}: id "${id}" уже есть в документе`);
+  if (ctx.byId(id).length) throw new CommandError('E_EDITOR_ID_TAKEN', `${arg}: id "${id}" is already in the document`);
 }
 
 function attrValue(v: string | number): string {
@@ -112,37 +105,37 @@ function attrValue(v: string | number): string {
 }
 
 function checkAttrName(name: string): void {
-  if (name.startsWith('tml:')) throw new CommandError(`${name}: база стерильна — tml:* живут в наследнике (scene.tml.svg)`);
-  if (name === 'xmlns' || name.startsWith('xmlns:')) throw new CommandError(`${name}: пространства имён не правятся`);
+  if (name.startsWith('tml:')) throw new CommandError('E_STERILE', `${name}: the base is sterile — tml:* live in the heir (scene.tml.svg)`);
+  if (name === 'xmlns' || name.startsWith('xmlns:')) throw new CommandError('E_EDITOR_ATTR', `${name}: namespaces are not edited`);
 }
 
 function clipWarnings(ctx: Ctx, id: string, what: string): void {
-  for (const file of ctx.clipRefs.get(id) ?? []) ctx.warn(`клип ${file} ссылается на ${what} id "${id}"`);
+  for (const file of ctx.clipRefs.get(id) ?? []) ctx.warn('W_EDITOR_CLIP_REF', `clip ${file} refers to the ${what} id "${id}"`);
 }
 
 /** Read a <path>'s d as editable M L C Z (normalizing — with a warning — whatever else it uses). */
 function editPath(ctx: Ctx, el: Element, fn: (cmds: P.EditCmd[]) => P.EditCmd[]): void {
-  if (el.nodeName !== 'path') throw new CommandError(`${where(el)}: <${el.nodeName}> — path-команды работают с <path>`);
+  if (el.nodeName !== 'path') throw new CommandError('E_EDITOR_TAG', `${where(el)}: <${el.nodeName}> — path commands work on a <path>`);
   const d = el.getAttribute('d') ?? '';
   let parsed: PathCmd[];
   try {
     parsed = parsePathData(d);
   } catch (e) {
-    throw new CommandError(`${where(el)}: d: ${(e as Error).message}`);
+    throw CommandError.from(e, `${where(el)}: d`, 'E_PATH_DATA');
   }
   const cmds = P.toEditCmds(parsed);
   let out: P.EditCmd[];
   try {
     out = fn(cmds);
   } catch (e) {
-    if (e instanceof P.PathEditError) throw new CommandError(`${where(el)}: ${e.message}`);
+    if (e instanceof P.PathEditError) throw CommandError.from(e, where(el), 'E_EDITOR_PATH');
     throw e;
   }
   const normalize = P.needsNormalize(d);
   if (!normalize && JSON.stringify(out) === JSON.stringify(cmds)) return;
   if (normalize) {
     const arcs = parsed.some((c) => c[0] === 'A');
-    ctx.warn(`${where(el)}: d переписан в абсолютные M L C Z${arcs ? ' (дуги A — аппроксимация кубиками)' : ''}`);
+    ctx.warn('W_EDITOR_PATH_REWRITTEN', `${where(el)}: d rewritten as absolute M L C Z${arcs ? ' (A arcs approximated by cubics)' : ''}`);
   }
   ctx.setAttr(el, 'd', P.printPath(out));
 }
@@ -157,10 +150,10 @@ function localDelta(el: Element, dx: number, dy: number): { x: number; y: number
 function shiftAttr(ctx: Ctx, el: Element, name: string, delta: number): void {
   const raw = el.getAttribute(name);
   if (raw != null && /[\s,]/.test(raw.trim())) {
-    throw new CommandError(`${where(el)}: ${name}="${raw}" — список значений не сдвигается, только одно число`);
+    throw new CommandError('E_EDITOR_VALUE', `${where(el)}: ${name}="${raw}" — a list of values cannot be shifted, only a single number`);
   }
   const v = num(raw);
-  if (!Number.isFinite(v)) throw new CommandError(`${where(el)}: ${name}="${raw}" — не число`);
+  if (!Number.isFinite(v)) throw new CommandError('E_EDITOR_VALUE', `${where(el)}: ${name}="${raw}" — not a number`);
   if (delta === 0) return;
   ctx.setAttr(el, name, fmt(v + delta));
 }
@@ -171,21 +164,21 @@ const TRANSLATE_HEAD = /^(\s*translate\(\s*)([^\s,)]+)(\s*,\s*|\s+)?([^\s,)]+)?(
 
 const defs = {
   'node.setAttr': {
-    describe: 'Задать атрибут узла (value: null — удалить). tml:* в базе запрещены; id — через node.setId.',
+    describe: 'Set a node attribute (value: null — remove it). tml:* are not allowed in the base; id — via node.setId.',
     schema: obj(
       { node: NODE, name: { type: 'string', minLength: 1 }, value: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }] } },
       ['node', 'name', 'value'],
     ),
     run(ctx: Ctx, a: { node: string; name: string; value: string | number | null }) {
       checkAttrName(a.name);
-      if (a.name === 'id') throw new CommandError('id меняется командой node.setId (она же правит ссылки clip-path)');
+      if (a.name === 'id') throw new CommandError('E_EDITOR_ATTR', 'id is changed by node.setId (it also fixes clip-path references)');
       const el = ctx.node(a.node);
       ctx.setAttr(el, a.name, a.value === null ? null : attrValue(a.value));
     },
   },
 
   'node.setId': {
-    describe: 'Переименовать узел; ссылки clip-path="url(#…)" в документе обновляются, клипы — предупреждение.',
+    describe: 'Rename a node; clip-path="url(#…)" references in the document are updated, clips get a warning.',
     schema: obj({ node: NODE, id: ID }, ['node', 'id']),
     run(ctx: Ctx, a: { node: string; id: string }) {
       const el = ctx.node(a.node);
@@ -200,29 +193,29 @@ const defs = {
           ctx.setAttr(n, 'clip-path', `url(#${a.id})`);
         }
       }
-      clipWarnings(ctx, old, 'старый');
+      clipWarnings(ctx, old, 'old');
     },
   },
 
   'node.setText': {
-    describe: 'Заменить текст <text> (макетная строка базы; биндинг наследника его перекрывает).',
+    describe: 'Replace the text of a <text> (the base\'s mock-up string; a binding in the heir overrides it).',
     schema: obj({ node: NODE, text: { type: 'string' } }, ['node', 'text']),
     run(ctx: Ctx, a: { node: string; text: string }) {
       const el = ctx.node(a.node);
-      if (el.nodeName !== 'text') throw new CommandError(`${where(el)}: <${el.nodeName}> — текст бывает только у <text>`);
+      if (el.nodeName !== 'text') throw new CommandError('E_EDITOR_TAG', `${where(el)}: <${el.nodeName}> — only a <text> has text`);
       ctx.setText(el, a.text);
     },
   },
 
   'node.move': {
-    describe: 'Сдвинуть узел на (dx, dy) в координатах родителя: translate у <g>, x/y, cx/cy, x1…y2, точки d.',
+    describe: 'Move a node by (dx, dy) in its parent\'s coordinates: translate on a <g>, x/y, cx/cy, x1…y2, the points of d.',
     schema: obj({ node: NODE, dx: NUMBER, dy: NUMBER }, ['node', 'dx', 'dy']),
     run(ctx: Ctx, a: { node: string; dx: number; dy: number }) {
       const el = ctx.node(a.node);
       const tag = el.nodeName;
       if (a.dx === 0 && a.dy === 0) return;
       if (tag === 'svg' || tag === 'defs' || tag === 'clipPath') {
-        throw new CommandError(`${where(el)}: <${tag}> не двигается — двигайте его содержимое`);
+        throw new CommandError('E_EDITOR_TAG', `${where(el)}: <${tag}> does not move — move its content`);
       }
       if (tag === 'g') {
         const tr = el.getAttribute('transform') ?? '';
@@ -264,25 +257,25 @@ const defs = {
           try {
             parsed = parsePathData(el.getAttribute('d') ?? '');
           } catch (e) {
-            throw new CommandError(`${where(el)}: d: ${(e as Error).message}`);
+            throw CommandError.from(e, `${where(el)}: d`, 'E_PATH_DATA');
           }
           ctx.setAttr(el, 'd', P.printParsed(P.shiftParsed(parsed, d.x, d.y)));
           break;
         }
         default:
-          throw new CommandError(`${where(el)}: <${tag}> двигать не умею`);
+          throw new CommandError('E_EDITOR_TAG', `${where(el)}: cannot move a <${tag}>`);
       }
     },
   },
 
   'node.setTransform': {
     describe:
-      'Пересобрать transform из частей: translate(t+pivot) rotate scale translate(-pivot). Без частей — transform снимается. pivot по умолчанию — data-pivot узла.',
+      'Rebuild transform from parts: translate(t+pivot) rotate scale translate(-pivot). No parts — transform is removed. pivot defaults to the node\'s data-pivot.',
     schema: obj(
       {
         node: NODE,
         translate: XY,
-        rotate: { type: 'number', description: 'градусы' },
+        rotate: { type: 'number', description: 'degrees' },
         scale: { anyOf: [{ type: 'number' }, XY] },
         pivot: XY,
       },
@@ -290,7 +283,7 @@ const defs = {
     ),
     run(ctx: Ctx, a: { node: string; translate?: number[]; rotate?: number; scale?: number | number[]; pivot?: number[] }) {
       const el = ctx.node(a.node);
-      if (el === ctx.root) throw new CommandError('у корня <svg> transform не задаётся');
+      if (el === ctx.root) throw new CommandError('E_EDITOR_ROOT', 'the root <svg> takes no transform');
       const s = ctx.sep;
       const [tx, ty] = a.translate ?? [0, 0];
       const [px, py] = a.pivot ?? pivotOf(el) ?? [0, 0];
@@ -310,12 +303,12 @@ const defs = {
 
   'node.setPivot': {
     describe:
-      'Пивот узла (data-pivot="x y", его собственное пространство до transform): вокруг него вращение и масштаб — ручками, клипами, setTransform. keepWorld (по умолчанию true) — узел на месте (матрица та же); false — части transform (сдвиг, поворот, масштаб) остаются числами, но теперь вокруг нового пивота (узел смещается).',
+      'The node\'s pivot (data-pivot="x y", in its own space before transform): rotation and scale go around it — by handles, clips, setTransform. keepWorld (default true) — the node stays in place (same matrix); false — the transform parts (translate, rotate, scale) keep their numbers but now turn around the new pivot (the node shifts).',
     schema: obj({ node: NODE, x: NUMBER, y: NUMBER, keepWorld: { type: 'boolean' } }, ['node', 'x', 'y']),
     run(ctx: Ctx, a: { node: string; x: number; y: number; keepWorld?: boolean }) {
       const el = ctx.node(a.node);
       if (el === ctx.root || el.nodeName === 'defs' || el.nodeName === 'clipPath') {
-        throw new CommandError(`${where(el)}: у <${el.nodeName}> пивота нет — узел не рисуется`);
+        throw new CommandError('E_EDITOR_TAG', `${where(el)}: <${el.nodeName}> has no pivot — the node is not drawn`);
       }
       const [ox, oy] = pivotOf(el) ?? [0, 0];
       ctx.setAttr(el, 'data-pivot', `${fmt(a.x)} ${fmt(a.y)}`);
@@ -332,7 +325,7 @@ const defs = {
 
   'node.resize': {
     describe:
-      'Размер узла (v1.0): <image> — width/height (у data-slices это размер панели, борта 1:1), <rect> — width/height, <g data-size> — data-size, инстанс растягиваемого префаба (<use>, data-resizable) — width/height по его осям (null — снять: минимальный размер). Ось без значения не меняется.',
+      'Node size (v1.0): <image> — width/height (with data-slices it is the panel size, borders 1:1), <rect> — width/height, <g data-size> — data-size, an instance of a resizable prefab (<use>, data-resizable) — width/height along its axes (null — remove: the minimum size). An axis without a value is left as is.',
     schema: obj(
       {
         node: NODE,
@@ -353,12 +346,12 @@ const defs = {
           else n.children.forEach(find);
         };
         find(ctx.env.merged());
-        if (!inst) throw new CommandError(`${where(el)}: инстанс не развёрнут (префаб не найден или с ошибками — см. doc.errors)`);
+        if (!inst) throw new CommandError('E_EDITOR_NOT_EXPANDED', `${where(el)}: the instance is not expanded (the prefab is missing or has errors — see doc.errors)`);
         const axes = inst.resizable ?? '';
         for (const [k, axis] of [['width', 'x'], ['height', 'y']] as const) {
           if (a[k] === undefined) continue;
           if (!axes.includes(axis)) {
-            throw new CommandError(`${where(el)}: ${inst.href} ${axes ? `растягивается только по ${axes}` : 'не растягивается (нет data-resizable) — масштаб инстанса: node.setTransform'}`);
+            throw new CommandError('E_PREFAB_RESIZE', `${where(el)}: ${inst.href} ${axes ? `resizes only along ${axes}` : 'does not resize (no data-resizable) — to scale the instance: node.setTransform'}`);
           }
           ctx.setAttr(el, k, a[k] === null ? null : fmt(a[k] as number));
         }
@@ -366,7 +359,7 @@ const defs = {
       }
       if (tag === 'g') {
         const raw = el.getAttribute('data-size');
-        if (raw == null) throw new CommandError(`${where(el)}: у <g> размера нет — data-size="w h" делает группу боксом для якорей`);
+        if (raw == null) throw new CommandError('E_EDITOR_TAG', `${where(el)}: the <g> has no size — data-size="w h" makes a group a box for anchors`);
         const [w0, h0] = raw.trim().split(/[\s,]+/).map(Number);
         const w = a.width ?? w0;
         const h = a.height ?? h0;
@@ -374,45 +367,45 @@ const defs = {
         return;
       }
       if (tag !== 'image' && tag !== 'rect') {
-        throw new CommandError(`${where(el)}: размер задаётся у <image>, <rect>, <g data-size> и инстансов растягиваемых префабов, а это <${tag}>`);
+        throw new CommandError('E_EDITOR_TAG', `${where(el)}: size is set on an <image>, <rect>, <g data-size> or an instance of a resizable prefab, not on a <${tag}>`);
       }
       for (const k of ['width', 'height'] as const) {
         if (a[k] === undefined) continue;
-        if (a[k] === null) throw new CommandError(`${where(el)}: ${k} у <${tag}> не снимается — задайте число`);
+        if (a[k] === null) throw new CommandError('E_EDITOR_VALUE', `${where(el)}: ${k} of a <${tag}> cannot be removed — give a number`);
         ctx.setAttr(el, k, fmt(a[k] as number));
       }
     },
   },
 
   'node.reorder': {
-    describe: 'Поставить узел на место index среди соседей (z-order: 0 — самый нижний).',
+    describe: 'Put a node at position index among its siblings (z-order: 0 — the bottom).',
     schema: obj({ node: NODE, index: INDEX }, ['node', 'index']),
     run(ctx: Ctx, a: { node: string; index: number }) {
       const el = ctx.node(a.node);
       const parent = el.parentNode as Element | null;
-      if (!parent || el === ctx.root) throw new CommandError('у корня нет соседей');
+      if (!parent || el === ctx.root) throw new CommandError('E_EDITOR_ROOT', 'the root has no siblings');
       const kids = elementChildren(parent);
-      if (a.index >= kids.length) throw new CommandError(`index ${a.index}: у <${parent.nodeName}> ${kids.length} дочерних — допустимо 0…${kids.length - 1}`);
+      if (a.index >= kids.length) throw new CommandError('E_EDITOR_INDEX', `index ${a.index}: <${parent.nodeName}> has ${kids.length} children — allowed 0…${kids.length - 1}`);
       if (kids.indexOf(el) === a.index) return;
       ctx.move(el, parent, a.index);
     },
   },
 
   'node.reparent': {
-    describe: 'Перенести узел в другого родителя (index — место среди его детей, по умолчанию последним); мировая позиция сохраняется.',
+    describe: 'Move a node to another parent (index — its position among the children, default last); the world position is kept.',
     schema: obj({ node: NODE, parent: NODE, index: INDEX }, ['node', 'parent']),
     run(ctx: Ctx, a: { node: string; parent: string; index?: number }) {
       const el = ctx.node(a.node);
       const parent = ctx.node(a.parent, 'parent');
-      if (el === ctx.root) throw new CommandError('корень не переносится');
-      if (!CONTAINERS.has(parent.nodeName)) throw new CommandError(`parent: <${parent.nodeName}> не контейнер (есть: ${[...CONTAINERS].join(', ')})`);
+      if (el === ctx.root) throw new CommandError('E_EDITOR_ROOT', 'the root cannot be moved');
+      if (!CONTAINERS.has(parent.nodeName)) throw new CommandError('E_EDITOR_TAG', `parent: <${parent.nodeName}> is not a container (containers: ${[...CONTAINERS].join(', ')})`);
       for (let n: Node | null = parent; n; n = n.parentNode) {
-        if (n === el) throw new CommandError('parent: нельзя перенести узел внутрь самого себя');
+        if (n === el) throw new CommandError('E_EDITOR_REPARENT', 'parent: a node cannot be moved into itself');
       }
       const oldParent = el.parentNode as Element;
       const local = multiply(multiply(invert(worldOf(parent)), worldOf(oldParent)), matrixOf(el));
       const count = elementChildren(parent).length - (oldParent === parent ? 1 : 0);
-      if (a.index != null && a.index > count) throw new CommandError(`index ${a.index}: у <${parent.nodeName}> будет ${count} дочерних — допустимо 0…${count}`);
+      if (a.index != null && a.index > count) throw new CommandError('E_EDITOR_INDEX', `index ${a.index}: <${parent.nodeName}> will have ${count} children — allowed 0…${count}`);
       ctx.move(el, parent, a.index ?? count);
       const t = writeMatrix(local, ctx.sep);
       const before = el.getAttribute('transform');
@@ -428,51 +421,51 @@ const defs = {
   },
 
   'node.insert': {
-    describe: 'Вставить XML-фрагмент (ровно один элемент) в parent на место index (по умолчанию последним).',
+    describe: 'Insert an XML fragment (exactly one element) into parent at position index (default last).',
     schema: obj({ parent: NODE, index: INDEX, xml: { type: 'string', minLength: 1 } }, ['parent', 'xml']),
     run(ctx: Ctx, a: { parent: string; index?: number; xml: string }) {
       const parent = ctx.node(a.parent, 'parent');
-      if (!CONTAINERS.has(parent.nodeName)) throw new CommandError(`parent: <${parent.nodeName}> не контейнер (есть: ${[...CONTAINERS].join(', ')})`);
+      if (!CONTAINERS.has(parent.nodeName)) throw new CommandError('E_EDITOR_TAG', `parent: <${parent.nodeName}> is not a container (containers: ${[...CONTAINERS].join(', ')})`);
       const el = ctx.fragment(a.xml, parent);
       const ids = new Set<string>();
       for (const n of ctx.allElements(el)) {
         if (!ALLOWED_TAGS.has(n.nodeName)) {
-          throw new CommandError(`xml: <${n.nodeName}> вне формата (есть: ${[...ALLOWED_TAGS].join(', ')})`);
+          throw new CommandError('E_TAG', `xml: <${n.nodeName}> is outside the format (supported: ${[...ALLOWED_TAGS].join(', ')})`);
         }
         for (let i = 0; i < n.attributes.length; i++) checkAttrName(n.attributes[i].name);
         const id = n.getAttribute('id');
         if (id) {
-          if (ids.has(id)) throw new CommandError(`xml: id "${id}" дважды во фрагменте`);
+          if (ids.has(id)) throw new CommandError('E_DUP_ID', `xml: id "${id}" twice in the fragment`);
           requireUniqueId(ctx, id, 'xml');
           ids.add(id);
         }
       }
-      if (el.nodeName === 'svg') throw new CommandError('xml: <svg> внутрь сцены не вставляется');
+      if (el.nodeName === 'svg') throw new CommandError('E_EDITOR_FRAGMENT', 'xml: an <svg> cannot be inserted into the scene');
       ctx.insert(parent, el, a.index);
     },
   },
 
   'node.remove': {
-    describe: 'Удалить узел с поддеревом.',
+    describe: 'Remove a node with its subtree.',
     schema: obj({ node: NODE }, ['node']),
     run(ctx: Ctx, a: { node: string }) {
       const el = ctx.node(a.node);
-      if (el === ctx.root) throw new CommandError('корень удалить нельзя');
+      if (el === ctx.root) throw new CommandError('E_EDITOR_ROOT', 'the root cannot be removed');
       for (const n of ctx.allElements(el)) {
         const id = n.getAttribute('id');
-        if (id) clipWarnings(ctx, id, 'удалённый');
+        if (id) clipWarnings(ctx, id, 'removed');
       }
       ctx.remove(el);
     },
   },
 
   'node.duplicate': {
-    describe: 'Копия узла сразу после него; id в копии — с суффиксом (по умолчанию -2, -3… до свободного).',
+    describe: 'A copy of a node right after it; ids in the copy get a suffix (default -2, -3… up to a free one).',
     schema: obj({ node: NODE, idSuffix: { type: 'string', minLength: 1 } }, ['node']),
     run(ctx: Ctx, a: { node: string; idSuffix?: string }) {
       const el = ctx.node(a.node);
       const parent = el.parentNode as Element | null;
-      if (!parent || el === ctx.root) throw new CommandError('корень не копируется');
+      if (!parent || el === ctx.root) throw new CommandError('E_EDITOR_ROOT', 'the root cannot be copied');
       const copy = cloneWithSource(el, ctx.doc) as Element;
       const nodes = ctx.allElements(copy);
       const ids = nodes.map((n) => n.getAttribute('id')).filter((x): x is string => !!x);
@@ -487,7 +480,7 @@ const defs = {
         }
       } else {
         const clash = ids.find((id) => taken(id + suffix));
-        if (clash) throw new CommandError(`idSuffix: id "${clash + suffix}" уже есть в документе`);
+        if (clash) throw new CommandError('E_EDITOR_ID_TAKEN', `idSuffix: id "${clash + suffix}" is already in the document`);
       }
       const renamed = new Map(ids.map((id) => [id, id + suffix]));
       for (const n of nodes) {
@@ -502,22 +495,22 @@ const defs = {
   },
 
   'path.setData': {
-    describe: 'Заменить d пути целиком.',
+    describe: 'Replace the whole d of a path.',
     schema: obj({ node: NODE, d: { type: 'string', minLength: 1 } }, ['node', 'd']),
     run(ctx: Ctx, a: { node: string; d: string }) {
       const el = ctx.node(a.node);
-      if (el.nodeName !== 'path') throw new CommandError(`${where(el)}: <${el.nodeName}> — d бывает только у <path>`);
+      if (el.nodeName !== 'path') throw new CommandError('E_EDITOR_TAG', `${where(el)}: <${el.nodeName}> — only a <path> has d`);
       try {
         parsePathData(a.d);
       } catch (e) {
-        throw new CommandError(`d: ${e instanceof PathDataError ? e.message : (e as Error).message}`);
+        throw CommandError.from(e, 'd', 'E_PATH_DATA');
       }
       ctx.setAttr(el, 'd', a.d);
     },
   },
 
   'path.setPoint': {
-    describe: 'Передвинуть точку index контура (ручки едут с ней).',
+    describe: 'Move point index of the path (its handles move with it).',
     schema: obj({ node: NODE, index: INDEX, x: NUMBER, y: NUMBER }, ['node', 'index', 'x', 'y']),
     run(ctx: Ctx, a: { node: string; index: number; x: number; y: number }) {
       editPath(ctx, ctx.node(a.node), (c) => P.setPoint(c, a.index, { x: a.x, y: a.y }));
@@ -525,7 +518,7 @@ const defs = {
   },
 
   'path.setHandle': {
-    describe: 'Поставить ручку Безье точки index (which: in — входящая, out — исходящая); linked — зеркалить противоположную.',
+    describe: 'Place a Bézier handle of point index (which: in — incoming, out — outgoing); linked — mirror the opposite one.',
     schema: obj(
       { node: NODE, index: INDEX, which: { type: 'string', enum: ['in', 'out'] }, x: NUMBER, y: NUMBER, linked: { type: 'boolean' } },
       ['node', 'index', 'which', 'x', 'y'],
@@ -536,7 +529,7 @@ const defs = {
   },
 
   'path.insertPoint': {
-    describe: 'Разрезать сегмент segment в t (0<t<1) с сохранением формы; сегменты — L/C по порядку и замыкающая линия Z.',
+    describe: 'Split segment segment at t (0<t<1) keeping the shape; segments are the L/C in order and the closing line of Z.',
     schema: obj({ node: NODE, segment: INDEX, t: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 1 } }, ['node', 'segment', 't']),
     run(ctx: Ctx, a: { node: string; segment: number; t: number }) {
       editPath(ctx, ctx.node(a.node), (c) => P.insertPoint(c, a.segment, a.t));
@@ -544,7 +537,7 @@ const defs = {
   },
 
   'path.removePoint': {
-    describe: 'Удалить точку index; соседние сегменты сшиваются в один.',
+    describe: 'Remove point index; the neighbouring segments are joined into one.',
     schema: obj({ node: NODE, index: INDEX }, ['node', 'index']),
     run(ctx: Ctx, a: { node: string; index: number }) {
       editPath(ctx, ctx.node(a.node), (c) => P.removePoint(c, a.index));
@@ -552,7 +545,7 @@ const defs = {
   },
 
   'path.close': {
-    describe: 'Замкнуть подконтур (Z); subpath — номер, по умолчанию последний.',
+    describe: 'Close a subpath (Z); subpath — its number, default the last.',
     schema: obj({ node: NODE, subpath: INDEX }, ['node']),
     run(ctx: Ctx, a: { node: string; subpath?: number }) {
       editPath(ctx, ctx.node(a.node), (c) => P.closePath(c, a.subpath));
@@ -560,7 +553,7 @@ const defs = {
   },
 
   'path.open': {
-    describe: 'Разомкнуть подконтур (убрать Z); subpath — номер, по умолчанию последний.',
+    describe: 'Open a subpath (remove Z); subpath — its number, default the last.',
     schema: obj({ node: NODE, subpath: INDEX }, ['node']),
     run(ctx: Ctx, a: { node: string; subpath?: number }) {
       editPath(ctx, ctx.node(a.node), (c) => P.openPath(c, a.subpath));
@@ -568,7 +561,7 @@ const defs = {
   },
 
   'path.setNodeType': {
-    describe: 'Тип узла index: smooth — выровнять ручки на одну прямую (длины сохраняются), corner — ручки независимы.',
+    describe: 'Node type of point index: smooth — align the handles on one line (lengths kept), corner — independent handles.',
     schema: obj({ node: NODE, index: INDEX, type: { type: 'string', enum: ['corner', 'smooth'] } }, ['node', 'index', 'type']),
     run(ctx: Ctx, a: { node: string; index: number; type: 'corner' | 'smooth' }) {
       editPath(ctx, ctx.node(a.node), (c) => P.setNodeType(c, a.index, a.type));
@@ -576,7 +569,7 @@ const defs = {
   },
 
   'defs.ensure': {
-    describe: 'Создать <defs id="defs"> первым ребёнком корня, если его нет.',
+    describe: 'Create <defs id="defs"> as the first child of the root, if there is none.',
     schema: obj({}),
     run(ctx: Ctx) {
       ensureDefs(ctx);
@@ -584,7 +577,7 @@ const defs = {
   },
 
   'clip.create': {
-    describe: 'Создать <clipPath id> в <defs> с одной фигурой (shape: rect | path, attrs — её атрибуты: x y width height rx | d).',
+    describe: 'Create a <clipPath id> in <defs> with one shape (shape: rect | path, attrs — its attributes: x y width height rx | d).',
     schema: obj(
       {
         id: ID,
@@ -595,8 +588,8 @@ const defs = {
     ),
     run(ctx: Ctx, a: { id: string; shape: 'rect' | 'path'; attrs: Record<string, string | number> }) {
       requireUniqueId(ctx, a.id);
-      if (a.shape === 'path' && a.attrs.d == null) throw new CommandError('attrs: у path нужен d');
-      if (a.shape === 'rect' && (a.attrs.width == null || a.attrs.height == null)) throw new CommandError('attrs: у rect нужны width и height');
+      if (a.shape === 'path' && a.attrs.d == null) throw new CommandError('E_EDITOR_ARGS', 'attrs: a path needs d');
+      if (a.shape === 'rect' && (a.attrs.width == null || a.attrs.height == null)) throw new CommandError('E_EDITOR_ARGS', 'attrs: a rect needs width and height');
       const defsEl = ensureDefs(ctx);
       const kids = elementChildren(defsEl);
       const prev = kids.length ? kids[kids.length - 1].previousSibling : defsEl.previousSibling;
@@ -617,30 +610,30 @@ const defs = {
   },
 
   'clip.assign': {
-    describe: 'Назначить узлу (<g>, <image>) маску: clip-path="url(#clip)"; clip: null — снять.',
+    describe: 'Mask a node (<g>, <image>): clip-path="url(#clip)"; clip: null — remove the mask.',
     schema: obj({ node: NODE, clip: { anyOf: [{ type: 'string' }, { type: 'null' }] } }, ['node', 'clip']),
     run(ctx: Ctx, a: { node: string; clip: string | null }) {
       const el = ctx.node(a.node);
       if (el.nodeName !== 'g' && el.nodeName !== 'image') {
-        throw new CommandError(`${where(el)}: маска бывает только у <g> и <image>`);
+        throw new CommandError('E_EDITOR_TAG', `${where(el)}: only a <g> or an <image> takes a mask`);
       }
       if (a.clip === null) {
         ctx.setAttr(el, 'clip-path', null);
         return;
       }
       const target = ctx.byId(a.clip)[0];
-      if (!target) throw new CommandError(`clip: узла #${a.clip} нет`);
-      if (target.nodeName !== 'clipPath') throw new CommandError(`clip: #${a.clip} — <${target.nodeName}>, а не <clipPath>`);
+      if (!target) throw new CommandError('E_EDITOR_NO_NODE', `clip: no node #${a.clip}`);
+      if (target.nodeName !== 'clipPath') throw new CommandError('E_EDITOR_TAG', `clip: #${a.clip} is a <${target.nodeName}>, not a <clipPath>`);
       ctx.setAttr(el, 'clip-path', `url(#${a.clip})`);
     },
   },
 
   'layer.create': {
-    describe: 'Создать пустой слой <g id> в parent (по умолчанию корень) на месте index (по умолчанию последним).',
+    describe: 'Create an empty layer <g id> in parent (default the root) at position index (default last).',
     schema: obj({ parent: NODE, id: ID, index: INDEX }, ['id']),
     run(ctx: Ctx, a: { parent?: string; id: string; index?: number }) {
       const parent = a.parent == null ? ctx.root : ctx.node(a.parent, 'parent');
-      if (parent.nodeName !== 'svg' && parent.nodeName !== 'g') throw new CommandError(`parent: слой живёт в <svg> или <g>, а не в <${parent.nodeName}>`);
+      if (parent.nodeName !== 'svg' && parent.nodeName !== 'g') throw new CommandError('E_EDITOR_TAG', `parent: a layer lives in an <svg> or a <g>, not in a <${parent.nodeName}>`);
       requireUniqueId(ctx, a.id);
       const g = ctx.doc.createElement('g');
       g.setAttribute('id', a.id);

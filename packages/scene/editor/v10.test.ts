@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mount, type SceneSource } from '@trempel/scene/core';
+import { codeOf, mount, type SceneSource } from '@trempel/scene/core';
 import { createMockBackend, type MockNode } from '../test/helpers/mockBackend';
 import { openDocument, type EditorDocument } from './index.js';
 import { applyOp, type OpHost } from '../edit/ops';
@@ -56,12 +56,12 @@ describe('v1.0 — editor core', () => {
     const after = roundtrip(doc, 'node.resize', { node: 'pause', width: 500 });
     expect(after).toContain('width="500" height="800"');
     expect(doc.instance('pause')!.size).toEqual({ w: 500, h: 800 });
-    expect(doc.exec('node.resize', { node: 'resumeBtn', height: 90 }).errors?.[0]).toMatch(/#resumeBtn: ui\/button.svg растягивается только по x/);
+    expect(doc.exec('node.resize', { node: 'resumeBtn', height: 90 }).errors?.[0]).toMatch(/^E_PREFAB_RESIZE: #resumeBtn: ui\/button.svg /);
     roundtrip(doc, 'node.resize', { node: 'pause', width: null, height: null });
     expect(doc.instance('pause')!.size).toEqual({ w: 320, h: 240 });
     // below the minimum — applied, but reported
     doc.exec('node.resize', { node: 'pause', width: 100 });
-    expect(doc.errors).toContain('#pause: width="100" меньше минимального 320 (viewBox ui/panel.svg).');
+    expect(doc.errors.some((e) => codeOf(e) === 'E_PREFAB_MIN_SIZE' && e.includes('#pause'))).toBe(true);
   });
 
   it('node.resize on image / rect / g[data-size]; node.setAttr data-slices — undo/redo', () => {
@@ -76,9 +76,9 @@ describe('v1.0 — editor core', () => {
     expect(roundtrip(doc, 'node.resize', { node: 'p', width: 400, height: 260 })).toContain('width="400" height="260" data-slices');
     expect(roundtrip(doc, 'node.resize', { node: 'r', height: 30 })).toContain('<rect id="r" width="10" height="30"/>');
     expect(roundtrip(doc, 'node.resize', { node: 'zone', width: 140 })).toContain('data-size="140 50"');
-    expect(doc.exec('node.resize', { node: 't', width: 3 }).errors?.[0]).toMatch(/размер задаётся у <image>, <rect>, <g data-size>/);
+    expect(doc.exec('node.resize', { node: 't', width: 3 }).errors?.[0]).toMatch(/^E_EDITOR_TAG: /);
     doc.exec('node.setAttr', { node: 'p', name: 'data-slices', value: '1 2 3' });
-    expect(doc.errors.join('\n')).toMatch(/#p: data-slices="1 2 3"/);
+    expect(doc.errors.some((e) => codeOf(e) === 'E_SLICES' && e.includes('#p'))).toBe(true);
   });
 });
 

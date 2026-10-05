@@ -4,7 +4,8 @@
 // runtime never draws these; the layer does, and a click on a dashed stroke selects that element.
 // v1.0: the slice lines of a selected <image data-slices> (the borders that do not stretch).
 
-import { parseClipRef, type SceneNode } from '../../src/core.js';
+import { type SceneNode } from '../../src/core.js';
+import { parseClipRef } from '../../src/geom/check.js';
 import { parseSlices } from '../../src/layout.js';
 import { mapBox, multiply, nodeWorld, ownMatrix, type Matrix } from '../geometry';
 import type { Editor } from './editor';

@@ -32,7 +32,7 @@ const args = (schema) => {
 // Tags in descriptions (<defs>, <g>) as code, so markdown does not take them for HTML.
 const cell = (t) => t.replace(/\|/g, '\\|').replace(/<[^>]+>/g, (m) => `\`${m}\``);
 const rows = Object.entries(commands).map(([name, c]) => `| \`${name}\` | ${args(c.schema)} | ${cell(c.describe)} |`);
-const block = ['| команда | аргументы | что делает |', '|---|---|---|', ...rows].join('\n');
+const block = ['| command | arguments | what it does |', '|---|---|---|', ...rows].join('\n');
 
 const BEGIN = '<!-- BEGIN commands (scripts/editor-commands.mjs) -->';
 const END = '<!-- END commands -->';
@@ -40,11 +40,11 @@ const text = readFileSync(readme, 'utf8');
 const a = text.indexOf(BEGIN);
 const b = text.indexOf(END);
 if (a < 0 || b < a) {
-  console.error(`editor/README.md: нет маркеров ${BEGIN} … ${END}`);
+  console.error(`E_CLI: editor/README.md: no markers ${BEGIN} … ${END}`);
   process.exit(2);
 }
 writeFileSync(readme, `${text.slice(0, a + BEGIN.length)}\n${block}\n${text.slice(b)}`);
-console.log(`editor/README.md: ${rows.length} команд`);
+console.log(`editor/README.md: ${rows.length} commands`);
 
 // ---- edit/API.md ---------------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ const tmlSrc = readFileSync(fileURLToPath(new URL('../edit/app/tml.ts', import.m
 const ga = tmlSrc.indexOf('// BEGIN tml-api');
 const gb = tmlSrc.indexOf('// END tml-api');
 if (ga < 0 || gb < ga) {
-  console.error('edit/app/tml.ts: нет маркеров // BEGIN tml-api … // END tml-api');
+  console.error('E_CLI: edit/app/tml.ts: no markers // BEGIN tml-api … // END tml-api');
   process.exit(2);
 }
 const types = tmlSrc
@@ -61,33 +61,33 @@ const types = tmlSrc
   .split('\n')
   .filter((l) => l.trim() !== '')
   .join('\n');
-const api = `# tml — API редактора сцен для скриптов
+const api = `# tml — the scene editor API for scripts
 
-<!-- Сгенерировано: npm run editor:commands (из edit/app/tml.ts и реестра команд). Не править руками. -->
+<!-- Generated: npm run editor:commands (from edit/app/tml.ts and the command registry). Do not edit by hand. -->
 
-\`window.tml\` — редактор сцен Trempel одним объектом: консоль (вкладка «Консоль», ⌘Enter), макросы (\`<папка сцен>/.trempel/macros/*.js\`, ⌘K), агент (\`tml.run(code)\`). Правится **база** сцены (\`X.svg\`, ванильный SVG): только командами ядра — \`tml.doc.exec(name, args)\`. Узел — \`id\` или путь индексов элементов от корня (\`"0/3/1"\`). Координаты команд — пространство **родителя** узла; \`tml.bounds\` и \`tml.moveBy\` — единицы **сцены** (viewBox).
+\`window.tml\` is the Trempel scene editor as one object: the console (the Console tab, ⌘Enter), macros (\`<scene folder>/.trempel/macros/*.js\`, ⌘K), an agent (\`tml.run(code)\`). What gets edited is the scene **base** (\`X.svg\`, vanilla SVG), and only through core commands — \`tml.doc.exec(name, args)\`. A node is an \`id\` or a path of element indices from the root (\`"0/3/1"\`). Command coordinates are in the node's **parent** space; \`tml.bounds\` and \`tml.moveBy\` use **scene** units (the viewBox).
 
-- Скрипт = тело async-функции с \`tml\` и \`console\`; одно выражение возвращается само. Весь \`tml.run\` — **одна** запись undo; исключение откатывает всё. Ошибка команды — не исключение: \`{ ok: false, errors }\`.
-- После команд сцена перерисовывается асинхронно: \`bounds\` и \`scene\` — с прошлой отрисовки, свежие — после \`await tml.idle()\`.
-- Макрос — тот же скрипт в файле, первая строка \`// name: Подпись\`.
+- A script is the body of an async function with \`tml\` and \`console\`; a single expression is returned as is. A whole \`tml.run\` is **one** undo entry; an exception rolls it all back. A command error is not an exception: \`{ ok: false, errors }\`.
+- After commands the scene is redrawn asynchronously: \`bounds\` and \`scene\` are from the last render, fresh ones after \`await tml.idle()\`.
+- A macro is the same script in a file, its first line \`// name: Title\`.
 
 \`\`\`ts
 ${types}
 \`\`\`
 
-## Команды — \`tml.doc.exec(name, args)\`, пачкой — \`tml.doc.batch(label, [{ name, args }])\`
+## Commands — \`tml.doc.exec(name, args)\`, as a batch — \`tml.doc.batch(label, [{ name, args }])\`
 
 ${block}
 
-## Примеры
+## Examples
 
 \`\`\`js
-tml.nodes().filter(n => n.tag === 'image').length              // сколько картинок
+tml.nodes().filter(n => n.tag === 'image').length              // how many images
 tml.doc.exec('node.move', { node: 'settingsBtn', dx: 10, dy: 0 })
-for (const id of tml.selection) tml.moveBy(id, 0, -20)          // выделение вверх на 20 единиц сцены
-tml.doc.errors                                                   // контракт, геометрия, клипы — после каждой команды
+for (const id of tml.selection) tml.moveBy(id, 0, -20)          // the selection up by 20 scene units
+tml.doc.errors                                                   // contract, geometry, clips — after every command
 await tml.save()
 \`\`\`
 `;
 writeFileSync(fileURLToPath(new URL('../edit/API.md', import.meta.url)), api);
-console.log(`edit/API.md: ${api.split('\n').length} строк`);
+console.log(`edit/API.md: ${api.split('\n').length} lines`);

@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Assets, Container, Graphics, Sprite, Text, Texture, TextureSource } from 'pixi.js';
 import { PixiBackend } from '../src/render/pixi';
 import { TrempelError } from '../src/errors';
+import { codesOf, thrown } from './helpers/codes';
 
 // ascent 80 + descent 20 per 100px: the baseline sits at 80% of an unstroked line.
 const metrics = (font: string): { ascent: number; descent: number } => {
@@ -48,7 +49,9 @@ describe('PixiBackend — transform', () => {
   });
 
   it('a bad transform is a hard error', () => {
-    expect(() => backend().createNode('g', { transform: 'perspective(1)' })).toThrow(/не поддерживается/);
+    const e = thrown(() => backend().createNode('g', { transform: 'perspective(1)' }));
+    expect(e).toMatchObject({ code: 'E_TRANSFORM' });
+    expect(e.message).toContain('perspective');
   });
 });
 
@@ -188,10 +191,10 @@ describe('PixiBackend — images and readiness', () => {
     b.createNode('image', { href: 'missing/b.png' });
     const err = await b.whenReady().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(TrempelError);
-    expect((err as TrempelError).errors).toEqual([
-      'Текстура не загрузилась: "missing/a.png".',
-      'Текстура не загрузилась: "missing/b.png".',
-    ]);
+    const { errors } = err as TrempelError;
+    expect(codesOf(errors)).toEqual(['E_TEXTURE', 'E_TEXTURE']);
+    expect(errors[0]).toContain('"missing/a.png"');
+    expect(errors[1]).toContain('"missing/b.png"');
     await expect(b.whenReady()).resolves.toBeUndefined(); // failures are reported once
   });
 });

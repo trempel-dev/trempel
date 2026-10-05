@@ -27,6 +27,7 @@ export default defineConfig({
     alias: [
       { find: /^@trempel\/scene\/view$/, replacement: here('../view/api.ts') },
       { find: /^@trempel\/scene\/core$/, replacement: here('../src/core.ts') },
+      { find: /^@trempel\/scene\/internal\/(.*)$/, replacement: `${here('../src/')}$1` },
       { find: /^@trempel\/scene$/, replacement: here('../src/index.ts') },
     ],
   },

@@ -33,13 +33,13 @@ if (!existsSync(folder) || !statSync(folder).isDirectory()) {
 }
 const project = loadProject(folder);
 if (!project.root) {
-  console.error(`✗ ${folderArg}: нет .trempel/project.mdz выше — коллекции объявляются там (## collections)`);
+  console.error(`✗ E_PROJECT: ${folderArg}: no .trempel/project.mdz above — collections are declared there (## collections)`);
   process.exit(2);
 }
 for (const e of project.errors) console.error(`  • ${e}`);
 const dirs = Object.values(project.collections);
 if (!dirs.length) {
-  console.error(`✗ ${project.root}/.trempel/project.mdz: коллекций нет`);
+  console.error(`✗ E_PROJECT: ${project.root}/.trempel/project.mdz: no collections`);
   process.exit(1);
 }
 
@@ -126,11 +126,11 @@ for (const file of files.sort()) {
   const n = text.split('\n').filter((l, i) => l !== out.split('\n')[i]).length;
   changed++;
   links += n;
-  console.log(`${dry ? '~' : '✓'} ${relative(cwd, file)} (${n} строк)`);
+  console.log(`${dry ? '~' : '✓'} ${relative(cwd, file)} (${n} line(s))`);
   if (dry) {
     const a = text.split('\n');
     const b = out.split('\n');
     a.forEach((l, i) => l !== b[i] && console.log(`    - ${l.trim()}\n    + ${b[i].trim()}`));
   } else writeFileSync(file, out);
 }
-console.log(changed ? `${dry ? 'было бы изменено' : 'изменено'}: ${changed} файл(ов), ${links} строк(и)` : 'нечего менять — ссылки уже на коллекциях');
+console.log(changed ? `${dry ? 'would change' : 'changed'}: ${changed} file(s), ${links} line(s)` : 'nothing to change — the links already use collections');

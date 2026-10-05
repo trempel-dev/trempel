@@ -1,12 +1,12 @@
-# tml — API редактора сцен для скриптов
+# tml — the scene editor API for scripts
 
-<!-- Сгенерировано: npm run editor:commands (из edit/app/tml.ts и реестра команд). Не править руками. -->
+<!-- Generated: npm run editor:commands (from edit/app/tml.ts and the command registry). Do not edit by hand. -->
 
-`window.tml` — редактор сцен Trempel одним объектом: консоль (вкладка «Консоль», ⌘Enter), макросы (`<папка сцен>/.trempel/macros/*.js`, ⌘K), агент (`tml.run(code)`). Правится **база** сцены (`X.svg`, ванильный SVG): только командами ядра — `tml.doc.exec(name, args)`. Узел — `id` или путь индексов элементов от корня (`"0/3/1"`). Координаты команд — пространство **родителя** узла; `tml.bounds` и `tml.moveBy` — единицы **сцены** (viewBox).
+`window.tml` is the Trempel scene editor as one object: the console (the Console tab, ⌘Enter), macros (`<scene folder>/.trempel/macros/*.js`, ⌘K), an agent (`tml.run(code)`). What gets edited is the scene **base** (`X.svg`, vanilla SVG), and only through core commands — `tml.doc.exec(name, args)`. A node is an `id` or a path of element indices from the root (`"0/3/1"`). Command coordinates are in the node's **parent** space; `tml.bounds` and `tml.moveBy` use **scene** units (the viewBox).
 
-- Скрипт = тело async-функции с `tml` и `console`; одно выражение возвращается само. Весь `tml.run` — **одна** запись undo; исключение откатывает всё. Ошибка команды — не исключение: `{ ok: false, errors }`.
-- После команд сцена перерисовывается асинхронно: `bounds` и `scene` — с прошлой отрисовки, свежие — после `await tml.idle()`.
-- Макрос — тот же скрипт в файле, первая строка `// name: Подпись`.
+- A script is the body of an async function with `tml` and `console`; a single expression is returned as is. A whole `tml.run` is **one** undo entry; an exception rolls it all back. A command error is not an exception: `{ ok: false, errors }`.
+- After commands the scene is redrawn asynchronously: `bounds` and `scene` are from the last render, fresh ones after `await tml.idle()`.
+- A macro is the same script in a file, its first line `// name: Title`.
 
 ```ts
 /** Bounds in scene units (the root <svg>'s viewBox space). */
@@ -76,7 +76,7 @@ interface Tml {
   /** The scene as drawn now (no reference/onion/handles) at the viewBox's 1:1, cropped to a box
    *  in scene units; background — the stage's, else #18181c. */
   pixels(box?: TmlBounds): Promise<TmlPixels>;
-  /** «Снимок для видео»: the rest pose (a clip is stopped) at 1:1 on `background` (null —
+  /** "Video snapshot": the rest pose (a clip is stopped) at 1:1 on `background` (null —
    *  transparent; omitted — the panel's) → renders/<scene>-<time>.png; returns its path. */
   snapshot(opts?: { background?: string | null }): Promise<string>;
   /** Prefabs (v0.9): list() — scenes to place ("ui/button.svg"; v1.1 — a collection's too, "@skin/button.svg"); place(prefab, at?) — a <use> at a scene
@@ -91,45 +91,45 @@ interface Tml {
 }
 ```
 
-## Команды — `tml.doc.exec(name, args)`, пачкой — `tml.doc.batch(label, [{ name, args }])`
+## Commands — `tml.doc.exec(name, args)`, as a batch — `tml.doc.batch(label, [{ name, args }])`
 
-| команда | аргументы | что делает |
+| command | arguments | what it does |
 |---|---|---|
-| `node.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Задать атрибут узла (value: null — удалить). tml:* в базе запрещены; id — через node.setId. |
-| `node.setId` | `node`: string, `id`: string | Переименовать узел; ссылки clip-path="url(#…)" в документе обновляются, клипы — предупреждение. |
-| `node.setText` | `node`: string, `text`: string | Заменить текст `<text>` (макетная строка базы; биндинг наследника его перекрывает). |
-| `node.move` | `node`: string, `dx`: number, `dy`: number | Сдвинуть узел на (dx, dy) в координатах родителя: translate у `<g>`, x/y, cx/cy, x1…y2, точки d. |
-| `node.setTransform` | `node`: string, `translate?`: [x, y], `rotate?`: number, `scale?`: number \| [x, y], `pivot?`: [x, y] | Пересобрать transform из частей: translate(t+pivot) rotate scale translate(-pivot). Без частей — transform снимается. pivot по умолчанию — data-pivot узла. |
-| `node.setPivot` | `node`: string, `x`: number, `y`: number, `keepWorld?`: boolean | Пивот узла (data-pivot="x y", его собственное пространство до transform): вокруг него вращение и масштаб — ручками, клипами, setTransform. keepWorld (по умолчанию true) — узел на месте (матрица та же); false — части transform (сдвиг, поворот, масштаб) остаются числами, но теперь вокруг нового пивота (узел смещается). |
-| `node.resize` | `node`: string, `width?`: number \| null, `height?`: number \| null | Размер узла (v1.0): `<image>` — width/height (у data-slices это размер панели, борта 1:1), `<rect>` — width/height, `<g data-size>` — data-size, инстанс растягиваемого префаба (`<use>`, data-resizable) — width/height по его осям (null — снять: минимальный размер). Ось без значения не меняется. |
-| `node.reorder` | `node`: string, `index`: integer | Поставить узел на место index среди соседей (z-order: 0 — самый нижний). |
-| `node.reparent` | `node`: string, `parent`: string, `index?`: integer | Перенести узел в другого родителя (index — место среди его детей, по умолчанию последним); мировая позиция сохраняется. |
-| `node.insert` | `parent`: string, `index?`: integer, `xml`: string | Вставить XML-фрагмент (ровно один элемент) в parent на место index (по умолчанию последним). |
-| `node.remove` | `node`: string | Удалить узел с поддеревом. |
-| `node.duplicate` | `node`: string, `idSuffix?`: string | Копия узла сразу после него; id в копии — с суффиксом (по умолчанию -2, -3… до свободного). |
-| `path.setData` | `node`: string, `d`: string | Заменить d пути целиком. |
-| `path.setPoint` | `node`: string, `index`: integer, `x`: number, `y`: number | Передвинуть точку index контура (ручки едут с ней). |
-| `path.setHandle` | `node`: string, `index`: integer, `which`: 'in' \| 'out', `x`: number, `y`: number, `linked?`: boolean | Поставить ручку Безье точки index (which: in — входящая, out — исходящая); linked — зеркалить противоположную. |
-| `path.insertPoint` | `node`: string, `segment`: integer, `t`: number | Разрезать сегмент segment в t (0<t<1) с сохранением формы; сегменты — L/C по порядку и замыкающая линия Z. |
-| `path.removePoint` | `node`: string, `index`: integer | Удалить точку index; соседние сегменты сшиваются в один. |
-| `path.close` | `node`: string, `subpath?`: integer | Замкнуть подконтур (Z); subpath — номер, по умолчанию последний. |
-| `path.open` | `node`: string, `subpath?`: integer | Разомкнуть подконтур (убрать Z); subpath — номер, по умолчанию последний. |
-| `path.setNodeType` | `node`: string, `index`: integer, `type`: 'corner' \| 'smooth' | Тип узла index: smooth — выровнять ручки на одну прямую (длины сохраняются), corner — ручки независимы. |
-| `defs.ensure` | — | Создать `<defs id="defs">` первым ребёнком корня, если его нет. |
-| `clip.create` | `id`: string, `shape`: 'rect' \| 'path', `attrs`: object | Создать `<clipPath id>` в `<defs>` с одной фигурой (shape: rect \| path, attrs — её атрибуты: x y width height rx \| d). |
-| `clip.assign` | `node`: string, `clip`: string \| null | Назначить узлу (`<g>`, `<image>`) маску: clip-path="url(#clip)"; clip: null — снять. |
-| `layer.create` | `parent?`: string, `id`: string, `index?`: integer | Создать пустой слой `<g id>` в parent (по умолчанию корень) на месте index (по умолчанию последним). |
-| `prefab.instantiate` | `parent?`: string, `href`: string, `id`: string, `x?`: number, `y?`: number, `params?`: object, `index?`: integer | Поставить инстанс префаба: `<use id href x y data-*>` в parent (по умолчанию корень) на место index (по умолчанию последним). |
-| `prefab.setParam` | `node`: string, `name`: string, `value`: string \| null | Параметр инстанса: data-`<name>` на `<use>` (value: null — снять, остаётся значение по умолчанию префаба). |
-| `prefab.detach` | `node`: string | Развернуть инстанс в копию: `<g>` с содержимым префаба (id с префиксом остаются, вложенные инстансы — `<use>`); связь с префабом рвётся, обратной операции нет. |
-| `prefab.extract` | `node`: string, `href`: string, `params?`: object[] | Выделенный `<g>` → новый префаб href (файл базы, при params — и наследник) + `<use>` на его месте. params: какие href картинок / тексты детей станут параметрами. |
+| `node.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Set a node attribute (value: null — remove it). tml:* are not allowed in the base; id — via node.setId. |
+| `node.setId` | `node`: string, `id`: string | Rename a node; clip-path="url(#…)" references in the document are updated, clips get a warning. |
+| `node.setText` | `node`: string, `text`: string | Replace the text of a `<text>` (the base's mock-up string; a binding in the heir overrides it). |
+| `node.move` | `node`: string, `dx`: number, `dy`: number | Move a node by (dx, dy) in its parent's coordinates: translate on a `<g>`, x/y, cx/cy, x1…y2, the points of d. |
+| `node.setTransform` | `node`: string, `translate?`: [x, y], `rotate?`: number, `scale?`: number \| [x, y], `pivot?`: [x, y] | Rebuild transform from parts: translate(t+pivot) rotate scale translate(-pivot). No parts — transform is removed. pivot defaults to the node's data-pivot. |
+| `node.setPivot` | `node`: string, `x`: number, `y`: number, `keepWorld?`: boolean | The node's pivot (data-pivot="x y", in its own space before transform): rotation and scale go around it — by handles, clips, setTransform. keepWorld (default true) — the node stays in place (same matrix); false — the transform parts (translate, rotate, scale) keep their numbers but now turn around the new pivot (the node shifts). |
+| `node.resize` | `node`: string, `width?`: number \| null, `height?`: number \| null | Node size (v1.0): `<image>` — width/height (with data-slices it is the panel size, borders 1:1), `<rect>` — width/height, `<g data-size>` — data-size, an instance of a resizable prefab (`<use>`, data-resizable) — width/height along its axes (null — remove: the minimum size). An axis without a value is left as is. |
+| `node.reorder` | `node`: string, `index`: integer | Put a node at position index among its siblings (z-order: 0 — the bottom). |
+| `node.reparent` | `node`: string, `parent`: string, `index?`: integer | Move a node to another parent (index — its position among the children, default last); the world position is kept. |
+| `node.insert` | `parent`: string, `index?`: integer, `xml`: string | Insert an XML fragment (exactly one element) into parent at position index (default last). |
+| `node.remove` | `node`: string | Remove a node with its subtree. |
+| `node.duplicate` | `node`: string, `idSuffix?`: string | A copy of a node right after it; ids in the copy get a suffix (default -2, -3… up to a free one). |
+| `path.setData` | `node`: string, `d`: string | Replace the whole d of a path. |
+| `path.setPoint` | `node`: string, `index`: integer, `x`: number, `y`: number | Move point index of the path (its handles move with it). |
+| `path.setHandle` | `node`: string, `index`: integer, `which`: 'in' \| 'out', `x`: number, `y`: number, `linked?`: boolean | Place a Bézier handle of point index (which: in — incoming, out — outgoing); linked — mirror the opposite one. |
+| `path.insertPoint` | `node`: string, `segment`: integer, `t`: number | Split segment segment at t (0<t<1) keeping the shape; segments are the L/C in order and the closing line of Z. |
+| `path.removePoint` | `node`: string, `index`: integer | Remove point index; the neighbouring segments are joined into one. |
+| `path.close` | `node`: string, `subpath?`: integer | Close a subpath (Z); subpath — its number, default the last. |
+| `path.open` | `node`: string, `subpath?`: integer | Open a subpath (remove Z); subpath — its number, default the last. |
+| `path.setNodeType` | `node`: string, `index`: integer, `type`: 'corner' \| 'smooth' | Node type of point index: smooth — align the handles on one line (lengths kept), corner — independent handles. |
+| `defs.ensure` | — | Create `<defs id="defs">` as the first child of the root, if there is none. |
+| `clip.create` | `id`: string, `shape`: 'rect' \| 'path', `attrs`: object | Create a `<clipPath id>` in `<defs>` with one shape (shape: rect \| path, attrs — its attributes: x y width height rx \| d). |
+| `clip.assign` | `node`: string, `clip`: string \| null | Mask a node (`<g>`, `<image>`): clip-path="url(#clip)"; clip: null — remove the mask. |
+| `layer.create` | `parent?`: string, `id`: string, `index?`: integer | Create an empty layer `<g id>` in parent (default the root) at position index (default last). |
+| `prefab.instantiate` | `parent?`: string, `href`: string, `id`: string, `x?`: number, `y?`: number, `params?`: object, `index?`: integer | Place a prefab instance: `<use id href x y data-*>` in parent (default the root) at position index (default last). |
+| `prefab.setParam` | `node`: string, `name`: string, `value`: string \| null | An instance parameter: data-`<name>` on the `<use>` (value: null — remove it, the prefab default applies). |
+| `prefab.detach` | `node`: string | Turn an instance into a copy: a `<g>` with the prefab content (prefixed ids stay, nested instances stay `<use>`); the link to the prefab is broken, there is no way back. |
+| `prefab.extract` | `node`: string, `href`: string, `params?`: object[] | The selected `<g>` → a new prefab href (a base file, with params also an heir) + a `<use>` in its place. params: which image hrefs / texts of the children become parameters. |
 
-## Примеры
+## Examples
 
 ```js
-tml.nodes().filter(n => n.tag === 'image').length              // сколько картинок
+tml.nodes().filter(n => n.tag === 'image').length              // how many images
 tml.doc.exec('node.move', { node: 'settingsBtn', dx: 10, dy: 0 })
-for (const id of tml.selection) tml.moveBy(id, 0, -20)          // выделение вверх на 20 единиц сцены
-tml.doc.errors                                                   // контракт, геометрия, клипы — после каждой команды
+for (const id of tml.selection) tml.moveBy(id, 0, -20)          // the selection up by 20 scene units
+tml.doc.errors                                                   // contract, geometry, clips — after every command
 await tml.save()
 ```

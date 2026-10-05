@@ -21,19 +21,29 @@
 // Syntax errors throw ExpressionError with a position; evaluation errors (member of undefined,
 // calling a non-function, unknown name) are thrown as ExpressionError too and turned into
 // `undefined` by the lenient entry points, exactly as v0.5 behaved.
+//
+// @internal — `@trempel/scene/internal/expr`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): ExpressionError.
 
 import { PIPES, type PipeFn } from './pipes.js';
+import { coded, type Code } from './codes.js';
+import { trempelError } from './errors.js';
 
 // ---- errors ----------------------------------------------------------------
 
-/** A syntax or evaluation error in an expression. `pos` is a 0-based offset into `src`. */
+/**
+ * A syntax or evaluation error in an expression. `pos` is a 0-based offset into `src`; `code` —
+ * `E_EXPR_SYNTAX` for syntax, `E_EXPR_UNDEF` / `E_EXPR_FIELD` / `E_EXPR_FORBIDDEN` /
+ * `E_EXPR_CALL` for evaluation.
+ */
 export class ExpressionError extends Error {
   constructor(
     readonly reason: string,
     readonly src: string,
     readonly pos: number,
+    readonly code: Code = 'E_EXPR_SYNTAX',
   ) {
-    super(`${reason} (позиция ${pos + 1}) в «${src}»`);
+    super(coded(code, `${reason} (col ${pos + 1}) in "${src}"`));
     this.name = 'ExpressionError';
   }
 }
@@ -76,7 +86,7 @@ function tokenize(src: string): Tok[] {
       const m = /^(\d*\.?\d+|\d+\.)([eE][+-]?\d+)?/.exec(src.slice(i))!;
       i += m[0].length;
       if (isNameChar(src[i] ?? '')) {
-        throw new ExpressionError(`число сразу переходит в имя «${src[i]}»`, src, i);
+        throw new ExpressionError(`a number runs into a name "${src[i]}"`, src, i);
       }
       toks.push({ kind: 'num', value: m[0], lit: Number(m[0]), pos: start });
       continue;
@@ -92,7 +102,7 @@ function tokenize(src: string): Tok[] {
       i++;
       let out = '';
       for (;;) {
-        if (i >= src.length) throw new ExpressionError('незакрытая строка', src, start);
+        if (i >= src.length) throw new ExpressionError('unterminated string', src, start);
         const ch = src[i];
         if (ch === c) {
           i++;
@@ -100,11 +110,11 @@ function tokenize(src: string): Tok[] {
         }
         if (ch === '\\') {
           const e = src[i + 1];
-          if (e === undefined) throw new ExpressionError('незакрытая строка', src, start);
+          if (e === undefined) throw new ExpressionError('unterminated string', src, start);
           if (e === 'u') {
             const hex = src.slice(i + 2, i + 6);
             if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-              throw new ExpressionError('ожидается \\uXXXX', src, i);
+              throw new ExpressionError('expected \\uXXXX', src, i);
             }
             out += String.fromCharCode(parseInt(hex, 16));
             i += 6;
@@ -123,8 +133,8 @@ function tokenize(src: string): Tok[] {
 
     const op = OPS.find((o) => src.startsWith(o, i));
     if (!op) {
-      if (c === '=') throw new ExpressionError('присваивание не поддерживается (сравнение — «===»)', src, i);
-      throw new ExpressionError(`неожиданный символ «${c}»`, src, i);
+      if (c === '=') throw new ExpressionError('assignment is not supported (to compare, use "===")', src, i);
+      throw new ExpressionError(`unexpected character "${c}"`, src, i);
     }
     i += op.length;
     toks.push({ kind: 'op', value: op, pos: start });
@@ -206,22 +216,22 @@ class Parser {
     throw new ExpressionError(reason, this.src, t.pos);
   }
   private describe(t: Tok): string {
-    return t.kind === 'end' ? 'конец выражения' : `«${t.value}»`;
+    return t.kind === 'end' ? 'the end of the expression' : `"${t.value}"`;
   }
   private expect(v: string): Tok {
-    if (!this.isOp(v)) this.fail(`ожидается «${v}», а встретилось ${this.describe(this.peek())}`);
+    if (!this.isOp(v)) this.fail(`expected "${v}", found ${this.describe(this.peek())}`);
     return this.next();
   }
 
   compile(): CompiledExpr {
-    if (this.peek().kind === 'end') this.fail('пустое выражение');
+    if (this.peek().kind === 'end') this.fail('empty expression');
     const ast = this.cond();
     const pipeStart = this.peek().pos;
     const pipes: PipeCall[] = [];
     while (this.isOp('|')) {
       this.next();
       const name = this.next();
-      if (name.kind !== 'name') this.fail(`после «|» ожидается имя пайпа, а встретилось ${this.describe(name)}`, name);
+      if (name.kind !== 'name') this.fail(`expected a pipe name after "|", found ${this.describe(name)}`, name);
       const pipe: PipeCall = { name: name.value };
       if (this.isOp(':')) {
         this.next();
@@ -234,12 +244,12 @@ class Parser {
         if (arg.kind === 'num') pipe.arg = sign + arg.value;
         else if (!sign && arg.kind === 'str') pipe.arg = String(arg.lit);
         else if (!sign && arg.kind === 'name') pipe.arg = arg.value;
-        else this.fail(`аргумент пайпа «${name.value}» — число, строка или имя, а встретилось ${this.describe(arg)}`, arg);
+        else this.fail(`the argument of the pipe "${name.value}" is a number, a string or a name, found ${this.describe(arg)}`, arg);
       }
       pipes.push(pipe);
     }
     const end = this.peek();
-    if (end.kind !== 'end') this.fail(`лишнее ${this.describe(end)} — выражение уже закончилось`, end);
+    if (end.kind !== 'end') this.fail(`unexpected ${this.describe(end)} — the expression has ended`, end);
     const expr = (pipes.length ? this.src.slice(0, pipeStart) : this.src).trim();
     return { src: this.src, expr, ast, pipes };
   }
@@ -284,8 +294,8 @@ class Parser {
       if (t.value === '.') {
         this.next();
         const name = this.next();
-        if (name.kind !== 'name') this.fail(`после «.» ожидается имя поля, а встретилось ${this.describe(name)}`, name);
-        if (FORBIDDEN.has(name.value)) this.fail(`доступ к «${name.value}» запрещён`, name);
+        if (name.kind !== 'name') this.fail(`expected a field name after ".", found ${this.describe(name)}`, name);
+        if (FORBIDDEN.has(name.value)) throw new ExpressionError(`access to "${name.value}" is forbidden`, this.src, name.pos, 'E_EXPR_FORBIDDEN');
         node = { k: 'member', obj: node, prop: name.value, pos: name.pos };
       } else if (t.value === '[') {
         this.next();
@@ -331,9 +341,9 @@ class Parser {
         if (t.value === '{') return this.object();
         break;
       case 'end':
-        this.fail('выражение оборвалось — ожидается значение', t);
+        this.fail('the expression ends where a value is expected', t);
     }
-    return this.fail(`неожиданное ${this.describe(t)} — ожидается значение`, t);
+    return this.fail(`unexpected ${this.describe(t)} — expected a value`, t);
   }
 
   private object(): Node {
@@ -343,8 +353,8 @@ class Parser {
       let name: string;
       if (key.kind === 'name') name = key.value;
       else if (key.kind === 'str' || key.kind === 'num') name = String(key.lit);
-      else this.fail(`ожидается ключ объекта, а встретилось ${this.describe(key)}`, key);
-      if (FORBIDDEN.has(name)) this.fail(`ключ «${name}» запрещён`, key);
+      else this.fail(`expected an object key, found ${this.describe(key)}`, key);
+      if (FORBIDDEN.has(name)) throw new ExpressionError(`the key "${name}" is forbidden`, this.src, key.pos, 'E_EXPR_FORBIDDEN');
       this.expect(':');
       props.push([name, this.cond()]);
       if (!this.isOp('}')) this.expect(',');
@@ -374,11 +384,11 @@ const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnPropert
 
 function member(obj: unknown, prop: unknown, src: string, pos: number): unknown {
   if (obj === null || obj === undefined) {
-    throw new ExpressionError(`чтение поля «${String(prop)}» у ${String(obj)}`, src, pos);
+    throw new ExpressionError(`reading the field "${String(prop)}" of ${String(obj)}`, src, pos, 'E_EXPR_FIELD');
   }
   const key = typeof prop === 'symbol' ? prop : String(prop);
   if (typeof key === 'string' && FORBIDDEN.has(key)) {
-    throw new ExpressionError(`доступ к «${key}» запрещён`, src, pos);
+    throw new ExpressionError(`access to "${key}" is forbidden`, src, pos, 'E_EXPR_FORBIDDEN');
   }
   return (obj as Record<string | symbol, unknown>)[key];
 }
@@ -409,7 +419,7 @@ function evalNode(n: Node, ctx: Record<string, unknown>, src: string): unknown {
     case 'lit':
       return n.v;
     case 'name':
-      if (!hasOwn(ctx, n.name)) throw new ExpressionError(`имя «${n.name}» не определено в контексте`, src, n.pos);
+      if (!hasOwn(ctx, n.name)) throw new ExpressionError(`the name "${n.name}" is not defined in the context`, src, n.pos, 'E_EXPR_UNDEF');
       return ctx[n.name];
     case 'member':
       return member(
@@ -428,7 +438,7 @@ function evalNode(n: Node, ctx: Record<string, unknown>, src: string): unknown {
       } else {
         fn = evalNode(n.callee, ctx, src);
       }
-      if (typeof fn !== 'function') throw new ExpressionError('вызов не-функции', src, n.pos);
+      if (typeof fn !== 'function') throw new ExpressionError('calling something that is not a function', src, n.pos, 'E_EXPR_CALL');
       const args = n.args.map((a) => evalNode(a, ctx, src));
       return Reflect.apply(fn as (...a: unknown[]) => unknown, self, args);
     }
@@ -465,7 +475,7 @@ export function run(c: CompiledExpr, ctx: Record<string, unknown>): unknown {
 export function applyPipes(value: unknown, pipes: PipeCall[], registry: Record<string, PipeFn> = PIPES): unknown {
   return pipes.reduce((acc, p) => {
     const fn = hasOwn(registry, p.name) ? registry[p.name] : undefined;
-    if (!fn) throw new Error(`Trempel binding error: unknown pipe "${p.name}"`);
+    if (!fn) throw trempelError('E_PIPE_UNKNOWN', `unknown pipe "${p.name}"`);
     return fn(acc, p.arg);
   }, value);
 }

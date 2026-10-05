@@ -7,6 +7,7 @@ import { pathFromNode } from '../src/geom/path';
 import { geometryErrors, parseClipRef } from '../src/geom/check';
 import { parse, parseHeir } from '../src/parser';
 import { mergeScene } from '../src/merge';
+import { codesOf, thrown, withCode } from './helpers/codes';
 
 const svg = (body: string, extra = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"${extra}>${body}</svg>`;
@@ -47,14 +48,14 @@ describe('path data — every command, both cases', () => {
   });
 
   it.each([
-    ['M0 0 X 10', /команда «X» не поддерживается/],
-    ['L 0 0', /начинаться с команды M/],
-    ['M 0', /ожидается число/],
-    ['   ', /пустой d/],
-    ['M0 0 A 5 5 0 2 0 1 1', /флаг дуги/],
-    ['M0 0 Z 5 5', /после Z/],
-  ])('%s → hard error with a position', (d, re) => {
-    expect(() => parsePathData(d)).toThrow(re);
+    ['M0 0 X 10', 5], // unsupported command
+    ['L 0 0', 2], // must start with M
+    ['M 0', 3], // a number expected
+    ['   ', 0], // empty d
+    ['M0 0 A 5 5 0 2 0 1 1', 13], // an arc flag
+    ['M0 0 Z 5 5', 7], // numbers after Z
+  ])('%s → hard error with a position', (d, pos) => {
+    expect(thrown(() => parsePathData(d))).toMatchObject({ code: 'E_PATH_DATA', pos });
     expect(() => parsePathData(d)).toThrow(PathDataError);
   });
 });
@@ -120,8 +121,12 @@ describe('ScenePath — by length, not by curve parameter', () => {
   });
 
   it('a stretching / skewing transform and a non-geometry node are errors', () => {
-    expect(() => pathFromNode(node('line', { x2: '10', transform: 'scale(2 1)', id: 'l' }))).toThrow(/#l: transform="scale\(2 1\)" растягивает/);
-    expect(() => pathFromNode(node('g', { id: 'g1' }))).toThrow(/#g1 — <g>, не геометрия/);
+    const stretched = thrown(() => pathFromNode(node('line', { x2: '10', transform: 'scale(2 1)', id: 'l' })));
+    expect(stretched).toMatchObject({ code: 'E_PATH_SIMILARITY' });
+    expect(stretched.message).toContain('#l: transform="scale(2 1)"');
+    const group = thrown(() => pathFromNode(node('g', { id: 'g1' })));
+    expect(group).toMatchObject({ code: 'E_GEOMETRY' });
+    expect(group.message).toContain('#g1');
   });
 });
 
@@ -133,7 +138,10 @@ describe('parser — v0.7 tags', () => {
   });
 
   it('<mask> is an error that says to use clipPath', () => {
-    expect(() => parse(svg('<defs><mask id="m"/></defs>'))).toThrow(/unsupported element <mask>.*только геометрическая <clipPath>/);
+    const e = thrown(() => parse(svg('<defs><mask id="m"/></defs>')));
+    expect(e).toMatchObject({ code: 'E_TAG' });
+    expect(e.message).toContain('<mask>');
+    expect(e.message).toContain('<clipPath>');
   });
 });
 
@@ -151,29 +159,40 @@ describe('geometryErrors — defs, clipPath, clip-path', () => {
   });
 
   it('defs not at the root, wrong children', () => {
-    expect(errs('<g><defs/></g>')).toContain('<defs>: <defs> — только прямой ребёнок корня <svg>.');
-    expect(errs('<defs><text>x</text></defs>')[0]).toMatch(/<text> в <defs> не бывает/);
-    expect(errs('<defs><g><image/></g></defs>')[0]).toMatch(/<image> в <defs> не бывает/);
+    expect(codesOf(errs('<g><defs/></g>'))).toEqual(['E_DEFS_PLACE']);
+    expect(withCode(errs('<defs><text>x</text></defs>'), 'E_DEFS_PLACE')[0]).toContain('<text>');
+    expect(withCode(errs('<defs><g><image/></g></defs>'), 'E_DEFS_PLACE')[0]).toContain('<image>');
   });
 
   it('clipPath: outside defs, without id, objectBoundingBox, wrong children', () => {
-    expect(errs('<clipPath id="m"/>')).toContain('#m: <clipPath> живёт только внутри <defs>.');
-    expect(errs('<defs><clipPath/></defs>')).toContain('<clipPath> без id — на неё нельзя сослаться из clip-path.');
-    expect(errs('<defs><clipPath id="m" clipPathUnits="objectBoundingBox"/></defs>')[0]).toMatch(/objectBoundingBox" не поддерживается/);
-    expect(errs('<defs><clipPath id="m"><line x2="5"/></clipPath></defs>')[0]).toMatch(/<line> внутри <clipPath> не бывает/);
+    expect(withCode(errs('<clipPath id="m"/>'), 'E_DEFS_PLACE')[0]).toContain('#m');
+    expect(codesOf(errs('<defs><clipPath/></defs>'))).toEqual(['E_CLIP_NO_ID']);
+    expect(withCode(errs('<defs><clipPath id="m" clipPathUnits="objectBoundingBox"/></defs>'), 'E_CLIP_UNITS')[0]).toContain('objectBoundingBox');
+    expect(withCode(errs('<defs><clipPath id="m"><line x2="5"/></clipPath></defs>'), 'E_DEFS_PLACE')[0]).toContain('<line>');
   });
 
   it('clip-path: host tag, missing target, target not a clipPath, unreadable value', () => {
     const defs = '<defs><clipPath id="m"><rect width="1" height="1"/></clipPath><path id="p" d="M0 0 L1 0"/></defs>';
-    expect(errs(defs + '<rect id="r" clip-path="url(#m)"/>')).toEqual(['#r: clip-path на <rect> не поддерживается — только на <g> и <image>.']);
-    expect(errs(defs + '<g id="a" clip-path="url(#nope)"/>')).toEqual(['#a: clip-path="url(#nope)" — узла #nope нет.']);
-    expect(errs(defs + '<g id="a" clip-path="url(#p)"/>')).toEqual(['#a: clip-path="url(#p)" — #p это <path>, а не <clipPath>.']);
-    expect(errs(defs + '<g id="a" clip-path="inset(5px)"/>')).toEqual(['#a: clip-path="inset(5px)" — ожидается url(#id) или none.']);
+    const one = (body: string): string => {
+      const list = errs(defs + body);
+      expect(codesOf(list)).toEqual(['E_CLIP_PATH']);
+      return list[0];
+    };
+    expect(one('<rect id="r" clip-path="url(#m)"/>')).toContain('#r: clip-path on <rect>');
+    expect(one('<g id="a" clip-path="url(#nope)"/>')).toContain('#a: clip-path="url(#nope)"');
+    expect(one('<g id="a" clip-path="url(#p)"/>')).toContain('#p is <path>');
+    expect(one('<g id="a" clip-path="inset(5px)"/>')).toContain('#a: clip-path="inset(5px)"');
   });
 
   it('unreadable geometry names the node', () => {
-    expect(errs('<path id="wing" d="M0 0 X 3"/>')).toEqual(['#wing: d: команда «X» не поддерживается (есть: M L H V C S Q T A Z) (позиция 6).']);
-    expect(errs('<circle id="c" r="big"/>')).toEqual(['#c: <circle> r="big" — не число (позиция 1).']);
+    const wing = errs('<path id="wing" d="M0 0 X 3"/>');
+    expect(codesOf(wing)).toEqual(['E_PATH_DATA']);
+    expect(wing[0]).toContain('#wing: d:');
+    expect(wing[0]).toContain('(col 6)');
+    const circle = errs('<circle id="c" r="big"/>');
+    expect(codesOf(circle)).toEqual(['E_PATH_DATA']);
+    expect(circle[0]).toContain('#c: <circle> r="big"');
+    expect(circle[0]).toContain('(col 1)');
   });
 
   it('parseClipRef', () => {
@@ -188,7 +207,8 @@ describe('merge — <defs> rules', () => {
 
   it('tml:ref onto a node in defs is an error (service geometry is not bound)', () => {
     const out = mergeScene(parse(base), parseHeir(heir('<tml:ref id="fly1" tml:visible="state.x"/>')));
-    expect(out.errors).toEqual(['<tml:ref id="fly1">: узел в <defs> — служебная геометрия не биндится.']);
+    expect(codesOf(out.errors)).toEqual(['E_REF_DEFS']);
+    expect(out.errors[0]).toContain('<tml:ref id="fly1">');
     expect(out.tree.children[0].children[0].tml).toEqual({});
   });
 
@@ -201,11 +221,15 @@ describe('merge — <defs> rules', () => {
 
   it('`into defs` when the base defs has no id says so', () => {
     const out = mergeScene(parse(svg('<defs><path id="fly1" d="M0 0 L1 0"/></defs>')), parseHeir(heir('<path id="f2" d="M0 0 L1 1" tml:insert="into defs"/>')));
-    expect(out.errors).toEqual(['tml:insert="into defs": вставка в defs без id — дайте <defs> базы id (например id="defs").']);
+    expect(codesOf(out.errors)).toEqual(['E_INSERT_TARGET']);
+    expect(out.errors[0]).toContain('tml:insert="into defs"');
   });
 
   it('a bound node inserted into defs is reported by the geometry check', () => {
     const out = mergeScene(parse(base), parseHeir(heir('<path id="f2" d="M0 0 L1 1" tml:insert="into defs" tml:visible="state.on"/>')));
-    expect(geometryErrors(out.tree)).toEqual(['#f2: служебная геометрия (<defs>) не биндится — tml:visible здесь не действует.']);
+    const list = geometryErrors(out.tree);
+    expect(codesOf(list)).toEqual(['E_REF_DEFS']);
+    expect(list[0]).toContain('#f2');
+    expect(list[0]).toContain('tml:visible');
   });
 });

@@ -9,6 +9,7 @@ import { Animator, compileClips, composeScene, mount, parseContract, TrempelErro
 import { checkContract } from '../src/contract';
 import { layoutErrors, parseSlices } from '../src/layout';
 import { createMockBackend, createMockClock, isMockNode, type MockNode } from './helpers/mockBackend';
+import { codesOf, rejected, thrown, withCode } from './helpers/codes';
 
 const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"';
 const svg = (body: string, root = '', vb = '0 0 800 600'): string => `<svg ${NS} viewBox="${vb}"${root}>${body}</svg>`;
@@ -77,7 +78,10 @@ describe('v1.0 — data-slices / data-tile (PixiBackend)', () => {
   it('slices that leave no centre are a load error (ready rejects)', async () => {
     const backend = new PixiBackend({ metrics });
     const s = mount({ base: svg(`<image id="p" href="v10/panel.png" width="300" height="90" data-slices="30 10"/>`), backend, context: {} });
-    await expect(s.ready).rejects.toThrow(/#p: data-slices="30 10 30 10" не помещаются в текстуру 60×60/);
+    const e = await rejected(s.ready);
+    expect(e).toMatchObject({ code: 'E_SLICES_FIT' });
+    expect(e.message).toContain('#p: data-slices="30 10 30 10"');
+    expect(e.message).toContain('60×60');
   });
 
   it('data-slices on a non-image, malformed values, with data-tile — mount errors', () => {
@@ -88,9 +92,10 @@ describe('v1.0 — data-slices / data-tile (PixiBackend)', () => {
         context: {},
       }),
     );
-    expect(errs.join('\n')).toMatch(/#r: data-slices на <rect>/);
-    expect(errs.join('\n')).toMatch(/#i: data-slices="a"/);
-    expect(errs.join('\n')).toMatch(/#t: data-slices и data-tile вместе не бывают/);
+    const slices = withCode(errs, 'E_SLICES');
+    expect(slices.some((m) => m.includes('#r: data-slices on <rect>'))).toBe(true);
+    expect(slices.some((m) => m.includes('#i: data-slices="a"'))).toBe(true);
+    expect(withCode(errs, 'E_TILE')[0]).toContain('#t:');
   });
 
   it('data-tile → TilingSprite; "x" stretches the texture vertically', async () => {
@@ -168,11 +173,13 @@ describe('v1.0 — data-anchor / data-stretch / data-size', () => {
       composeScene({
         base: svg(`<g id="plain"><rect id="a" data-anchor="1 0" width="1" height="1"/></g><text id="t" data-stretch="x">x</text><rect id="b" data-anchor="1" width="1" height="1"/><g id="s" data-size="5"><rect id="c" data-anchor="0 0" width="1" height="1"/></g>`),
       }).tree!,
-    ).join('\n');
-    expect(errs).toMatch(/#a: якорь без размера родителя — #plain: дайте группе data-size/);
-    expect(errs).toMatch(/#t: data-stretch на <text>/);
-    expect(errs).toMatch(/#b: data-anchor="1" — ожидается «ax ay»/);
-    expect(errs).toMatch(/#s: data-size="5"/);
+    );
+    const noBox = withCode(errs, 'E_NO_BOX')[0];
+    expect(noBox).toContain('#a:');
+    expect(noBox).toContain('#plain');
+    expect(withCode(errs, 'E_STRETCH')[0]).toContain('#t: data-stretch on <text>');
+    expect(withCode(errs, 'E_ANCHOR')[0]).toContain('#b: data-anchor="1"');
+    expect(withCode(errs, 'E_SIZE')[0]).toContain('#s: data-size="5"');
   });
 
   it('data-size with one number is a component parameter until something asks for the box', () => {
@@ -191,10 +198,11 @@ describe('v1.0 — data-anchor / data-stretch / data-size', () => {
     const c = parseContract(`<contract><g id="a" anchor="1 0"/><g id="b" anchor="0.5 0.5"/><g id="c" anchor="0 1"/></contract>`);
     const tree = composeScene({ base: svg(`<g id="a" data-anchor="1 0"/><g id="b" data-anchor="0.5 0"/><g id="c"/>`) }).tree!;
     const errs = checkContract(tree, c);
-    expect(errs).toEqual([
-      '#b: data-anchor="0.5 0", а контракт ждёт «0.5 0.5».',
-      '#c: нет data-anchor — контракт ждёт якорь «0 1».',
-    ]);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_ATTR', 'E_CONTRACT_ATTR']);
+    expect(errs[0]).toContain('#b: data-anchor="0.5 0"');
+    expect(errs[0]).toContain('0.5 0.5');
+    expect(errs[1]).toContain('#c');
+    expect(errs[1]).toContain('0 1');
   });
 });
 
@@ -203,7 +211,7 @@ describe('v1.0 — resizable prefabs', () => {
 
   it('<use width height> of a resizable prefab: bg 9-slice to the size, title centred, close at the right', async () => {
     const backend = new PixiBackend({ metrics });
-    const s = mount({ base: scene(`<use id="p" href="ui/panel.svg" x="10" y="20" width="400" height="300" data-title="Пауза"/>`), backend, context: {}, loadScene: loader() });
+    const s = mount({ base: scene(`<use id="p" href="ui/panel.svg" x="10" y="20" width="400" height="300" data-title="Pause"/>`), backend, context: {}, loadScene: loader() });
     await s.ready;
     const bg = s.byId.get('p/bg') as NineSliceSprite;
     expect(bg).toBeInstanceOf(NineSliceSprite);
@@ -216,13 +224,15 @@ describe('v1.0 — resizable prefabs', () => {
     s.setSize('p', 300);
     expect(bg.width).toBe(300);
     expect(title.x).toBe(150);
-    expect(() => s.setSize('nope', 1)).toThrow(/узла с таким id/);
+    expect(thrown(() => s.setSize('nope', 1))).toMatchObject({ code: 'E_NODE' });
   });
 
   it('without a size — the minimum (viewBox); below the minimum — an error', () => {
     const c = composeScene({ base: scene(`<use id="p" href="ui/panel.svg"/><use id="q" href="ui/panel.svg" width="100"/>`), loadScene: loader() });
     expect(c.tree!.children[0].instance!.size).toEqual({ w: 200, h: 120 });
-    expect(c.errors.prefab).toContain('#q: width="100" меньше минимального 200 (viewBox ui/panel.svg).');
+    const small = withCode(c.errors.prefab, 'E_PREFAB_MIN_SIZE');
+    expect(small).toHaveLength(1);
+    for (const part of ['#q: width="100"', '200', 'ui/panel.svg']) expect(small[0]).toContain(part);
   });
 
   it('width on a non-resizable prefab — the old error; on a wrong axis — which axes', () => {
@@ -231,18 +241,23 @@ describe('v1.0 — resizable prefabs', () => {
       base: scene(`<use id="b" href="ui/button.svg" width="200"/><use id="o" href="ui/one.svg" width="300" height="80"/>`),
       loadScene: loader({ ...files, 'ui/one.svg': ONEAXIS }),
     });
-    expect(c.errors.prefab).toEqual([
-      '#b: width на <use> — ui/button.svg не растягивается (нет data-resizable у корня); масштаб инстанса задаётся transform.',
-      '#o: height — ui/one.svg растягивается только по x (data-resizable="x").',
-    ]);
+    expect(codesOf(c.errors.prefab)).toEqual(['E_PREFAB_RESIZE', 'E_PREFAB_RESIZE']);
+    expect(c.errors.prefab[0]).toContain('#b: width');
+    expect(c.errors.prefab[0]).toContain('ui/button.svg');
+    expect(c.errors.prefab[1]).toContain('#o: height');
+    expect(c.errors.prefab[1]).toContain('ui/one.svg');
+    expect(c.errors.prefab[1]).toContain('data-resizable="x"');
   });
 
   it('data-resizable without a stretching background — an error (and the contract checks resizable)', () => {
     const NOBG: SceneSource = { base: svg(`<image id="bg" href="v10/panel.png" width="100" height="40"/>`, ' data-resizable="xy"', '0 0 100 40') };
     const errs = errorsOf(() => mount({ base: scene(`<use id="n" href="ui/nobg.svg" width="200"/>`), backend: createMockBackend(), context: {}, loadScene: loader({ 'ui/nobg.svg': NOBG }) }));
-    expect(errs.join('\n')).toMatch(/data-resizable без растягиваемого фона/);
+    expect(withCode(errs, 'E_RESIZABLE')[0]).toContain('#n (ui/nobg.svg)');
     const c = parseContract('<contract resizable="xy"/>');
-    expect(checkContract(composeScene({ base: svg('', ' data-resizable="x"') }).tree!, c)).toContain('корень <svg>: data-resizable="x", а контракт ждёт «xy».');
+    const contractErrs = checkContract(composeScene({ base: svg('', ' data-resizable="x"') }).tree!, c);
+    expect(codesOf(contractErrs)).toEqual(['E_CONTRACT_ATTR']);
+    expect(contractErrs[0]).toContain('data-resizable="x"');
+    expect(contractErrs[0]).toContain('xy');
   });
 
   it('data-resizable is not a parameter', () => {
@@ -263,7 +278,9 @@ describe('v1.0 — resizable prefabs', () => {
     const md = `# $clip open\n\n## $track p\n| t | height |\n|---|---|\n| 0 | 120 |\n| 1 | 400 |\n\n## $track s\n| t | width |\n|---|---|\n| 0 | 100 |\n| 1 | 300 |\n`;
     const clips = compileClips(md, tree);
     expect(clips.open.tracks.map((t) => t.property)).toEqual(['height', 'width']);
-    expect(() => compileClips(`# $clip bad\n\n## $track i\n| t | width |\n|---|---|\n| 0 | 1 |\n`, tree)).toThrow(/width\/height анимируются только у data-slices/);
+    const bad = thrown(() => compileClips(`# $clip bad\n\n## $track i\n| t | width |\n|---|---|\n| 0 | 1 |\n`, tree));
+    expect(bad).toMatchObject({ code: 'E_ANIM_TARGET' });
+    expect(bad.message).toContain('$clip bad / $track i');
 
     const b = createMockBackend();
     const s = mount({ base: scene(`<use id="p" href="ui/panel.svg" data-title="x"/><image id="s" href="v10/panel.png" width="100" height="100" data-slices="10"/>`), backend: b, context: {}, loadScene: loader() });
@@ -281,22 +298,22 @@ describe('v1.0 — resizable prefabs', () => {
 
 describe('v1.0 — slots', () => {
   const pause = (children: string, extra = ''): string =>
-    svg(`<use id="pp" href="ui/panel.svg" width="400" height="500" data-title="Пауза"${extra}>${children}</use>`);
+    svg(`<use id="pp" href="ui/panel.svg" width="400" height="500" data-title="Pause"${extra}>${children}</use>`);
 
   it('children go into the slot: ids without the prefix, the scene context, nested instances expand', () => {
     const b = createMockBackend();
     const s = mount({
-      base: pause(`<use id="resume" slot="content" href="ui/button.svg" y="10" data-label="Дальше"/><text id="note" y="80">x</text>`),
+      base: pause(`<use id="resume" slot="content" href="ui/button.svg" y="10" data-label="Next"/><text id="note" y="80">x</text>`),
       heir: heirOf('scene.svg', `<tml:ref id="note" tml:bind="hint"/>`),
       backend: b,
-      context: { hint: 'из сцены' },
+      context: { hint: 'from the scene' },
       loadScene: loader(),
     });
     expect(s.byId.has('resume')).toBe(true);
     expect(s.byId.has('resume/label')).toBe(true);
     expect(s.byId.has('pp/resume')).toBe(false);
-    expect(isMockNode(s.byId.get('note')!).props.text).toBe('из сцены');
-    expect(isMockNode(s.byId.get('resume/label')!).props.text).toBe('Дальше');
+    expect(isMockNode(s.byId.get('note')!).props.text).toBe('from the scene');
+    expect(isMockNode(s.byId.get('resume/label')!).props.text).toBe('Next');
     const content = isMockNode(s.byId.get('pp/content')!);
     expect(content.children.map((c: MockNode) => c.attrs.id ?? c.tag)).toEqual(['resume', 'note']);
   });
@@ -313,11 +330,10 @@ describe('v1.0 — slots', () => {
       base: svg(`<use id="a" href="ui/named.svg"><g id="x"/></use><use id="b" href="ui/named.svg"><g id="y" slot="footer"/></use><use id="c" href="ui/button.svg"><g id="z"/></use>`),
       loadScene: loader(fs),
     });
-    expect(c.errors.prefab).toEqual([
-      '#a: #x без slot — у ui/named.svg нет слота по умолчанию (есть: content).',
-      '#b: #y slot="footer" — у ui/named.svg такого слота нет (есть: content).',
-      '#c: дети у <use> — у ui/button.svg нет слотов (tml:slot в наследнике префаба); настройка — параметрами data-*.',
-    ]);
+    expect(codesOf(c.errors.prefab)).toEqual(['E_SLOT_UNKNOWN', 'E_SLOT_UNKNOWN', 'E_SLOT_UNKNOWN']);
+    for (const part of ['#a: #x', 'ui/named.svg', 'content']) expect(c.errors.prefab[0]).toContain(part);
+    for (const part of ['#b: #y slot="footer"', 'ui/named.svg', 'content']) expect(c.errors.prefab[1]).toContain(part);
+    for (const part of ['#c:', 'ui/button.svg']) expect(c.errors.prefab[2]).toContain(part);
   });
 
   it('slot children are the scene base: sterility, contract by their own id', () => {
@@ -326,12 +342,12 @@ describe('v1.0 — slots', () => {
       contract: `<contract><use id="pp" href="ui/panel.svg"/><g id="body"/></contract>`,
       loadScene: loader(),
     });
-    expect(c.errors.contract.join('\n')).toMatch(/База не стерильна: #body/);
+    expect(withCode(c.errors.contract, 'E_STERILE')[0]).toContain('#body');
   });
 
   it('the prefab contract: slot="true" needs tml:slot in the heir', () => {
     const NOSLOT: SceneSource = { base: PANEL.base, contract: PANEL.contract };
     const c = composeScene({ base: svg(`<use id="p" href="ui/noslot.svg" data-title="x"/>`), loadScene: loader({ 'ui/noslot.svg': NOSLOT }) });
-    expect(c.errors.prefab.join('\n')).toMatch(/#p \(ui\/noslot.svg\): #content: контракт ждёт слот/);
+    expect(withCode(c.errors.prefab, 'E_CONTRACT_SLOT')[0]).toContain('#p (ui/noslot.svg): #content');
   });
 });

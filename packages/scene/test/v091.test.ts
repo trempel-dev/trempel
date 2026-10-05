@@ -17,6 +17,7 @@ import { Registry } from '../src/registry';
 import { IDENTITY, parseTransform } from '../src/transform';
 import { checkContract, parseContract } from '../src/contract';
 import { createMockBackend, createMockClock } from './helpers/mockBackend';
+import { codesOf, thrown } from './helpers/codes';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -70,14 +71,11 @@ describe('stroke attributes — strict subset (propErrors)', () => {
           '<text id="t" stroke-dasharray="2">x</text>',
       ),
     );
-    expect(propErrors(tree)).toEqual([
-      '#p: stroke-dasharray="4 -2" — ожидаются неотрицательные числа через пробел или запятую (или none).',
-      '#p: stroke-linecap="arrow" — бывает butt, round, square.',
-      '#p: stroke-linejoin="arcs" — бывает miter, round, bevel.',
-      '#l: stroke-dashoffset="1em" — ожидается число.',
-      '#l: pathLength="0" — ожидается положительное число.',
-      '#t: stroke-dasharray на <text> не поддерживается — только на path, circle, ellipse, line, rect.',
-    ]);
+    const errs = propErrors(tree);
+    expect(codesOf(errs)).toEqual(['E_STROKE', 'E_STROKE', 'E_STROKE', 'E_STROKE', 'E_STROKE', 'E_STROKE']);
+    const named = ['#p: stroke-dasharray="4 -2"', '#p: stroke-linecap="arrow"', '#p: stroke-linejoin="arcs"', '#l: stroke-dashoffset="1em"', '#l: pathLength="0"', '#t: stroke-dasharray'];
+    named.forEach((n, i) => expect(errs[i].startsWith(`E_STROKE: ${n}`)).toBe(true));
+    expect(errs[5]).toContain('<text>');
     expect(parseDashArray('none')).toBeNull();
     expect(parseDashArray('0 0')).toBeNull(); // sums to zero — solid, as in SVG
     expect(parseDashArray('3,1')).toEqual([3, 1]);
@@ -147,7 +145,9 @@ describe('PixiBackend — dashed strokes (v0.9.1)', () => {
     be.setProp(g, 'stroke-opacity', 0.5);
     expect(strokeOf(g)).toMatchObject({ moves: 1, width: 6, alpha: 0.5 });
     expect([be.getProp(g, 'stroke-dashoffset'), be.getProp(g, 'stroke-width'), be.getProp(g, 'stroke-opacity')]).toEqual([0, 6, 0.5]);
-    expect(() => be.setProp(be.createNode('g', {}), 'stroke-width', 2)).toThrow(/только у геометрии/);
+    const notGeometry = thrown(() => be.setProp(be.createNode('g', {}), 'stroke-width', 2));
+    expect(notGeometry).toMatchObject({ code: 'E_BACKEND' });
+    expect(notGeometry.message).toContain('stroke-width');
   });
 
   it('bad values are errors with the node', () => {
@@ -207,7 +207,9 @@ describe('hit test by geometry (v0.9.1)', () => {
     expect(scene.hitTest('ln', 400, 582)).toBe(true);
     expect(scene.hitTest('ln', 400, 584)).toBe(false);
     expect(scene.hitTest('world', 100, 90)).toBe(true); // a group by its children
-    expect(() => scene.hitTest('nope', 0, 0)).toThrow(/hitTest\("nope"\) — узла с таким id в сцене нет/);
+    const missing = thrown(() => scene.hitTest('nope', 0, 0));
+    expect(missing).toMatchObject({ code: 'E_NODE' });
+    expect(missing.message).toContain('hitTest("nope")');
   });
 
   it('hitTestAll: topmost first (data-z among siblings), hidden included, defs never', () => {
@@ -276,13 +278,11 @@ describe('clips — stroke columns (v0.9.1)', () => {
         '## $track grp\n| t | strokeWidth |\n|---|---|\n| 0 | 1 |\n',
       SCENE,
     );
-    expect(errors).toEqual([
-      '$clip bad / $track d1, строка 3: dash="x" — не число.',
-      '$clip bad / $track d1, строка 3: strokeWidth="-1" — толщина не бывает отрицательной.',
-      '$clip bad / $track d1, строка 3: strokeAlpha="2" — от 0 до 1.',
-      '$clip bad / $track plain: dash — у #plain нет stroke-dasharray, сдвигать нечего.',
-      '$clip bad / $track grp: strokeWidth — #grp это <g>, обводка анимируется у path, line, circle, ellipse, rect.',
-    ]);
+    expect(codesOf(errors)).toEqual(['E_ANIM_VALUE', 'E_ANIM_VALUE', 'E_ANIM_VALUE', 'E_ANIM_TARGET', 'E_ANIM_TARGET']);
+    const named = ['$track d1, row 3: dash="x"', '$track d1, row 3: strokeWidth="-1"', '$track d1, row 3: strokeAlpha="2"', '$track plain: dash', '$track grp: strokeWidth'];
+    named.forEach((n, i) => expect(errors[i]).toContain(`$clip bad / ${n}`));
+    expect(errors[3]).toContain('#plain');
+    expect(errors[4]).toMatch(/#grp.*<g>/);
   });
 
   it('the player writes them as absolute numbers ($target late binding)', () => {
@@ -313,7 +313,7 @@ describe('$tex in md clips (v0.9.1)', () => {
   it('template on the clip, the track (nearest wins) and the file', () => {
     expect(hrefs(`# $clip c\n$tex: art/{}.png\n\n${TRACK('x')}`)).toEqual([['art/a.png', 'art/b.png']]);
     expect(hrefs(`# $clip c\n$tex: art/{}.png\n\n${TRACK('x', '$tex: fx/{}-{}.webp\n')}`)).toEqual([['fx/a-a.webp', 'fx/b-b.webp']]);
-    expect(hrefs(`Клипы.\n$tex: sheet/{}.png\n\n# $clip c\n${TRACK('x')}\n# $clip d\n$tex: own/{}.png\n\n${TRACK('y')}`)).toEqual([
+    expect(hrefs(`Clips.\n$tex: sheet/{}.png\n\n# $clip c\n${TRACK('x')}\n# $clip d\n$tex: own/{}.png\n\n${TRACK('y')}`)).toEqual([
       ['sheet/a.png', 'sheet/b.png'],
       ['own/a.png', 'own/b.png'],
     ]);
@@ -329,11 +329,10 @@ describe('$tex in md clips (v0.9.1)', () => {
     const { errors } = compileClipsResult(
       `# $clip c\n$tex: art/a.png\n\n## $tex\n| name | url |\n|---|---|\n| a | b |\n\n## $track x\n$tex: t/{}.png\n| t | x |\n|---|---|\n| 0 | 1 |\n`,
     );
-    expect(errors).toEqual([
-      '$clip c: $tex: «art/a.png» — шаблон без {} (например art/{}.png; имя по одному — таблица ## $tex | name | href |).',
-      '$clip c / $tex: нужны колонки name и href.',
-      '$clip c / $track x: $tex без колонки tex — подменять нечего.',
-    ]);
+    expect(codesOf(errors)).toEqual(['E_ANIM_TEX', 'E_ANIM_TEX', 'E_ANIM_TEX']);
+    expect(errors[0]).toMatch(/^E_ANIM_TEX: \$clip c: \$tex: "art\/a\.png"/);
+    expect(errors[1]).toMatch(/^E_ANIM_TEX: \$clip c \/ \$tex: .*name.*href/);
+    expect(errors[2]).toMatch(/^E_ANIM_TEX: \$clip c \/ \$track x: /);
   });
 });
 
@@ -344,12 +343,14 @@ describe('contract — nesting (v0.9.1)', () => {
     expect(C.patterns[0]).toMatchObject({ match: 'd\\d+', in: 'diffs' });
     expect(C.nodes.map((n) => [n.id, n.in])).toEqual([['diffs', undefined], ['frame', 'diffs']]);
     expect(checkContract(parse(svg('<g id="diffs"><ellipse id="d1" rx="1" ry="1"/><rect id="frame"/></g>')), C)).toEqual([]);
-    expect(checkContract(parse(svg('<g id="diffs"/><ellipse id="d1" rx="1" ry="1"/><rect id="frame"/>')), C)).toEqual([
-      '#frame: по контракту лежит внутри #diffs, а в базе — снаружи.',
-      '#d1: узлы по шаблону d\\d+ должны лежать внутри #diffs, а этот — снаружи.',
-      'Узлов по шаблону d\\d+ в #diffs — 0, а контракт ждёт не меньше 1.',
-    ]);
-    expect(() => parseContract('<contract><g id="a" empty="true"><rect id="b"/></g></contract>')).toThrow(/пустой узел/);
+    const errs = checkContract(parse(svg('<g id="diffs"/><ellipse id="d1" rx="1" ry="1"/><rect id="frame"/>')), C);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_PLACE', 'E_CONTRACT_PLACE', 'E_CONTRACT_COUNT']);
+    expect(errs[0]).toMatch(/^E_CONTRACT_PLACE: #frame: .*#diffs/);
+    expect(errs[1]).toMatch(/^E_CONTRACT_PLACE: #d1: .*d\\d\+.*#diffs/);
+    expect(errs[2]).toMatch(/d\\d\+.*#diffs.*\b0\b/);
+    const empty = thrown(() => parseContract('<contract><g id="a" empty="true"><rect id="b"/></g></contract>'));
+    expect(empty).toMatchObject({ code: 'E_CONTRACT_SYNTAX' });
+    expect(empty.message).toContain('<g id="a" empty="true">');
   });
 });
 

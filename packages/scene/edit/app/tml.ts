@@ -7,7 +7,8 @@
 // agent's context — keep its comments short and user-facing.
 
 import { commands, type CommandResult, type EditorDocument, type TreeNode } from '../../editor/index.js';
-import { legacyName, PROJECT_DIR, PROJECT_DIRS, type AnimClip, type MountedScene } from '../../src/core.js';
+import { coded, type AnimClip, type MountedScene } from '../../src/core.js';
+import { legacyName, PROJECT_DIR, PROJECT_DIRS } from '../../src/compat.js';
 import { invert, nodeWorld, parentPath, type Call } from '../geometry';
 import { applyOp } from '../ops';
 import type { SceneIO } from '../io';
@@ -86,7 +87,7 @@ export interface Tml {
   /** The scene as drawn now (no reference/onion/handles) at the viewBox's 1:1, cropped to a box
    *  in scene units; background — the stage's, else #18181c. */
   pixels(box?: TmlBounds): Promise<TmlPixels>;
-  /** «Снимок для видео»: the rest pose (a clip is stopped) at 1:1 on `background` (null —
+  /** "Video snapshot": the rest pose (a clip is stopped) at 1:1 on `background` (null —
    *  transparent; omitted — the panel's) → renders/<scene>-<time>.png; returns its path. */
   snapshot(opts?: { background?: string | null }): Promise<string>;
   /** Prefabs (v0.9): list() — scenes to place ("ui/button.svg"; v1.1 — a collection's too, "@skin/button.svg"); place(prefab, at?) — a <use> at a scene
@@ -134,7 +135,7 @@ export function compileScript(code: string, params: string[]): (...a: unknown[])
 
 function cspHint(e: unknown): unknown {
   if (e instanceof EvalError || (e instanceof Error && /unsafe-eval|Content Security Policy/i.test(e.message))) {
-    return new Error(`скрипты запрещены политикой CSP страницы (нужен 'unsafe-eval'): ${e.message}`);
+    return new Error(coded('E_EDIT_SCRIPT', `scripts are forbidden by the page CSP ('unsafe-eval' is needed): ${e.message}`));
   }
   return e;
 }
@@ -161,7 +162,7 @@ export type TmlHost = Pick<Editor, 'doc' | 'session' | 'entry' | 'scenes' | 'sel
 
 export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink: TmlSink, extras?: TmlExtras): Tml {
   const x = (): TmlExtras => {
-    if (!extras) throw new Error('клипы, эталон и снимки — только на странице редактора');
+    if (!extras) throw new Error(coded('E_EDIT_HOST', 'clips, the reference and snapshots are available only on the editor page'));
     return extras;
   };
   const anim: TmlAnim = {
@@ -240,7 +241,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
         const code = await io.read(file);
         out.push({ name: file.slice(file.indexOf('/macros/') + 8).replace(/\.js$/, ''), title: macroTitle(file, code), file, code });
       } catch (e) {
-        sink.print('warn', [`макрос ${file} не прочитан: ${e instanceof Error ? e.message : String(e)}`]);
+        sink.print('warn', [coded('W_EDIT_MACRO', `macro ${file} could not be read: ${e instanceof Error ? e.message : String(e)}`)]);
       }
     }
     macroCache = out;
@@ -276,7 +277,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
       const paths: string[] = [];
       for (const n of list) {
         const p = pathOf(n);
-        if (p == null || p === '') throw new Error(`tml.select: узла «${n}» нет`);
+        if (p == null || p === '') throw new Error(coded('E_EDIT_NODE', `tml.select: no node "${n}"`));
         paths.push(p);
       }
       ed.select(paths);
@@ -290,7 +291,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
     moveBy(node, dx, dy) {
       const doc = ed.doc;
       const p = pathOf(node);
-      if (!doc || p == null || p === '') throw new Error(`tml.moveBy: узла «${node}» нет`);
+      if (!doc || p == null || p === '') throw new Error(coded('E_EDIT_NODE', `tml.moveBy: no node "${node}"`));
       const v = invert(nodeWorld(doc.scene, parentPath(p)));
       const r = (x: number): number => Math.round(x * 10000) / 10000;
       const call: Call = { name: 'node.move', args: { node: ed.ref(p), dx: r(v[0] * dx + v[2] * dy), dy: r(v[1] * dx + v[3] * dy) } };
@@ -316,7 +317,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
     save: () => ed.save(),
     async open(sceneId) {
       const entry = ed.scenes.find((s) => s.id === sceneId);
-      if (!entry) throw new Error(`tml.open: сцены «${sceneId}» нет (есть: ${ed.scenes.map((s) => s.id).join(', ')})`);
+      if (!entry) throw new Error(coded('E_EDIT_SCENE', `tml.open: no scene "${sceneId}" (scenes: ${ed.scenes.map((s) => s.id).join(', ')})`));
       if (active && active.doc === ed.doc && entry.id !== ed.entry?.id) active.doc.end(); // what the script did there — one step
       const ok = await ed.openScene(entry);
       if (active && ed.doc && ed.doc !== active.doc) {
@@ -337,7 +338,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
     viewBox: () => x().viewBox(),
     pixels: (box) => x().pixels(box),
     snapshot: (opts = {}) => x().snapshot(opts.background),
-    async run(code, label = 'скрипт') {
+    async run(code, label = 'script') {
       if (active) {
         // a nested run (a macro calling tml.run): joins the running step
         return compileScript(code, ['tml', 'console'])(tml, scriptConsole);
@@ -363,7 +364,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
     prefabs: {
       list: () => ed.prefabCandidates?.() ?? [],
       place: async (prefab, at) => {
-        if (!ed.instantiate) throw new Error('префабы — только на странице редактора');
+        if (!ed.instantiate) throw new Error(coded('E_EDIT_HOST', 'prefabs are available only on the editor page'));
         return ed.instantiate(prefab, at);
       },
       open: async (node) => {
@@ -386,7 +387,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
       async run(name) {
         const all = macroCache ?? (await loadMacros());
         const m = all.find((x) => x.name === name || x.title === name || x.file === name);
-        if (!m) throw new Error(`макроса «${name}» нет (есть: ${all.map((x) => x.name).join(', ') || '—'}; папка ${MACRO_DIR}/)`);
+        if (!m) throw new Error(coded('E_EDIT_MACRO', `no macro "${name}" (macros: ${all.map((x) => x.name).join(', ') || '—'}; folder ${MACRO_DIR}/)`));
         return tml.run(m.code, m.title);
       },
     },
@@ -398,7 +399,7 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
 export function formatValue(v: unknown): string {
   if (typeof v === 'string') return v;
   if (v === undefined) return 'undefined';
-  if (typeof v === 'function') return `ƒ ${v.name || '(анонимная)'}`;
+  if (typeof v === 'function') return `ƒ ${v.name || '(anonymous)'}`;
   if (v instanceof Error) return v.stack?.split('\n').slice(0, 3).join('\n') ?? v.message;
   try {
     const json = (indent?: number): string | undefined => {
@@ -407,7 +408,7 @@ export function formatValue(v: unknown): string {
         v,
         (_k, x: unknown) => {
           if (x && typeof x === 'object') {
-            if (seen.has(x)) return '[цикл]';
+            if (seen.has(x)) return '[cycle]';
             seen.add(x);
             if (x instanceof Map) return Object.fromEntries([...x].slice(0, 50).map(([k, y]) => [String(k), typeof y === 'object' ? '{…}' : y]));
           }

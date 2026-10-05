@@ -1,8 +1,8 @@
-// index.ts — public API: the renderer-agnostic core (core.ts) plus the PixiJS backend.
-// Pixi-free consumers (CLI checkers, level tools) import '@trempel/scene/core' instead.
+// index.ts — the stable API (`@trempel/scene`): the renderer-agnostic core (core.ts) plus the
+// PixiJS backend. Pixi-free consumers (CLI checkers, level tools) import '@trempel/scene/core'.
 
 export * from './core.js';
-export { PixiBackend, parseColor } from './render/pixi.js';
+export { PixiBackend } from './render/pixi.js';
 export type { PixiBackendOptions, FontMetricsFn, ImageNode } from './render/pixi.js';
 
 import { mountAsync as coreMountAsync, type MountArgsLoose, type MountedScene } from './scene.js';

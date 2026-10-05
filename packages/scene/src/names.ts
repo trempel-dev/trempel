@@ -1,6 +1,8 @@
 // names.ts — what a composed scene's expressions read from the context: every free name, plus the
 // on-click source of each node with an id. The viewer stubs the names nobody provides (clicks go to
 // its log); flatten stubs them too, so a static render evaluates like the viewer's.
+//
+// @internal — `@trempel/scene/internal/names`, for the kit and the editor: no stability promise.
 
 import { isExprKey } from './binding.js';
 import { compile, type Node as ExprNode } from './expr.js';

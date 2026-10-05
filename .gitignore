@@ -10,3 +10,4 @@ dist-*/
 test-results/
 playwright-report/
 build-report.md
+.visual/

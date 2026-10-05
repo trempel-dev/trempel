@@ -1,6 +1,6 @@
 {
   "name": "@trempel/scene",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Trempel — agent-first 2D game scenes: a scene format that is valid SVG (+ tml: namespace), a PixiJS runtime, an animation player and an editor core.",
   "type": "module",
   "license": "MIT",
@@ -8,8 +8,11 @@
   "homepage": "https://trempel.dev",
   "repository": {
     "type": "git",
-    "url": "github:trempel-dev/trempel",
+    "url": "git+https://github.com/trempel-dev/trempel.git",
     "directory": "packages/scene"
+  },
+  "bugs": {
+    "url": "https://github.com/trempel-dev/trempel/issues"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,6 +33,10 @@
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
+    "./view": {
+      "types": "./dist/view.d.ts",
+      "import": "./dist/view.js"
+    },
     "./edit": {
       "types": "./dist/edit/types/edit/lib.d.ts",
       "import": "./dist/edit/index.js"
@@ -39,7 +46,11 @@
     "./package.json": "./package.json",
     "./browser": "./dist/browser/trempel.js",
     "./browser/core": "./dist/browser/trempel-core.js",
-    "./browser/editor": "./dist/browser/trempel-editor.js"
+    "./browser/editor": "./dist/browser/trempel-editor.js",
+    "./internal/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
   },
   "bin": {
     "trempel-flatten": "dist/node/flatten-cli.js"
@@ -47,7 +58,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -67,26 +79,22 @@
     "editor:commands": "npm run build && node scripts/editor-commands.mjs",
     "build:browser": "vite build --config vite.browser.config.ts",
     "build:edit": "vite build --config edit/lib.config.ts && tsc -p edit/tsconfig.lib.json",
-    "prepack": "npm run build && npm run build:browser"
+    "prepack": "npm run build && npm run build:browser",
+    "error-codes": "node scripts/error-codes.mjs",
+    "visual-gate": "node scripts/visual-gate.mjs"
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.9.6",
     "svg-path-properties": "^2.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "pixi.js": "^8.5.0",
-    "playwright": "^1.63.0",
-    "sharp": "^0.35.3",
-    "typescript": "^5.6.0",
-    "vite": "^5.4.0",
-    "vitest": "^2.1.0"
+    "pixi.js": "^8.19.0"
   },
   "engines": {
     "node": ">=20"
   },
   "peerDependencies": {
-    "pixi.js": "^8.5.0"
+    "pixi.js": "^8.19.0"
   },
   "peerDependenciesMeta": {
     "pixi.js": {

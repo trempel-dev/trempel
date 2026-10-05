@@ -9,9 +9,13 @@
 //
 // The file is md (src/md/): plain `##` headings open sections, `$name: value` lines in the
 // `collections` section declare collections. Other sections are free text (notes for people).
+//
+// @internal — `@trempel/scene/internal/project`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): parseProject, PROJECT_FILE, ProjectFile, CollectionSpec.
 
 import { parse as parseMd } from './md/parse.js';
 import { COLLECTION_NAME, collectionOf, unknownCollection } from './href.js';
+import { coded } from './codes.js';
 import { parseViews } from './props.js';
 import type { SceneNode } from './parser.js';
 import { walk } from './tree.js';
@@ -62,7 +66,7 @@ export function parseProject(text: string): ProjectFile {
   try {
     attrs = parseMd(own.join('\n')).root.attrs;
   } catch (e) {
-    out.errors.push(`${PROJECT_FILE}: ${(e as Error).message}`);
+    out.errors.push(coded('E_PROJECT', `${PROJECT_FILE}: ${(e as Error).message}`));
     return out;
   }
   const seen = new Set<string>();
@@ -70,27 +74,27 @@ export function parseProject(text: string): ProjectFile {
     const name = a.key.join('.');
     const where = `${PROJECT_FILE}: $${name}`;
     if (!COLLECTION_NAME.test(name)) {
-      out.errors.push(`${where} — имя коллекции [a-z][a-z0-9-]* (строчные латинские буквы, цифры, дефис).`);
+      out.errors.push(coded('E_PROJECT', `${where} — a collection name is [a-z][a-z0-9-]* (lowercase Latin letters, digits, hyphens).`));
       continue;
     }
     if (seen.has(name)) {
-      out.errors.push(`${where} — коллекция объявлена дважды.`);
+      out.errors.push(coded('E_PROJECT', `${where} — the collection is declared twice.`));
       continue;
     }
     seen.add(name);
     const value = typeof a.value === 'string' ? a.value.trim() : '';
     if (!value) {
-      out.errors.push(`${where} — нужна папка: путь от корня проекта или npm:<пакет>/<папка>.`);
+      out.errors.push(coded('E_PROJECT', `${where} — needs a folder: a path from the project root or npm:<package>/<folder>.`));
       continue;
     }
     if (value.startsWith('npm:')) {
       const npm = parseNpmRef(value);
-      if (!npm) out.errors.push(`${where}: «${value}» — ожидается npm:<пакет>/<папка>.`);
+      if (!npm) out.errors.push(coded('E_PROJECT', `${where}: "${value}" — expected npm:<package>/<folder>.`));
       else out.collections.push({ name, value, npm });
       continue;
     }
     if (/^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/)/.test(value)) {
-      out.errors.push(`${where}: «${value}» — путь от корня проекта (относительный) или npm:<пакет>/<папка>.`);
+      out.errors.push(coded('E_PROJECT', `${where}: "${value}" — a (relative) path from the project root or npm:<package>/<folder>.`));
       continue;
     }
     out.collections.push({ name, value });
@@ -124,7 +128,7 @@ export function collectionErrors(tree: SceneNode, collections: Record<string, st
   treeHrefs(tree, (href, where) => {
     const name = collectionOf(href);
     if (name && !(collections && Object.prototype.hasOwnProperty.call(collections, name))) {
-      errors.push(`${where}: ${href} — ${unknownCollection(name, collections)}`);
+      errors.push(coded('E_COLLECTION_UNKNOWN', `${where}: ${href} — ${unknownCollection(name, collections)}`));
     }
   });
   return [...new Set(errors)];

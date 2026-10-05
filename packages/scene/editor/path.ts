@@ -7,7 +7,8 @@
 // A closed subpath whose last anchor sits on its M point (circles, most editors' output) treats
 // the two as one node: moving either moves both, the in-handle of M is the last curve's.
 
-import type { PathCmd } from '@trempel/scene/core';
+import { coded } from '@trempel/scene/core';
+import { type PathCmd } from '@trempel/scene/internal/geom/pathdata';
 import { fmt } from './num.js';
 
 export type EditCmd = ['M', number, number] | ['L', number, number] | ['C', number, number, number, number, number, number] | ['Z'];
@@ -18,7 +19,11 @@ export interface Pt {
 }
 
 /** Thrown for a bad index / impossible edit; the command turns it into `ok: false`. */
-export class PathEditError extends Error {}
+export class PathEditError extends Error {
+  constructor(text: string) {
+    super(coded('E_EDITOR_PATH', text));
+  }
+}
 
 /** True when `d` uses anything besides absolute M L C Z (relative, H V S T Q A). */
 export function needsNormalize(d: string): boolean {
@@ -207,7 +212,7 @@ export function anchorPoints(cmds: EditCmd[]): Pt[] {
 function locate(cmds: EditCmd[], index: number): { ci: number; sub: Sub } {
   const list = anchors(cmds);
   if (!Number.isInteger(index) || index < 0 || index >= list.length) {
-    throw new PathEditError(`точки ${index} нет — у контура ${list.length} точек (0…${list.length - 1})`);
+    throw new PathEditError(`no point ${index} — the path has ${list.length} points (0…${list.length - 1})`);
   }
   const ci = list[index];
   const sub = subpaths(cmds).filter((s) => s.m <= ci).pop()!;
@@ -330,7 +335,7 @@ export function setHandle(src: EditCmd[], index: number, which: 'in' | 'out', p:
   const h = handleRef(cmds, ci, sub, which, true);
   if (!h) {
     throw new PathEditError(
-      which === 'in' ? `у точки ${index} нет входящего сегмента — ручке «in» не на чем быть` : `у точки ${index} нет исходящего сегмента — ручке «out» не на чем быть`,
+      which === 'in' ? `point ${index} has no incoming segment — there is nothing for the "in" handle to be on` : `point ${index} has no outgoing segment — there is nothing for the "out" handle to be on`,
     );
   }
   setH(cmds, h, p);
@@ -414,9 +419,9 @@ export function insertPoint(src: EditCmd[], segment: number, t: number): EditCmd
   const cmds = copy(src);
   const segs = segments(cmds);
   if (!Number.isInteger(segment) || segment < 0 || segment >= segs.length) {
-    throw new PathEditError(`сегмента ${segment} нет — у контура ${segs.length} сегментов (0…${segs.length - 1})`);
+    throw new PathEditError(`no segment ${segment} — the path has ${segs.length} segments (0…${segs.length - 1})`);
   }
-  if (!(t > 0 && t < 1)) throw new PathEditError(`t=${t} — ожидается число строго между 0 и 1`);
+  if (!(t > 0 && t < 1)) throw new PathEditError(`t=${t} — expected a number strictly between 0 and 1`);
   const si = segs[segment];
   const c = cmds[si];
   const a = segStart(cmds, si);
@@ -476,7 +481,7 @@ export function removePoint(src: EditCmd[], index: number): EditCmd[] {
       cmds.splice(ci, 1);
     }
   }
-  if (!cmds.some((c) => c[0] !== 'Z')) throw new PathEditError('это последняя точка контура — удалите узел целиком (node.remove)');
+  if (!cmds.some((c) => c[0] !== 'Z')) throw new PathEditError('this is the last point of the path — remove the whole node (node.remove)');
   return cmds;
 }
 
@@ -484,7 +489,7 @@ function subAt(cmds: EditCmd[], subpath: number | undefined): Sub {
   const subs = subpaths(cmds);
   const k = subpath ?? subs.length - 1;
   if (!Number.isInteger(k) || k < 0 || k >= subs.length) {
-    throw new PathEditError(`подконтура ${subpath} нет — их ${subs.length} (0…${subs.length - 1})`);
+    throw new PathEditError(`no subpath ${subpath} — there are ${subs.length} (0…${subs.length - 1})`);
   }
   return subs[k];
 }

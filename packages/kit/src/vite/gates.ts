@@ -12,7 +12,8 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { zipSync } from 'fflate';
-import { LEGACY, NS } from '@trempel/scene/core';
+import { NS } from '@trempel/scene/core';
+import { LEGACY } from '@trempel/scene/internal/compat';
 
 const MiB = 1024 * 1024;
 export const LIMITS = { initialFail: 30 * MiB, initialWarn: 15 * MiB, totalFail: 250 * MiB, files: 8000, fileFail: 30 * MiB };

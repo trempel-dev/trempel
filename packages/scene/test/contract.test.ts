@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '../src/parser';
 import { parseContract, checkContract } from '../src/contract';
+import { codesOf, thrown, withCode } from './helpers/codes';
 
 // xmlns:tml is declared so the "tml in base" fixture can carry a tml:* attribute and still parse.
 const base = (body: string, viewBox = '0 0 1280 800'): string =>
@@ -29,7 +30,7 @@ describe('contract — happy path', () => {
 describe('contract — check 1 (node exists once, tag matches)', () => {
   it('flags a missing node', () => {
     const errors = check(base(`<g id="board"/><image id="bg"/>`), CONTRACT);
-    expect(errors.some((e) => /#balance:.*такого узла в базе нет/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_CONTRACT_MISSING')[0]).toContain('#balance');
   });
 
   it('flags a tag mismatch', () => {
@@ -37,7 +38,10 @@ describe('contract — check 1 (node exists once, tag matches)', () => {
       base(`<image id="bg"/><g id="board"/><g id="balance"/>`),
       CONTRACT,
     );
-    expect(errors.some((e) => /#balance: контракт ждёт <text>, а в базе <g>/.test(e))).toBe(true);
+    const [tag] = withCode(errors, 'E_CONTRACT_TAG');
+    expect(tag).toContain('#balance');
+    expect(tag).toContain('<text>');
+    expect(tag).toContain('<g>');
   });
 });
 
@@ -51,7 +55,7 @@ describe('contract — check 2 (empty="true")', () => {
       base(`<image id="bg"/><g id="board"><rect/></g><text id="balance"/>`),
       CONTRACT,
     );
-    expect(errors.some((e) => /#board должен быть пустым — в нём 1/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_CONTRACT_EMPTY')[0]).toContain('#board');
   });
 });
 
@@ -64,7 +68,8 @@ describe('contract — check 3 (viewBox)', () => {
   it('flags a viewBox mismatch', () => {
     const b = base(`<image id="bg"/><g id="board"/><text id="balance"/>`, '0 0 1024 768');
     const errors = check(b, CONTRACT);
-    expect(errors.some((e) => /viewBox базы.*не совпадает/.test(e))).toBe(true);
+    expect(codesOf(errors)).toEqual(['E_CONTRACT_VIEWBOX']);
+    expect(errors[0]).toContain('"0 0 1024 768"');
   });
 });
 
@@ -74,8 +79,9 @@ describe('contract — check 4 (base ids unique)', () => {
       base(`<image id="bg"/><g id="board"/><text id="balance"/><text id="balance"/>`),
       CONTRACT,
     );
-    // duplicate surfaces both as the per-node "встречается N раз" and the global uniqueness check
-    expect(errors.some((e) => /balance.*id должен быть уникален/.test(e))).toBe(true);
+    // duplicate surfaces both as the per-node count and the global uniqueness check
+    expect(codesOf(errors)).toEqual(['E_CONTRACT_TWICE', 'E_DUP_ID']);
+    for (const e of errors) expect(e).toContain('balance');
   });
 });
 
@@ -89,7 +95,9 @@ describe('contract — check 5 (base sterile)', () => {
       base(`<image id="bg"/><g id="board" tml:type="tile-grid"/><text id="balance"/>`),
       CONTRACT,
     );
-    expect(errors.some((e) => /не стерильна.*tml:type/.test(e))).toBe(true);
+    const [sterile] = withCode(errors, 'E_STERILE');
+    expect(sterile).toContain('#board');
+    expect(sterile).toContain('tml:type');
   });
 });
 
@@ -105,6 +113,6 @@ describe('contract — parsing', () => {
   });
 
   it('throws on a non-<contract> root', () => {
-    expect(() => parseContract(`<foo/>`)).toThrow(/root element must be <contract>/);
+    expect(thrown(() => parseContract(`<foo/>`))).toMatchObject({ code: 'E_ROOT' });
   });
 });

@@ -3,6 +3,7 @@ import { compile, run, ExpressionError, evalExpression } from '../src/expr';
 import { evalBinding, bindingErrors } from '../src/binding';
 import { parse } from '../src/parser';
 import { reactive, effect } from '../src/reactive';
+import { codesOf, thrown } from './helpers/codes';
 
 const ev = (src: string, ctx: Record<string, unknown> = {}): unknown => run(compile(src), ctx);
 
@@ -98,20 +99,28 @@ describe('expr — context access and calls', () => {
   });
 
   it('throws an evaluation error for unknown names, member of undefined and non-functions', () => {
-    expect(() => ev('nope', ctx)).toThrow(/имя «nope» не определено/);
-    expect(() => ev('state.missing.x', ctx)).toThrow(/чтение поля «x» у undefined/);
-    expect(() => ev('state.win()', ctx)).toThrow(/вызов не-функции/);
+    const undef = thrown(() => ev('nope', ctx));
+    expect(undef).toMatchObject({ code: 'E_EXPR_UNDEF' });
+    expect(undef.message).toContain('nope');
+    const field = thrown(() => ev('state.missing.x', ctx));
+    expect(field).toMatchObject({ code: 'E_EXPR_FIELD' });
+    expect(field.message).toContain('"x"');
+    expect(thrown(() => ev('state.win()', ctx))).toMatchObject({ code: 'E_EXPR_CALL' });
   });
 
   it('has no globals and no path back to code', () => {
-    expect(() => ev('Math.max(1, 2)')).toThrow(/не определено/);
-    expect(() => ev('globalThis')).toThrow(/не определено/);
-    expect(() => compile('play.constructor')).toThrow(/доступ к «constructor» запрещён/);
-    expect(() => compile('a.__proto__')).toThrow(/запрещён/);
-    expect(() => ev("play['constru' + 'ctor']", ctx)).toThrow(/доступ к «constructor» запрещён/);
-    expect(() => ev("t['__proto__']", ctx)).toThrow(/запрещён/);
+    expect(thrown(() => ev('Math.max(1, 2)'))).toMatchObject({ code: 'E_EXPR_UNDEF' });
+    expect(thrown(() => ev('globalThis'))).toMatchObject({ code: 'E_EXPR_UNDEF' });
+    const ctor = thrown(() => compile('play.constructor'));
+    expect(ctor).toMatchObject({ code: 'E_EXPR_FORBIDDEN' });
+    expect(ctor.message).toContain('constructor');
+    expect(thrown(() => compile('a.__proto__'))).toMatchObject({ code: 'E_EXPR_FORBIDDEN' });
+    const computed = thrown(() => ev("play['constru' + 'ctor']", ctx));
+    expect(computed).toMatchObject({ code: 'E_EXPR_FORBIDDEN' });
+    expect(computed.message).toContain('constructor');
+    expect(thrown(() => ev("t['__proto__']", ctx))).toMatchObject({ code: 'E_EXPR_FORBIDDEN' });
     // inherited Object.prototype members are not context names
-    expect(() => ev('toString', ctx)).toThrow(/не определено/);
+    expect(thrown(() => ev('toString', ctx))).toMatchObject({ code: 'E_EXPR_UNDEF' });
   });
 });
 
@@ -137,23 +146,23 @@ describe('expr — pipes', () => {
 
 describe('expr — syntax errors carry a position', () => {
   it.each([
-    ['state.', 'после «.» ожидается имя поля', 6],
-    ['a +', 'выражение оборвалось', 3],
-    ['(a', 'ожидается «)»', 2],
-    ['a b', 'лишнее «b»', 2],
-    ['a = 1', 'присваивание не поддерживается', 2],
-    ["'open", 'незакрытая строка', 0],
-    ['a # b', 'неожиданный символ «#»', 2],
-    ['a ? b', 'ожидается «:»', 5],
-    ['a | ', 'после «|» ожидается имя пайпа', 4],
-    ['1x', 'число сразу переходит в имя', 1],
-    ['', 'пустое выражение', 0],
-    ['{a 1}', 'ожидается «:»', 3],
-  ])('%j → %s @%i', (src, reason, pos) => {
+    ['state.', 'a field name expected after "."', 6],
+    ['a +', 'the expression breaks off', 3],
+    ['(a', '")" expected', 2],
+    ['a b', 'an extra "b"', 2],
+    ['a = 1', 'assignment is not supported', 2],
+    ["'open", 'an unclosed string', 0],
+    ['a # b', 'an unexpected "#"', 2],
+    ['a ? b', '":" expected', 5],
+    ['a | ', 'a pipe name expected after "|"', 4],
+    ['1x', 'a number runs into a name', 1],
+    ['', 'an empty expression', 0],
+    ['{a 1}', '":" expected', 3],
+  ])('%j → %s @%i', (src, _what, pos) => {
     const e = syntaxError(src);
-    expect(e.reason).toContain(reason);
-    expect(e.pos).toBe(pos);
-    expect(e.message).toContain(`позиция ${pos + 1}`);
+    expect(e).toMatchObject({ code: 'E_EXPR_SYNTAX', pos });
+    expect(e.reason).not.toBe('');
+    expect(e.message).toContain(`(col ${pos + 1})`);
   });
 
   it('bindingErrors reports every broken expression of a tree, with a caret', () => {
@@ -164,10 +173,11 @@ describe('expr — syntax errors carry a position', () => {
       <g id="ok" tml:visible="state.x > 0" tml:cols="3"/>
     </svg>`);
     const errors = bindingErrors(tree);
-    expect(errors).toHaveLength(3);
-    expect(errors[0]).toMatch(/^#a tml:bind: выражение оборвалось.*позиция 10:\n {6}state\.x \+\n {15}\^$/);
-    expect(errors[1]).toMatch(/^#b tml:on-click: выражение оборвалось/);
-    expect(errors[2]).toMatch(/^#c tml:bind: неизвестный пайп «nosuch»/);
+    expect(codesOf(errors)).toEqual(['E_EXPR_SYNTAX', 'E_EXPR_SYNTAX', 'E_PIPE_UNKNOWN']);
+    expect(errors[0]).toMatch(/^E_EXPR_SYNTAX: #a tml:bind: .*\(col 10\):\n {6}state\.x \+\n {15}\^$/);
+    expect(errors[1]).toContain('#b tml:on-click:');
+    expect(errors[2]).toContain('#c tml:bind:');
+    expect(errors[2]).toContain('nosuch');
   });
 });
 

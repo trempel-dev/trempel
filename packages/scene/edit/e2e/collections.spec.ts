@@ -4,6 +4,7 @@
 // ⌘S writes the base with that one line more — the scene's other @-links untouched.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { codeOf } from '../../src/core';
 import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,8 +56,8 @@ describe('editor e2e — v1.1 collections (examples/collections copy)', () => {
       await idle(e.page);
       // a new instance without its required parameters — the editor says so (as for a folder prefab)
       const errs = await e.page.evaluate(() => window.tmlEdit!.issues().filter((i) => i.level === 'error').map((i) => i.message));
-      expect(errs.filter((m) => !/^#button: не задан параметр data-/.test(m))).toEqual([]);
-      expect(errs.join('\n')).toContain('его требует @skin/button.svg');
+      expect(errs.filter((m) => codeOf(m) !== 'E_PARAM_MISSING' || !m.includes('#button'))).toEqual([]);
+      expect(errs.join('\n')).toContain('@skin/button.svg');
       expect(await e.page.evaluate(() => !!window.tmlEdit!.session?.scene?.byId.get('button/bg'))).toBe(true);
 
       await pressMod(e.page, 's');

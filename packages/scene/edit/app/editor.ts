@@ -8,12 +8,17 @@
 // the release commits one command (one undo entry).
 
 import { Application, Container, Graphics } from 'pixi.js';
-import { geometryErrors, preloadScenes, propErrors, mergeScene, parse, parseHeir, parsePathData, readHeir, readHeirAsync, resolveHref, sceneStem, type NodeHandle, type RendererBackend, type SceneLoader, type SceneNode, type SceneSource } from '../../src/core.js';
+import { coded, codeOf, within, preloadScenes, mergeScene, parse, parseHeir, sceneStem, type NodeHandle, type RendererBackend, type SceneLoader, type SceneNode, type SceneSource } from '../../src/core.js';
+import { geometryErrors } from '../../src/geom/check.js';
+import { propErrors } from '../../src/props.js';
+import { parsePathData } from '../../src/geom/pathdata.js';
+import { readHeir, readHeirAsync } from '../../src/compat.js';
+import { resolveHref } from '../../src/href.js';
 import { openDocument, type CommandResult, type EditorDocument } from '../../editor/index.js';
 import { anchorPoints, toEditCmds } from '../../editor/path.js';
 import { discoverScenes, type SceneEntry } from '../../view/discover';
 import { folderSceneLoader, type StageRuntime } from '../../view/runtime';
-import type { ViewIssue, ViewSession } from '../../view/session';
+import { isHeirError, type ViewIssue, type ViewSession } from '../../view/session';
 import { type StageFit, type Viewport } from '../../view/viewport';
 import { apply, canvasToScene, centredOrigin, geometryBox, invert as invertM, isWithin, mapBox, nodeAt, nodeWorld, parentPath, stageView, zoomAbout, type Box, type Call, type Matrix, type Pt } from '../geometry';
 import type { HitNode } from '../hittest';
@@ -187,7 +192,7 @@ export class Editor {
   /** Open a scene for editing (asks about unsaved changes first). */
   async openScene(entry: SceneEntry, opts: { force?: boolean } = {}): Promise<boolean> {
     if (!opts.force && this.doc?.dirty && entry.id !== this.entry?.id) {
-      const k = await this.ui.confirm(`В «${this.entry?.id}» несохранённые правки.`, ['Сохранить', 'Отбросить', 'Отмена']);
+      const k = await this.ui.confirm(`"${this.entry?.id}" has unsaved changes.`, ['Save', 'Discard', 'Cancel']);
       if (k === 2) return false;
       if (k === 0 && !(await this.save())) return false;
     }
@@ -237,7 +242,7 @@ export class Editor {
       const from = ext && entry.heir ? resolveHref(ext, entry.heir) : null;
       const stem = from?.replace(/(\.tml)?\.svg$/, '') ?? null;
       this.noBase = ext ? { extends: ext, scene: this.scenes.some((s) => s.id === stem) ? stem : null } : null;
-      this.renderIssues = this.noBase ? [] : [{ level: 'error', kind: 'base', message: `нет базы ${entry.id}.svg — редактор правит только базу` }];
+      this.renderIssues = this.noBase ? [] : [{ level: 'error', kind: 'base', message: coded('E_EDIT_NO_BASE', `no base ${entry.id}.svg — the editor edits only the base`) }];
       this.emit('issues', 'doc', 'render');
       return;
     }
@@ -370,7 +375,7 @@ export class Editor {
     const stem = p?.replace(/\.svg$/, '');
     const entry = this.scenes.find((s) => s.id === stem);
     if (!entry) {
-      this.log('warn', `префаб ${n.attrs.href} — не в открытой папке`);
+      this.log('warn', coded('W_EDIT_OUTSIDE', `prefab ${n.attrs.href} is not in the open folder`));
       return false;
     }
     return this.openScene(entry);
@@ -429,7 +434,7 @@ export class Editor {
       try {
         await this.io.write(rel, f.text);
         this.prefabTexts.set(rel, f.text);
-        this.log('info', `создан префаб: ${rel}`);
+        this.log('info', `prefab created: ${rel}`);
       } catch (e) {
         this.log('error', `${rel}: ${msg(e)}`);
       }
@@ -446,7 +451,7 @@ export class Editor {
       const { hash } = await this.io.write(this.entry.base, text);
       this.lastHash = hash;
       this.doc.markClean();
-      this.log('info', `сохранено: ${this.entry.base}`);
+      this.log('info', `saved: ${this.entry.base}`);
       this.emit('doc');
       return true;
     } catch (e) {
@@ -471,7 +476,7 @@ export class Editor {
       for (const f of [`${stem}.svg`, `${stem}.tml.svg`, `${stem}.contract.xml`]) this.prefabTexts.delete(f);
       await this.loadPrefabs();
       this.doc?.refresh();
-      this.log('info', `${c.file} изменён — инстансы перерисованы`);
+      this.log('info', `${c.file} changed — instances redrawn`);
       this.emit('doc');
       await this.render();
       return;
@@ -485,13 +490,13 @@ export class Editor {
       }
     }
     if (this.doc?.dirty) {
-      const k = await this.ui.confirm(`${c.file} изменён на диске, а у вас несохранённые правки.`, ['Перезагрузить с диска', 'Оставить мои']);
+      const k = await this.ui.confirm(`${c.file} changed on disk, and you have unsaved changes.`, ['Reload from disk', 'Keep mine']);
       if (k !== 0) {
-        this.log('warn', `${c.file} изменён на диске — оставлены правки редактора (сохранение перезапишет файл)`);
+        this.log('warn', coded('W_EDIT_DISK', `${c.file} changed on disk — the editor's changes are kept (saving overwrites the file)`));
         return;
       }
     }
-    this.log('info', `${c.file} изменён на диске — сцена перечитана`);
+    this.log('info', `${c.file} changed on disk — the scene is reloaded`);
     await this.loadDocument();
   }
 
@@ -506,7 +511,7 @@ export class Editor {
         try {
           await this.renderNow();
         } catch (e) {
-          this.log('error', `рендер: ${msg(e)}`);
+          this.log('error', within('render', codeOf(msg(e)) ? msg(e) : coded('E_EDIT_RENDER', msg(e))));
         }
       }
       this.renderLoop = null;
@@ -552,7 +557,7 @@ export class Editor {
     const extra = [...opened.extra];
     const missing = [...(standIns?.missing ?? [])];
     if (missing.length) {
-      extra.push({ level: 'warn', kind: 'component', message: `компоненты без реализации — нарисована их база: ${missing.join(', ')} (их даёт trempel.view.ts папки)` });
+      extra.push({ level: 'warn', kind: 'component', message: coded('W_EDIT_COMPONENT', `components without an implementation — their base is drawn: ${missing.join(', ')} (the folder's trempel.view.ts provides them)`) });
     }
     this.renderIssues = extra;
 
@@ -831,7 +836,7 @@ export class Editor {
         this.tool = 'select';
         this.emit('tool');
       }
-      if (t === 'path') this.log('warn', 'контур: выделите один <path> или <line>');
+      if (t === 'path') this.log('warn', coded('W_EDIT_SELECTION', 'contour: select one <path> or <line>'));
       return;
     }
     if (this.tool === t) return;
@@ -882,7 +887,7 @@ export class Editor {
     }
     for (const w of r.warnings ?? []) {
       // the d-normalization note — once per node
-      const key = /^(\S+): d переписан/.exec(w)?.[1];
+      const key = /^(?:[EW]_[A-Z0-9_]+: )?(\S+): d /.exec(w)?.[1];
       if (key) {
         if (this.warned.has(key)) continue;
         this.warned.add(key);
@@ -892,11 +897,11 @@ export class Editor {
   }
 
   undo(): void {
-    if (this.doc?.undo()) this.log('info', 'отменено');
+    if (this.doc?.undo()) this.log('info', 'undone');
   }
 
   redo(): void {
-    if (this.doc?.redo()) this.log('info', 'повторено');
+    if (this.doc?.redo()) this.log('info', 'redone');
   }
 
   /** Errors and warnings for the panel: the render's (runtime, assets, components) + the document's. */
@@ -907,8 +912,8 @@ export class Editor {
       const geom = new Set([...geometryErrors(doc.scene), ...propErrors(doc.scene)]);
       const clipNames = Object.keys(clipsOf(this.listing.files, this.entry?.id));
       for (const m of doc.errors) {
-        if (m.startsWith('наследник: ')) continue; // the render reports merge itself
-        const kind = geom.has(m) ? 'geometry' : clipNames.some((f) => m.startsWith(`${f}: `)) ? 'clips' : 'contract';
+        if (isHeirError(m)) continue; // the render reports merge itself
+        const kind = geom.has(m) ? 'geometry' : clipNames.some((f) => m.replace(/^[EW]_[A-Z0-9_]+: /, '').startsWith(`${f}: `)) ? 'clips' : 'contract';
         if (out.some((i) => i.message === m)) continue;
         out.push({ level: 'error', kind: kind as ViewIssue['kind'], message: m });
       }

@@ -6,6 +6,7 @@ import { Assets, Container, Graphics, Sprite, Texture, TextureSource } from 'pix
 import { PixiBackend } from '../src/render/pixi';
 import { mount } from '../src/scene';
 import { reactive } from '../src/reactive';
+import { thrown } from './helpers/codes';
 
 const metrics = (): { ascent: number; descent: number } => ({ ascent: 8, descent: 2 });
 const backend = (): PixiBackend => new PixiBackend({ metrics });
@@ -66,7 +67,10 @@ describe('PixiBackend v0.7 — shapes', () => {
   });
 
   it('unreadable d is an error with the node id', () => {
-    expect(() => backend().createNode('path', { id: 'wing', d: 'M0 0 X5' })).toThrow(/#wing: команда «X» не поддерживается/);
+    const e = thrown(() => backend().createNode('path', { id: 'wing', d: 'M0 0 X5' }));
+    expect(e).toMatchObject({ code: 'E_PATH_DATA' });
+    expect(e.message).toContain('#wing');
+    expect(e.message).toContain('"X"');
   });
 });
 
@@ -174,18 +178,23 @@ describe('scene v0.7 — clip-path masks', () => {
 
   it('a bound url to a missing clipPath is an error', () => {
     const state = reactive({ open: true });
-    expect(() =>
+    const e = thrown(() =>
       mount({
         base: svg(defs + '<g id="w"/>'),
         heir: heir(`<tml:ref id="w" tml:bind-clip-path="state.open ? 'url(#nope)' : 'none'"/>`),
         backend: backend(),
         context: { state },
       }),
-    ).toThrow(/<clipPath id="nope"> в сцене нет/);
+    );
+    expect(e).toMatchObject({ code: 'E_CLIP_PATH' });
+    expect(e.message).toContain('<clipPath id="nope">');
   });
 
   it('a static reference error stops mount with the list', () => {
-    expect(() => mount({ base: svg('<g id="w" clip-path="url(#m)"/>'), backend: backend(), context: {} })).toThrow(/#w: clip-path="url\(#m\)" — узла #m нет/);
+    const e = thrown(() => mount({ base: svg('<g id="w" clip-path="url(#m)"/>'), backend: backend(), context: {} }));
+    expect(e).toMatchObject({ code: 'E_CLIP_PATH' });
+    expect(e.errors).toHaveLength(1);
+    expect(e.errors![0]).toContain('#w: clip-path="url(#m)"');
   });
 });
 
@@ -206,6 +215,8 @@ describe('PixiBackend v0.7 — getProp, href on a group', () => {
     b.setProp(part, 'href', 'v07/head-b.png');
     expect(img.texture).toBe(Assets.cache.get('v07/head-b.png'));
     b.addChild(part, b.createNode('image', { href: 'v07/head-a.png' }));
-    expect(() => b.setProp(part, 'href', 'v07/head-a.png')).toThrow(/в ней 2 <image>/);
+    const e = thrown(() => b.setProp(part, 'href', 'v07/head-a.png'));
+    expect(e).toMatchObject({ code: 'E_BACKEND' });
+    expect(e.message).toContain('2 <image>');
   });
 });

@@ -10,6 +10,7 @@
     "paths": {
       "@trempel/scene": ["../src/index.ts"],
       "@trempel/scene/core": ["../src/core.ts"],
+      "@trempel/scene/internal/*": ["../src/*"],
       "@trempel/scene/view": ["../view/api.ts"]
     }
   },

@@ -18,7 +18,7 @@ for (let i = 0; i < argv.length; i++) {
 }
 const scene = args._[0];
 if (!scene || typeof args.out !== 'string') {
-  console.error('usage: trempel-flatten <scene> --out <file.svg> [--embed] [--state s.json] [--font-family Arial]');
+  console.error('E_CLI: usage: trempel-flatten <scene> --out <file.svg> [--embed] [--state s.json] [--font-family Arial]');
   process.exit(2);
 }
 const r = flattenFile({
@@ -28,7 +28,7 @@ const r = flattenFile({
   state: typeof args.state === 'string' ? resolve(cwd, args.state) : undefined,
   fontFamily: typeof args['font-family'] === 'string' ? args['font-family'] : undefined,
 });
-if (r.out) console.log(`${r.errors.length ? '✗' : '✓'} ${r.out}${r.collections.length ? ` (коллекции: ${r.collections.map((n) => `@${n}`).join(', ')})` : ''}`);
+if (r.out) console.log(`${r.errors.length ? '✗' : '✓'} ${r.out}${r.collections.length ? ` (collections: ${r.collections.map((n) => `@${n}`).join(', ')})` : ''}`);
 for (const w of r.warnings) console.log(`  ! ${w}`);
 for (const e of r.errors) console.error(`  • ${e}`);
 process.exit(r.errors.length ? 1 : r.out ? 0 : 1);

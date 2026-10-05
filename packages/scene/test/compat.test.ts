@@ -2,10 +2,12 @@
 // `.gml/`) still work for one release, each with a deprecation warning once.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mount, parse, parseHeir, onDeprecated, readHeir, readHeirAsync, sceneStem, isHeirFile, heirSuffix, VIEW_MODULES, PROJECT_DIRS, legacyName, upgradeDocument } from '../src/core';
+import { mount, parse, parseHeir, sceneStem, isHeirFile } from '../src/core';
+import { onDeprecated, readHeir, readHeirAsync, heirSuffix, VIEW_MODULES, PROJECT_DIRS, legacyName, upgradeDocument } from '../src/compat';
 import { discoverScenes } from '../view/discover';
 import { createMockBackend, isMockNode } from './helpers/mockBackend';
 import { reactive } from '../src/reactive';
+import { codesOf } from './helpers/codes';
 
 let warned: string[] = [];
 beforeEach(() => {
@@ -26,8 +28,8 @@ describe('compat — previous names, one release', () => {
     expect(isMockNode(scene.byId.get('t')!).props.text).toBe(2);
     expect(isMockNode(scene.byId.get('r')!).props.visible).toBe(true);
     parseHeir(OLD_HEIR);
-    expect(warned).toHaveLength(1);
-    expect(warned[0]).toMatch(/устарело — префикс gml:.*tml:/);
+    expect(codesOf(warned)).toEqual(['W_COMPAT_GML']);
+    expect(warned[0]).toMatch(/gml:.*tml:/);
     expect(warned[0]).toMatch(/migrate-tml\.mjs/);
   });
 
@@ -52,7 +54,8 @@ describe('compat — previous names, one release', () => {
     expect(readHeir(get, 'b')).toBe('new');
     expect(readHeir(get, 'c')).toBeUndefined();
     expect(await readHeirAsync(async (f) => files[f], 'a')).toBe('old');
-    expect(warned).toEqual([expect.stringMatching(/a\.gml\.svg — переименуйте в a\.tml\.svg/)]);
+    expect(codesOf(warned)).toEqual(['W_COMPAT_HEIR']);
+    expect(warned[0]).toMatch(/a\.gml\.svg.*a\.tml\.svg/);
     expect(sceneStem('ui/x.gml.svg')).toBe('ui/x');
     expect(sceneStem('ui/x.tml.svg')).toBe('ui/x');
     expect(isHeirFile('x.gml.svg') && isHeirFile('x.tml.svg') && !isHeirFile('x.svg')).toBe(true);
@@ -71,7 +74,9 @@ describe('compat — previous names, one release', () => {
     expect(warned).toEqual([]);
     legacyName('/w/gameml.view.ts');
     legacyName('.gml/macros');
-    expect(warned).toEqual([expect.stringMatching(/gameml\.view\.ts — переименуйте в trempel\.view\.ts/), expect.stringMatching(/папка \.gml\/ — переименуйте в \.trempel\//)]);
+    expect(codesOf(warned)).toEqual(['W_COMPAT_VIEW_MODULE', 'W_COMPAT_PROJECT_DIR']);
+    expect(warned[0]).toMatch(/gameml\.view\.ts.*trempel\.view\.ts/);
+    expect(warned[1]).toMatch(/\.gml\/.*\.trempel\//);
   });
 });
 

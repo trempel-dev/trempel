@@ -4,7 +4,7 @@
 
 import { formatValue, type Tml, type TmlSink } from './tml';
 
-const PLACEHOLDER = "tml.nodes().filter(n => n.tag==='image').length\n\n⌘Enter — выполнить (одним шагом ⌘Z), ↑/↓ — история, ⌘K — макросы";
+const PLACEHOLDER = "tml.nodes().filter(n => n.tag==='image').length\n\n⌘Enter — run (one ⌘Z step), ↑/↓ — history, ⌘K — macros";
 const MAX_HISTORY = 100;
 const MAX_LINES = 400;
 

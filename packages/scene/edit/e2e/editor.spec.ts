@@ -7,7 +7,8 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parse, pathFromNode, type SceneNode } from '../../src/core';
+import { parse, type SceneNode } from '../../src/core';
+import { pathFromNode } from '../../src/geom/path';
 import { changedLines, idle, openEditor, pressMod, root, type EditorPage } from './harness';
 
 const T = 120_000;
@@ -141,7 +142,7 @@ describe('editor e2e — examples/motion (copy in tmp)', () => {
     async () => {
       await e.page.click(row('bird'));
       await e.page.click(row('bird'), { button: 'right' });
-      await e.page.click('#menu button:has-text("Маска по bounds")');
+      await e.page.click('#menu button:has-text("Mask by bounds")');
       await idle(e.page);
       await saved(e);
       const tree = parse(readFileSync(join(dir, 'scene.svg'), 'utf8'));

@@ -57,10 +57,10 @@ function border(entry, real) {
     const kx = real[0] / w;
     const ky = real[1] / h;
     s = [Math.round(s[0] * kx), Math.round(s[1] * ky), Math.round(s[2] * kx), Math.round(s[3] * ky)];
-    note = ` (из ${entry.px} → файл ${real[0]}×${real[1]})`;
+    note = ` (from ${entry.px} → the file ${real[0]}×${real[1]})`;
     [w, h] = real;
   }
-  if (w && h && (w - s[0] - s[2] < 1 || h - s[1] - s[3] < 1)) return { problem: `центр ${w - s[0] - s[2]}×${h - s[1] - s[3]} px при ${w}×${h}` };
+  if (w && h && (w - s[0] - s[2] < 1 || h - s[1] - s[3] < 1)) return { problem: `the centre ${w - s[0] - s[2]}×${h - s[1] - s[3]} px at ${w}×${h}` };
   return { slices: s, note };
 }
 
@@ -102,7 +102,7 @@ for (const file of files) {
     const b = border(entry, real.get(href));
     const id = /\sid="([^"]*)"/.exec(tag)?.[1];
     if (b.problem) {
-      console.log(`! ${rel} ${id ? '#' + id : href}: ${stem(href)} — ${b.problem}: центру нужен хотя бы 1 px, data-slices не поставлен`);
+      console.log(`! ${rel} ${id ? '#' + id : href}: ${stem(href)} — ${b.problem}: the centre needs at least 1 px, data-slices not set`);
       return tag;
     }
     console.log(`+ ${rel} ${id ? '#' + id : href}: data-slices="${b.slices.join(' ')}"${b.note}`);
@@ -120,10 +120,10 @@ for (const file of files) {
         const id = c.getAttribute('id');
         const where = id ? `#${id}` : '<g>';
         if (el === root && !c.hasAttribute('transform') && id && vb.length === 4) {
-          console.log(`+ ${rel} ${where}: data-size="${vb[2]} ${vb[3]}" data-stretch="xy" (якоря детей — от холста, как в ките)`);
+          console.log(`+ ${rel} ${where}: data-size="${vb[2]} ${vb[3]}" data-stretch="xy" (the children's anchors follow the canvas, as in the kit)`);
           text = text.replace(new RegExp(`<g\\b([^>]*\\sid="${esc(id)}"[^>]*?)(\\s*/?)>`), `<g$1 data-size="${vb[2]} ${vb[3]}" data-stretch="xy"$2>`);
         } else {
-          console.log(`! ${rel} ${where}: в группе якоря, а размера нет — дайте ей data-size="w h" (и data-stretch, если она тянется с холстом) или вынесите узлы в корень`);
+          console.log(`! ${rel} ${where}: anchors in a group without a size — give it data-size="w h" (and data-stretch if it stretches with the canvas) or move the nodes to the root`);
         }
       }
       visit(c);
@@ -133,4 +133,4 @@ for (const file of files) {
 
   if (text !== before && write) writeFileSync(file, text);
 }
-if (!write) console.log('(отчёт; --write — записать)');
+if (!write) console.log('(a report; --write — write the changes)');

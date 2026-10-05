@@ -5,12 +5,26 @@
 // objects come back, so their remembered source text (xml.ts) does too and an undone change
 // serializes byte for byte as before.
 
-import type { SceneLoader, SceneNode } from '@trempel/scene/core';
+import { codeOf, coded, type Code, type SceneLoader, type SceneNode } from '@trempel/scene/core';
 import type { Document, Element, Node, Text } from '@xmldom/xmldom';
 import { elementChildren, isElement, isText, parseFragment } from './xml.js';
 
 /** A command's own failure (bad node, impossible edit): `ok: false`, the document untouched. */
-export class CommandError extends Error {}
+export class CommandError extends Error {
+  readonly code: Code;
+  constructor(code: Code, text: string) {
+    super(coded(code, text));
+    this.code = code;
+  }
+
+  /** Re-throw another error at `place`: its own code kept (none — `fallback`). */
+  static from(e: unknown, place: string, fallback: Code): CommandError {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = codeOf(msg);
+    const text = code ? msg.slice(code.length + 2) : msg;
+    return new CommandError(code ?? fallback, place ? `${place}: ${text}` : text);
+  }
+}
 
 /** What commands know about the scene beyond its DOM (v0.9 prefabs). */
 export interface CtxEnv {
@@ -120,19 +134,19 @@ export class Ctx {
   node(ref: string, arg = 'node'): Element {
     const byId = this.byId(ref);
     if (byId.length === 1) return byId[0];
-    if (byId.length > 1) throw new CommandError(`${arg}: id "${ref}" встречается ${byId.length} раз — адресуйте путём индексов`);
+    if (byId.length > 1) throw new CommandError('E_EDITOR_NODE_AMBIGUOUS', `${arg}: id "${ref}" is used ${byId.length} times — address the node by its index path`);
     if (ref === '' || ref === '/') return this.root;
     if (/^\d+(\/\d+)*$/.test(ref)) {
       let el = this.root;
       for (const part of ref.split('/')) {
         const kids = elementChildren(el);
         const k = Number(part);
-        if (k >= kids.length) throw new CommandError(`${arg}: пути "${ref}" нет — у <${el.nodeName}> ${kids.length} дочерних`);
+        if (k >= kids.length) throw new CommandError('E_EDITOR_NO_NODE', `${arg}: no path "${ref}" — <${el.nodeName}> has ${kids.length} children`);
         el = kids[k];
       }
       return el;
     }
-    throw new CommandError(`${arg}: узла "${ref}" нет (ни id, ни путь индексов вида "0/3/1")`);
+    throw new CommandError('E_EDITOR_NO_NODE', `${arg}: no node "${ref}" (neither an id nor an index path like "0/3/1")`);
   }
 
   /** How results name a node: its id, else its index path. */
@@ -144,8 +158,8 @@ export class Ctx {
     this.touched.push(this.label(el));
   }
 
-  warn(msg: string): void {
-    this.warnings.push(msg);
+  warn(code: Code, text: string): void {
+    this.warnings.push(coded(code, text));
   }
 
   // ---- mutations ---------------------------------------------------------------------------
@@ -165,7 +179,7 @@ export class Ctx {
   setText(el: Element, text: string): void {
     const kids: Node[] = [];
     for (let c = el.firstChild; c; c = c.nextSibling) kids.push(c);
-    if (kids.some(isElement)) throw new CommandError(`<${el.nodeName}>: внутри элементы — текст целиком не заменяется`);
+    if (kids.some(isElement)) throw new CommandError('E_EDITOR_TEXT', `<${el.nodeName}>: has elements inside — its text cannot be replaced as a whole`);
     if ((el.textContent ?? '') === text && kids.length <= 1) return;
     const node = this.doc.createTextNode(text);
     this.record({
@@ -213,7 +227,7 @@ export class Ctx {
     const kids = elementChildren(parent);
     const k = index == null ? kids.length : index;
     if (!Number.isInteger(k) || k < 0 || k > kids.length) {
-      throw new CommandError(`index ${index}: у <${parent.nodeName}> ${kids.length} дочерних — допустимо 0…${kids.length}`);
+      throw new CommandError('E_EDITOR_INDEX', `index ${index}: <${parent.nodeName}> has ${kids.length} children — allowed 0…${kids.length}`);
     }
     const childIndent = kids.length ? indentOf(kids[Math.min(k, kids.length - 1)]) : `${indentOf(parent)}  `;
     const sepText = lead ?? this.ws(`\n${childIndent}`);
@@ -245,7 +259,7 @@ export class Ctx {
   /** Remove an element with the whitespace that put it on its line. Returns that whitespace. */
   remove(el: Element): Text | undefined {
     const parent = el.parentNode as Element | null;
-    if (!parent) throw new CommandError('корень удалить нельзя');
+    if (!parent) throw new CommandError('E_EDITOR_ROOT', 'the root cannot be removed');
     this.touch(el);
     const prev = el.previousSibling;
     const lead = isText(prev) && /^\s*$/.test(prev.data) ? prev : undefined;
@@ -274,11 +288,11 @@ export class Ctx {
     try {
       nodes = parseFragment(xml.trim(), this.doc);
     } catch (e) {
-      throw new CommandError(`xml: ${(e as Error).message}`);
+      throw CommandError.from(e, 'xml', 'E_XML');
     }
     const els = nodes.filter(isElement);
     const junk = nodes.filter((n) => !isElement(n) && !(isText(n) && /^\s*$/.test(n.data)));
-    if (els.length !== 1 || junk.length) throw new CommandError('xml: ожидается ровно один элемент');
+    if (els.length !== 1 || junk.length) throw new CommandError('E_EDITOR_FRAGMENT', 'xml: expected exactly one element');
     const el = els[0];
     const kids = elementChildren(parent);
     const indent = kids.length ? indentOf(kids[kids.length - 1]) : `${indentOf(parent)}  `;

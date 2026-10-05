@@ -5,8 +5,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
-import { flattenLeftovers, flattenScene, type SceneSource } from '../src/core';
+import { flattenScene, type SceneSource } from '../src/core';
+import { flattenLeftovers } from '../src/flatten';
 import { imageSizeOf } from '../src/node/imagesize';
+import { codesOf, withCode } from './helpers/codes';
 
 const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"';
 const svg = (body: string, root = ' viewBox="0 0 400 300"'): string => `<svg ${NS}${root}>${body}</svg>`;
@@ -108,7 +110,7 @@ describe('flatten', () => {
     const base = svg(`<defs><clipPath id="m"><rect width="5" height="5"/></clipPath></defs><g id="board" data-cols="3"><rect width="9" height="9"/></g><g id="masked" clip-path="url(#m)"><rect width="9" height="9"/></g>`);
     const heir = `<svg ${NS}><tml:ref id="board" tml:type="tile-grid"/></svg>`;
     const r = flattenScene({ base, heir });
-    expect(r.warnings.join('\n')).toMatch(/компоненты с кодом нарисованы своей базой.*#board \(tile-grid\)/);
+    expect(withCode(r.warnings, 'W_FLATTEN')[0]).toContain('#board (tile-grid)');
     const doc = parse(r.svg!);
     expect(doc.getElementById('masked')!.getAttribute('clip-path')).toMatch(/^url\(#flat-clip-\d+\)$/);
     expect(doc.getElementsByTagName('clipPath')).toHaveLength(1);
@@ -117,7 +119,8 @@ describe('flatten', () => {
   it('an unknown collection: an error, nothing written', () => {
     const r = flattenScene({ base: svg(`<image id="a" href="@nope/a.png" width="1" height="1"/>`) });
     expect(r.svg).toBeNull();
-    expect(r.errors.join('\n')).toMatch(/коллекции @nope нет/);
+    expect(codesOf(r.errors)).toEqual(['E_COLLECTION_UNKNOWN']);
+    expect(r.errors[0]).toContain('@nope/a.png');
   });
 });
 

@@ -52,7 +52,7 @@ export function openPalette(opts: { placeholder: string; items: PaletteItem[]; e
       shown = opts.items.filter((i) => matches(i, input.value));
       k = Math.min(k, Math.max(0, shown.length - 1));
       ul.replaceChildren();
-      if (!shown.length) ul.append(h('li', 'empty', opts.items.length ? 'ничего не найдено' : opts.empty));
+      if (!shown.length) ul.append(h('li', 'empty', opts.items.length ? 'nothing found' : opts.empty));
       shown.forEach((it, i) => {
         const li = h('li', i === k ? 'on' : '');
         li.append(h('span', '', it.label));

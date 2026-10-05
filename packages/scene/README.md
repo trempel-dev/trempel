@@ -6,7 +6,7 @@ An agent-first, lightweight 2D game engine on [PixiJS](https://pixijs.com):
 - **A runtime** that mounts a scene over a renderer backend (PixiJS out of the box), with reactive state, an expression language without `eval`, and an animation player for clips written as Markdown tables.
 - **An editor core** (`@trempel/scene/editor`) — every edit is a command an agent or a person runs the same way — and the editor page as a library (`@trempel/scene/edit`).
 
-Docs: [trempel.dev](https://trempel.dev) · format: [`docs/format/scene-format.md`](docs/format/scene-format.md) · migration: [`MIGRATION.md`](MIGRATION.md)
+Docs: [trempel.dev](https://trempel.dev) · format, public API and error codes: [`docs/format/scene-format.md`](docs/format/scene-format.md) · for agents: [`CLAUDE.md`](../../CLAUDE.md) · [`CHANGELOG.md`](CHANGELOG.md) · migration: [`MIGRATION.md`](MIGRATION.md)
 
 ## Install
 
@@ -14,7 +14,7 @@ Docs: [trempel.dev](https://trempel.dev) · format: [`docs/format/scene-format.m
 npm install @trempel/scene pixi.js
 ```
 
-`pixi.js` (v8.5+) is a peer dependency. Tools that never render import `@trempel/scene/core` — no Pixi needed.
+`pixi.js` (v8.19+) is a peer dependency. Tools that never render import `@trempel/scene/core` — no Pixi needed. The stable API is listed in the spec (§15); `@trempel/scene/internal/*` is for the kit and the editor, without a stability promise.
 
 ## A scene
 
@@ -59,7 +59,7 @@ const scene = mount({
 await scene.ready;
 ```
 
-Every problem (XML, merge, contract, expressions) is collected and reported together; nothing is evaluated with `eval`.
+Every problem (XML, merge, contract, expressions) is collected and reported together, each with a code (`E_CONTRACT_MISSING: …`; the catalog — spec §16); nothing is evaluated with `eval`. `checkScene()` runs the same checks without rendering.
 
 ## In the repository
 
@@ -72,6 +72,7 @@ npm run test:e2e       # editor and view:shot in headless Chromium
 npm run view -- packages/scene/examples/motion           # scene viewer
 npm run edit -- packages/scene/examples/prefabs          # editor page on a dev server
 npm run check -- packages/scene/examples/motion          # validate scenes and clips from the CLI
+npm run view:shot -- packages/scene/examples/motion --out shot.png   # a deterministic headless PNG
 ```
 
 **Open a scene anywhere.** `npm run flatten -- packages/scene/examples/prefabs/menu.svg --out menu.svg --embed` (bin `trempel-flatten` in the package) turns a scene — heir, prefabs, 9-slice, slots, `@skin/…` collection links — into one vanilla SVG that any browser and Figma draw.

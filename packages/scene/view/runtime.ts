@@ -6,8 +6,9 @@
 // editor's SceneIO): it passes the sources as text and the URL the scene document lives at.
 
 import { Container } from 'pixi.js';
-import { createDefaultRegistry, PixiBackend, readHeirAsync, sceneStem } from '@trempel/scene';
-import { expandCollection, preloadScenes, type AsyncSceneLoader, type Registry, type RendererBackend } from '../src/core.js';
+import { createDefaultRegistry, PixiBackend, sceneStem } from '@trempel/scene';
+import { readHeirAsync } from '@trempel/scene/internal/compat';
+import { coded, expandCollection, preloadScenes, type AsyncSceneLoader, type Registry, type RendererBackend } from '../src/core.js';
 import type { ViewConfig } from './api';
 import { openScene, type OpenInput, type SceneSources, type ViewIssue, type ViewSession } from './session';
 import { fitStage, type StageFit, type ViewBox, type Viewport } from './viewport';
@@ -92,7 +93,7 @@ export async function loadViewModule(load: () => Promise<{ default: unknown }>):
     const m = await load();
     return { config: (m.default as ViewConfig | null) ?? {}, issue: null };
   } catch (e) {
-    return { config: {}, issue: { level: 'error', kind: 'component', message: `модуль просмотра не загрузился — рисует голый рантайм: ${msg(e)}` } };
+    return { config: {}, issue: { level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `the view module did not load — drawing with the bare runtime: ${msg(e)}`) } };
   }
 }
 
@@ -150,7 +151,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
       try {
         await setup();
       } catch (e) {
-        extra.push({ level: 'error', kind: 'component', message: `setup() модуля просмотра: ${msg(e)}` });
+        extra.push({ level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `view module setup(): ${msg(e)}`) });
       }
       clearContainer(target);
       let backend: RendererBackend;
@@ -159,7 +160,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
         backend = config.backend?.() ?? new PixiBackend({ fontFamily: config.fontFamily });
         registry = config.registry?.() ?? createDefaultRegistry();
       } catch (e) {
-        extra.push({ level: 'error', kind: 'component', message: `модуль просмотра: ${msg(e)}` });
+        extra.push({ level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `view module: ${msg(e)}`) });
         backend = new PixiBackend({ fontFamily: config.fontFamily });
         registry = createDefaultRegistry();
       }
@@ -195,7 +196,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
         try {
           config.onMount({ id: input.id, scene: s.scene, state: s.state });
         } catch (e) {
-          extra.push({ level: 'error', kind: 'component', message: `onMount() модуля просмотра: ${msg(e)}` });
+          extra.push({ level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `view module onMount(): ${msg(e)}`) });
         }
       }
       await s.ready;

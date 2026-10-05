@@ -1,6 +1,9 @@
 // Reactive system — Proxy-based dependency tracking.
 // Proxy reactivity (reactive/effect). Expression evaluation lives in expr.ts
 // in v0.6; tml:* attribute values are bare expressions, see binding.ts.
+//
+// @internal — `@trempel/scene/internal/reactive`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): reactive, effect.
 
 type Subscriber = () => void;
 

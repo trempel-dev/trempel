@@ -2,6 +2,8 @@
 
 A game kit on top of [Trempel](https://trempel.dev) scenes and [PixiJS](https://pixijs.com) v8. A game is one `createGame({...})` call plus its rules; boot, platform, loading, layout, pause, save, sound, input, i18n, ads, QA hooks and build gates are the kit's.
 
+Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`](../scene/docs/format/scene-format.md) · for agents: [`CLAUDE.md`](../../CLAUDE.md) · the template: [`templates/casual`](../../templates/casual)
+
 - **Services** — every external thing (saves, ads, wallet, purchases, leaderboards, your backend) is a typed contract with a mandatory mock; the game runs on mocks until an integration provides real implementations.
 - **Platforms** — web, YouTube Playables (`ytgame` SDK), mock (tests); they implement the platform contracts (lifecycle, save, audio, language, ads); the target is picked at build time, the other adapter never ships.
 - **Screens, popups, overlays** — Trempel scenes (base SVG + heir + contract), layout by fit policy with safe area and a playfield, screen templates in `ui/scenes` (`UI_SCENES`).

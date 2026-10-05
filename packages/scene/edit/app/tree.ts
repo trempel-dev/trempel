@@ -61,20 +61,20 @@ export class Tree {
     };
     li.append(tw);
     li.append(h('span', 'tag', `<${r.tag}>`));
-    const name = h('span', 'name', r.id ? `#${r.id}` : path == null ? '(наследник)' : '');
+    const name = h('span', 'name', r.id ? `#${r.id}` : path == null ? '(heir)' : '');
     if (r.type) name.textContent += ` ⧉${r.type}`;
     li.append(name);
     // v0.9: an instance — one node; its rows below are the prefab's (read-only, grey)
     if (r.href != null) {
       li.classList.add('instance');
       const b = h('span', 'href', `⟶ ${r.href}`);
-      b.title = 'инстанс префаба: двойной клик открывает префаб';
+      b.title = 'prefab instance: double-click opens the prefab';
       li.append(b);
     }
     // v0.8 badges: draw order among siblings, blend mode, sprite variants
     if (r.z != null) {
       const b = h('span', 'badge z', `z${r.z}`);
-      b.title = `data-z=${r.z}: порядок среди соседей`;
+      b.title = `data-z=${r.z}: order among siblings`;
       li.append(b);
     }
     if (r.blend && r.blend !== 'normal') {
@@ -90,21 +90,21 @@ export class Tree {
     li.title =
       path == null
         ? r.id?.includes('/')
-          ? 'внутренность инстанса — правится в префабе (двойной клик по инстансу)'
-          : 'вставка наследника — рисуется, правится в .tml.svg'
-        : `путь ${path || '(корень)'}`;
+          ? 'inside an instance — edited in the prefab (double-click the instance)'
+          : 'inserted by the heir — drawn, edited in .tml.svg'
+        : `path ${path || '(root)'}`;
 
     if (path == null || path === '') return li;
 
     const ico = h('span', 'ico');
     const eye = h('button', ed.hidden.has(path) ? 'off' : '', ed.hidden.has(path) ? '◌' : '●') as HTMLButtonElement;
-    eye.title = 'показать/скрыть (только в редакторе)';
+    eye.title = 'show/hide (in the editor only)';
     eye.onclick = (e) => {
       e.stopPropagation();
       ed.toggleHidden(path);
     };
     const lock = h('button', ed.locked.has(path) ? 'off' : '', ed.locked.has(path) ? '🔒' : '·') as HTMLButtonElement;
-    lock.title = 'замок: не выделяется на сцене (только в редакторе)';
+    lock.title = 'lock: not selectable on the stage (in the editor only)';
     lock.onclick = (e) => {
       e.stopPropagation();
       ed.toggleLocked(path);

@@ -9,6 +9,11 @@
 // relative hrefs written in a collection document (base `@skin/button.svg`) stay inside it
 // (`art/x.png` → `@skin/art/x.png`; `..` never climbs above `@skin`). `expandCollection` turns it
 // into `<URL of the collection folder>/path` — before baseUrl / the host's resolveHref.
+//
+// @internal — `@trempel/scene/internal/href`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): expandCollection.
+
+import { trempelError } from './errors.js';
 
 const ABSOLUTE = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/|#)/;
 const HAS_SCHEME = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
@@ -51,10 +56,13 @@ export function resolveHref(href: string, base: string | undefined): string {
   return joinPath(root, dir, href);
 }
 
-/** The message of an unknown collection (one wording for the runtime, the checker and the tools). */
+/**
+ * The message of an unknown collection, without its code (`E_COLLECTION_UNKNOWN` — one wording for
+ * the runtime, the checker and the tools).
+ */
 export function unknownCollection(name: string, collections: Record<string, string> | undefined): string {
   const known = Object.keys(collections ?? {}).sort();
-  return `коллекции @${name} нет в проекте (есть: ${known.length ? known.map((k) => `@${k}`).join(', ') : '—'}) — коллекции объявляются в .trempel/project.mdz (## collections).`;
+  return `the project has no collection @${name} (collections: ${known.length ? known.map((k) => `@${k}`).join(', ') : '—'}) — collections are declared in .trempel/project.mdz (## collections).`;
 }
 
 /**
@@ -65,7 +73,7 @@ export function expandCollection(href: string, collections: Record<string, strin
   const m = COLLECTION.exec(href);
   if (!m) return href;
   const url = collections && Object.prototype.hasOwnProperty.call(collections, m[1]) ? collections[m[1]] : undefined;
-  if (url == null) throw new Error(unknownCollection(m[1], collections));
+  if (url == null) throw trempelError('E_COLLECTION_UNKNOWN', unknownCollection(m[1], collections));
   const path = resolveHref(href, undefined).slice(m[1].length + 2);
   return url.endsWith('/') ? `${url}${path}` : `${url}/${path}`;
 }

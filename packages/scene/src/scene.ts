@@ -40,7 +40,8 @@
 
 import { applyBindings, bindingErrors, evalAt, failed, type ExpressionErrorOptions } from './binding.js';
 import { parseContract } from './contract.js';
-import { ExpressionRuntimeError, TrempelError, type ExpressionErrorInfo } from './errors.js';
+import { ExpressionRuntimeError, TrempelError, trempelError, type ExpressionErrorInfo } from './errors.js';
+import { coded } from './codes.js';
 import { compile } from './expr.js';
 import { clipPaths, geometryErrors, parseClipRef } from './geom/check.js';
 import { hitTestTree, nodeMatrix, pointInNode } from './geom/hit.js';
@@ -224,7 +225,7 @@ function makeSelf(scope: InstanceScope, parent: Record<string, unknown>): Record
         : typeof name === 'string' && Object.prototype.hasOwnProperty.call(parent, name)
           ? parent[name]
           : undefined;
-    if (typeof fn !== 'function') throw new Error(`self.call(${JSON.stringify(name ?? null)}): такой функции в контексте сцены нет`);
+    if (typeof fn !== 'function') throw trempelError('E_SELF_CALL', `self.call(${JSON.stringify(name ?? null)}): the scene context has no such function`);
     return (fn as (...a: unknown[]) => unknown)(...args);
   };
   return self;
@@ -306,7 +307,7 @@ function indexScene(tree: SceneNode, context: Record<string, unknown>): SceneInd
   const index: SceneIndex = {
     hitTest(id, x, y) {
       const n = nodes.get(id);
-      if (!n) throw new Error(`Trempel hitTest error: hitTest("${id}") — узла с таким id в сцене нет.`);
+      if (!n) throw trempelError('E_NODE', `hitTest("${id}") — the scene has no node with this id.`);
       const chain: SceneNode[] = [];
       for (let c: SceneNode | null | undefined = n; c; c = parents.get(c)) chain.unshift(c);
       const adjust = index.layout?.placed;
@@ -318,22 +319,22 @@ function indexScene(tree: SceneNode, context: Record<string, unknown>): SceneInd
     clips: clipPaths(tree),
     path(id) {
       const n = nodes.get(id);
-      if (!n) throw new Error(`Trempel path error: path("${id}") — узла с таким id в сцене нет.`);
+      if (!n) throw trempelError('E_NODE', `path("${id}") — the scene has no node with this id.`);
       try {
         return pathFromNode(n);
       } catch (e) {
-        throw new Error(`Trempel path error: ${(e as Error).message}`);
+        throw e instanceof TrempelError ? e : trempelError('E_GEOMETRY', (e as Error).message);
       }
     },
     view(id, name) {
       const n = nodes.get(id);
-      if (!n) throw new Error(`Trempel view error: setView("${id}") — узла с таким id в сцене нет.`);
+      if (!n) throw trempelError('E_NODE', `setView("${id}") — the scene has no node with this id.`);
       const img = singleImage(n);
       const raw = img?.attrs['data-views'];
-      if (!img || raw == null) throw new Error(`Trempel view error: #${id} — нет <image> с data-views.`);
+      if (!img || raw == null) throw trempelError('E_VIEW', `#${id} — no <image> with data-views.`);
       const href = parseViews(raw).get(name);
       if (href === undefined) {
-        throw new Error(`Trempel view error: #${id} — варианта «${name}» нет (есть: ${[...parseViews(raw).keys()].join(', ')}).`);
+        throw trempelError('E_VIEW', `#${id} — no variant "${name}" (variants: ${[...parseViews(raw).keys()].join(', ')}).`);
       }
       return href;
     },
@@ -354,8 +355,8 @@ function sceneBackend(
   const setClip = (node: NodeHandle, value: unknown): void => {
     const id = parseClipRef(value);
     const clip = id == null ? null : clips.get(id);
-    if (clip === undefined) throw new Error(`Trempel clip error: clip-path="${String(value)}" — <clipPath id="${id}"> в сцене нет.`);
-    if (!backend.setClip) throw new Error('Trempel clip error: бэкенд не умеет clip-path (нет setClip).');
+    if (clip === undefined) throw trempelError('E_CLIP_PATH', `clip-path="${String(value)}" — the scene has no <clipPath id="${id}">.`);
+    if (!backend.setClip) throw trempelError('E_BACKEND', 'the backend cannot do clip-path (no setClip).');
     backend.setClip(node, clip);
   };
   return {
@@ -413,7 +414,7 @@ function buildNode(
   const type = node.tml.type;
   if (type) {
     if (!registry) {
-      throw new Error(`Trempel scene error: tml:type="${type}" used but no registry provided`);
+      throw trempelError('E_NO_REGISTRY', `tml:type="${type}" is used but no registry is provided`);
     }
     const instance = registry.create(type, {
       tag: node.tag,
@@ -469,7 +470,7 @@ function buildNode(
     if (bindView !== undefined) {
       const img = singleImage(node);
       const raw = img?.attrs['data-views'];
-      if (!img || raw == null) throw new Error(`Trempel view error: ${whereNode} tml:bind-view — нет <image> с data-views.`);
+      if (!img || raw == null) throw trempelError('E_VIEW', `${whereNode} tml:bind-view — no <image> with data-views.`);
       const views = parseViews(raw);
       const c = compile(bindView);
       const where = { node: whereNode, attr: 'tml:bind-view' };
@@ -478,7 +479,7 @@ function buildNode(
         if (failed(v)) return;
         const href = v == null || v === '' ? img.attrs.href : views.get(String(v));
         if (href === undefined) {
-          const error = new Error(`варианта «${String(v)}» нет (есть: ${[...views.keys()].join(', ')})`);
+          const error = trempelError('E_VIEW', `no variant "${String(v)}" (variants: ${[...views.keys()].join(', ')})`);
           reportAt({ ...where, expr: bindView, error }, policy);
           return;
         }
@@ -497,7 +498,7 @@ function buildNode(
     for (const [key, kind] of POINTER_KEYS) {
       const src = tml[key];
       if (!src) continue;
-      if (!backend.onPointer) throw new Error(`Trempel scene error: ${whereNode} tml:${key} — бэкенд не умеет события указателя (нет onPointer).`);
+      if (!backend.onPointer) throw trempelError('E_BACKEND', `${whereNode} tml:${key} — the backend has no pointer events (no onPointer).`);
       const c = compile(src);
       const where = { node: whereNode, attr: `tml:${key}` };
       backend.onPointer(handle, kind, () => {
@@ -536,27 +537,27 @@ function buildScene(tree: SceneNode, options: MountOptions): MountedScene {
     hitTestAll: (x, y) => hitTestTree(tree, x, y, layout.placed),
     resize(w, h) {
       const box = layout.box(tree);
-      if (!box) throw new Error('Trempel resize error: у корня нет viewBox — размер сцены не задан.');
+      if (!box) throw trempelError('E_RESIZE', 'the root has no viewBox — the scene has no size.');
       box.size.w = w;
       box.size.h = h;
     },
     setSize(id, w, h) {
       const n = index.nodes.get(id);
       const handle = byId.get(id);
-      if (!n || !handle) throw new Error(`Trempel size error: setSize("${id}") — узла с таким id в сцене нет.`);
+      if (!n || !handle) throw trempelError('E_NODE', `setSize("${id}") — the scene has no node with this id.`);
       const box = layout.box(n);
       if (box) {
         if (n.instance) {
           const axes = n.instance.resizable ?? '';
           if ((w !== undefined && !axes.includes('x')) || (h !== undefined && !axes.includes('y'))) {
-            throw new Error(`Trempel size error: #${id} — ${n.instance.href} растягивается ${axes ? `только по ${axes}` : 'никак (нет data-resizable)'}.`);
+            throw trempelError('E_RESIZE', `#${id} — ${n.instance.href} ${axes ? `resizes only along ${axes}` : 'does not resize (no data-resizable)'}.`);
           }
         }
         if (w !== undefined) box.size.w = w;
         if (h !== undefined) box.size.h = h;
         return;
       }
-      if (n.tag !== 'image' && n.tag !== 'rect') throw new Error(`Trempel size error: #${id} — размер задаётся у инстанса растягиваемого префаба, <g data-size>, <image> и <rect>.`);
+      if (n.tag !== 'image' && n.tag !== 'rect') throw trempelError('E_RESIZE', `#${id} — a size is set on an instance of a resizable prefab, a <g data-size>, an <image> and a <rect>.`);
       if (w !== undefined) opts.backend.setProp(handle, 'width', w);
       if (h !== undefined) opts.backend.setProp(handle, 'height', h);
     },
@@ -582,7 +583,7 @@ export function mountTree(tree: SceneNode, opts: MountOptions): MountedScene {
 /** The built node setView writes href to (a group with one image passes it down — backend rule). */
 function viewTarget(byId: Map<string, NodeHandle>, id: string): NodeHandle {
   const h = byId.get(id);
-  if (!h) throw new Error(`Trempel view error: setView("${id}") — узел ещё не построен или вне сцены.`);
+  if (!h) throw trempelError('E_NODE', `setView("${id}") — the node is not built yet or is outside the scene.`);
   return h;
 }
 
@@ -617,7 +618,7 @@ export function mount(args: MountArgsLoose): MountedScene {
     errors.push(...collectionErrors(c.tree, opts.collections));
   }
   const deduped = [...new Set(errors)];
-  if (deduped.length || !c.tree) throw new TrempelError(deduped.length ? deduped : ['сцена пуста']);
+  if (deduped.length || !c.tree) throw new TrempelError(deduped.length ? deduped : [coded('E_EMPTY_SCENE', 'the scene is empty')]);
 
   return buildScene(c.tree, opts);
 }

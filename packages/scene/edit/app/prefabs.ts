@@ -10,6 +10,7 @@
 
 import { Container, Rectangle } from 'pixi.js';
 import { sha1 } from '../io';
+import { coded } from '../../src/core.js';
 import type { Editor } from './editor';
 
 const h = (tag: string, cls = '', text?: string): HTMLElement => {
@@ -40,7 +41,7 @@ export class PrefabPalette {
     this.root.id = 'prefabs';
     this.root.hidden = true;
     const head = h('header');
-    this.search.placeholder = 'префаб…';
+    this.search.placeholder = 'prefab…';
     this.search.oninput = () => {
       this.picked = 0;
       this.draw();
@@ -53,9 +54,9 @@ export class PrefabPalette {
       if (e.key === 'Enter' && this.items[this.picked]) void this.place(this.items[this.picked]);
     };
     const close = h('button', 'link', '×') as HTMLButtonElement;
-    close.title = 'закрыть (Esc)';
+    close.title = 'close (Esc)';
     close.onclick = () => this.close();
-    head.append(h('b', '', 'Префабы'), this.search, close);
+    head.append(h('b', '', 'Prefabs'), this.search, close);
     this.root.append(head, this.cards, this.note);
     document.body.append(this.root);
     ed.on('scenes', () => !this.root.hidden && this.draw());
@@ -96,7 +97,7 @@ export class PrefabPalette {
 
   async place(prefab: string, at?: { x: number; y: number }): Promise<void> {
     const r = await this.ed.instantiate(prefab, at);
-    if (r?.ok) this.ed.log('info', `инстанс ${prefab}`);
+    if (r?.ok) this.ed.log('info', `instance ${prefab}`);
   }
 
   private draw(): void {
@@ -107,7 +108,7 @@ export class PrefabPalette {
       const g = /^@[a-z][a-z0-9-]*/.exec(p)?.[0] ?? '';
       if (g !== group) {
         if (g || group !== null) {
-          const head = h('div', 'group', g || 'папка');
+          const head = h('div', 'group', g || 'folder');
           head.dataset.group = g;
           this.cards.append(head);
         }
@@ -116,7 +117,7 @@ export class PrefabPalette {
       const card = h('div', i === this.picked ? 'card sel' : 'card');
       card.dataset.prefab = p;
       card.draggable = true;
-      card.title = `${p} — перетащите на сцену (или Enter)`;
+      card.title = `${p} — drag onto the scene (or Enter)`;
       const img = document.createElement('img');
       img.alt = '';
       const cached = this.thumbs.get(p);
@@ -136,9 +137,9 @@ export class PrefabPalette {
       this.cards.append(card);
     });
     const notes: string[] = [];
-    if (!this.items.length) notes.push(this.search.value ? 'ничего не найдено' : 'в папке нет других сцен');
+    if (!this.items.length) notes.push(this.search.value ? 'nothing found' : 'no other scenes in the folder');
     const outside = this.dirs.filter((d) => d.startsWith('..') || d.startsWith('/'));
-    if (outside.length) notes.push(`вне открытой папки (не видны редактору): ${outside.join(', ')} — откройте общую папку`);
+    if (outside.length) notes.push(`outside the open folder (the editor cannot see them): ${outside.join(', ')} — open a common parent folder`);
     this.note.textContent = notes.join(' · ');
   }
 
@@ -172,7 +173,8 @@ export class PrefabPalette {
       this.thumbs.set(prefab, url);
       return url;
     } catch (e) {
-      ed.log('warn', `превью ${prefab}: ${e instanceof Error ? e.message : String(e)}`);
+      const m = e instanceof Error ? e.message : String(e);
+      ed.log('warn', coded('W_EDIT_PREVIEW', `preview ${prefab}: ${m}`));
       return null;
     }
   }

@@ -17,8 +17,13 @@
 //     clip-path → a <clipPath> per use;
 //   - what vanilla SVG cannot do (components with code, clips, bound transforms) stays as in the
 //     base, listed in `warnings`.
+//
+// @internal — `@trempel/scene/internal/flatten`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): flattenScene, FlattenInput, FlattenResult.
 
 import { bindingErrors, isExprKey } from './binding.js';
+import { coded } from './codes.js';
+import { TrempelError } from './errors.js';
 import { expandCollection, resolveHref } from './href.js';
 import { exprNames, sceneNames } from './names.js';
 import { parseAxes, parseSlices } from './layout.js';
@@ -297,7 +302,7 @@ class Writer {
 
     if (a['data-slices'] != null && w !== undefined && h !== undefined) {
       if (!tex) {
-        this.warnings.add(`${where(rec)}: data-slices — размер картинки ${raw} неизвестен, нарисована растянутой целиком.`);
+        this.warnings.add(coded('W_FLATTEN', `${where(rec)}: data-slices — the size of the picture ${raw} is unknown, it is drawn stretched whole.`));
       } else {
         const [l, t, r, b] = parseSlices(a['data-slices']);
         const k = Math.min(w > l + r ? 1 : w / (l + r), h > t + b ? 1 : h / (t + b));
@@ -323,7 +328,7 @@ class Writer {
     }
     if (a['data-tile'] != null && w !== undefined && h !== undefined) {
       if (!tex) {
-        this.warnings.add(`${where(rec)}: data-tile — размер картинки ${raw} неизвестен, нарисована растянутой целиком.`);
+        this.warnings.add(coded('W_FLATTEN', `${where(rec)}: data-tile — the size of the picture ${raw} is unknown, it is drawn stretched whole.`));
       } else {
         const axes = parseAxes('data-tile', a['data-tile']);
         const pw = axes.includes('x') ? tex.w : w;
@@ -336,7 +341,7 @@ class Writer {
       }
     }
     if (w === undefined || h === undefined) {
-      if (raw) this.warnings.add(`${where(rec)}: размер картинки ${raw} неизвестен — без width/height браузер возьмёт её собственный.`);
+      if (raw) this.warnings.add(coded('W_FLATTEN', `${where(rec)}: the size of the picture ${raw} is unknown — without width/height a browser takes its own.`));
     }
     const attrs: Record<string, string | undefined> = {
       id: a.id,
@@ -378,7 +383,7 @@ export function flattenScene(input: FlattenInput): FlattenResult {
   const c = composeScene({ base: input.base, heir: input.heir, contract: input.contract, path: input.path, loadScene: input.loadScene, url });
   errors.push(...c.errors.parse, ...c.errors.prefab, ...c.errors.contract, ...c.errors.merge);
   const tree = c.tree;
-  if (!tree) return { svg: null, errors: errors.length ? errors : ['сцена пуста'], warnings, collections: [] };
+  if (!tree) return { svg: null, errors: errors.length ? errors : [coded('E_EMPTY_SCENE', 'the scene is empty')], warnings, collections: [] };
   const collections = usedCollections(tree);
   // What mount() refuses to build: nothing is written.
   const hard = [...geometryErrors(tree), ...propErrors(tree), ...bindingErrors(tree), ...collectionErrors(tree, input.collections)];
@@ -416,7 +421,7 @@ export function flattenScene(input: FlattenInput): FlattenResult {
       if (isExprKey(k) && !reads(v).every((x) => provided.has(x))) delete n.tml[k];
     }
   });
-  if (components.length) warnings.push(`компоненты с кодом нарисованы своей базой (в ванильном SVG их нет): ${components.join(', ')}`);
+  if (components.length) warnings.push(coded('W_FLATTEN', `components with code are drawn as their base (vanilla SVG has none): ${components.join(', ')}`));
 
   const context: Record<string, unknown> = { state: reactive({ ...(input.state ?? {}) }), ...input.context };
   for (const name of sceneNames(tree).names) if (!(name in context)) context[name] = () => undefined;
@@ -430,13 +435,13 @@ export function flattenScene(input: FlattenInput): FlattenResult {
       baseUrl: input.baseUrl,
       collections: input.collections,
       lenient: true,
-      onError: (info) => warnings.push(`${info.node} ${info.attr}: выражение не вычислилось — ${info.error instanceof Error ? info.error.message : String(info.error)}`),
+      onError: (info) => warnings.push(coded('W_FLATTEN', `${info.node} ${info.attr}: the expression did not evaluate — ${info.error instanceof Error ? info.error.message : String(info.error)}`)),
     });
     root = scene.root as Rec;
   } catch (e) {
-    return { svg: null, errors: [...errors, e instanceof Error ? e.message : String(e)], warnings, collections };
+    return { svg: null, errors: [...errors, ...(e instanceof TrempelError ? e.errors : [e instanceof Error ? e.message : String(e)])], warnings, collections };
   }
-  for (const u of backend.unsupported) warnings.push(`${u} — привязка не переносится в ванильный SVG (оставлено значение базы)`);
+  for (const u of backend.unsupported) warnings.push(coded('W_FLATTEN', `${u} — the binding does not carry into vanilla SVG (the base's value is kept)`));
   const w = new Writer(input);
   const svg = w.document(root);
   warnings.push(...w.warnings);
@@ -448,7 +453,7 @@ export function flattenLeftovers(svg: string): string[] {
   const out: string[] = [];
   if (/\btml:/.test(svg)) out.push('tml:');
   if (/\sdata-[\w-]+=/.test(svg)) out.push('data-*');
-  if (/\s(?:href|xlink:href)="@/.test(svg)) out.push('@-ссылки');
+  if (/\s(?:href|xlink:href)="@/.test(svg)) out.push('@-hrefs');
   return out;
 }
 

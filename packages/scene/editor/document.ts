@@ -6,21 +6,11 @@
 // what will be saved. Validation never blocks: a command that breaks the contract is applied and
 // the problem lands in doc.errors (an artist may break things on the way).
 
-import {
-  baseDuplicateIdErrors,
-  baseTmlErrors,
-  compileClipsResult,
-  composeScene,
-  geometryErrors,
-  propErrors,
-  parse,
-  parseContract,
-  parseHeir,
-  rebase,
-  type SceneLoader,
-  type SceneNode,
-  type SceneSource,
-} from '@trempel/scene/core';
+import { coded, compileClipsResult, composeScene, parse, parseContract, parseHeir, within, type SceneLoader, type SceneNode, type SceneSource } from '@trempel/scene/core';
+import { baseDuplicateIdErrors, baseTmlErrors } from '@trempel/scene/internal/tree';
+import { geometryErrors } from '@trempel/scene/internal/geom/check';
+import { propErrors } from '@trempel/scene/internal/props';
+import { rebase } from '@trempel/scene/internal/prefab';
 import type { Element } from '@xmldom/xmldom';
 import { registry, type CommandName } from './commands.js';
 import { CommandError, Ctx, indexPath, type Op } from './ctx.js';
@@ -197,7 +187,7 @@ export class EditorDocument {
   }
 
   on(event: 'change', fn: (e: ChangeEvent) => void): () => void {
-    if (event !== 'change') throw new Error(`EditorDocument.on: события «${event}» нет (есть: change)`);
+    if (event !== 'change') throw new Error(coded('E_EDITOR_API', `EditorDocument.on: no event "${event}" (events: change)`));
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
@@ -270,7 +260,7 @@ export class EditorDocument {
       }
       if (err) {
         ctx.rollback();
-        return { ok: false, errors: err.map((e) => `[${i}] ${calls[i].name}: ${e}`), changed: [] };
+        return { ok: false, errors: err.map((e) => within(`[${i}] ${calls[i].name}`, e)), changed: [] };
       }
     }
     return this.commit(ctx, label, 'batch');
@@ -289,7 +279,7 @@ export class EditorDocument {
   /** Close the group opened by begin(): its commands become one undo entry (none — nothing). */
   end(): void {
     const g = this.group;
-    if (!g) throw new Error('EditorDocument.end: группа не открыта (begin)');
+    if (!g) throw new Error(coded('E_EDITOR_API', 'EditorDocument.end: no group is open (begin)'));
     if (--g.depth > 0) return;
     this.group = null;
     if (!g.ops.length) return;
@@ -301,7 +291,7 @@ export class EditorDocument {
   /** Close the group undoing all its commands (the whole group, also from a nested level). */
   abort(): void {
     const g = this.group;
-    if (!g) throw new Error('EditorDocument.abort: группа не открыта (begin)');
+    if (!g) throw new Error(coded('E_EDITOR_API', 'EditorDocument.abort: no group is open (begin)'));
     this.group = null;
     if (!g.ops.length) return;
     for (let i = g.ops.length - 1; i >= 0; i--) g.ops[i].undo();
@@ -369,7 +359,7 @@ export class EditorDocument {
   /** Run a command inside ctx; on failure undo its own ops and return the errors. */
   private run(ctx: Ctx, name: string, args: unknown): string[] | null {
     const def = registry[name];
-    if (!def) return [`команды «${name}» нет (есть: ${Object.keys(registry).join(', ')})`];
+    if (!def) return [coded('E_EDITOR_COMMAND', `no command "${name}" (commands: ${Object.keys(registry).join(', ')})`)];
     const argErrors = checkSchema(def.schema, args);
     if (argErrors.length) return argErrors;
     const mark = ctx.ops.length;
@@ -433,11 +423,11 @@ export class EditorDocument {
       path: this.path,
       loadScene: this.loadScene || this.created.size ? (rel) => this.load(rel) : undefined,
     });
-    errors.push(...c.errors.contract, ...c.errors.prefab, ...c.errors.merge.map((e) => `наследник: ${e}`));
+    errors.push(...c.errors.contract, ...c.errors.prefab, ...c.errors.merge.map((e) => within('heir', e)));
     const merged = c.tree ?? scene;
     errors.push(...geometryErrors(merged), ...propErrors(merged));
     for (const [file, md] of Object.entries(this.clips)) {
-      errors.push(...compileClipsResult(md, merged).errors.map((e) => `${file}: ${e}`));
+      errors.push(...compileClipsResult(md, merged).errors.map((e) => within(file, e)));
     }
     this._scene = scene;
     this._merged = merged;

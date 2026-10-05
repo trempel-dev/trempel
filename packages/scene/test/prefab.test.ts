@@ -9,6 +9,7 @@ import { checkContract } from '../src/contract';
 import { createMockBackend, isMockNode, type MockNode } from './helpers/mockBackend';
 import type { PointerKind } from '../src/render/backend';
 import type { SceneNode } from '../src/parser';
+import { codesOf, thrown, withCode } from './helpers/codes';
 
 const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"';
 const svg = (body: string, root = ''): string => `<svg ${NS} viewBox="0 0 800 600"${root}>${body}</svg>`;
@@ -113,7 +114,7 @@ describe('expand', () => {
       'b.svg': { base: svg(`<use id="a" href="a.svg"/>`) },
     };
     const c = composeScene({ base: svg(`<use id="x" href="a.svg"/>`), loadScene: loader(fs) });
-    expect(c.errors.prefab.join('\n')).toMatch(/цикл префабов: _ → a\.svg → b\.svg → a\.svg/);
+    expect(withCode(c.errors.prefab, 'E_PREFAB_CYCLE')[0]).toContain('a.svg → b.svg → a.svg');
   });
 
   it('instance without id, width/height, foreign attributes, children — errors', () => {
@@ -126,23 +127,30 @@ describe('expand', () => {
       ),
       loadScene: loader(files()),
     });
-    const e = c.errors.prefab.join('\n');
-    expect(e).toMatch(/<use href="ui\/button.svg">: инстанс без id/);
-    expect(e).toMatch(/#w: width на <use> — ui\/button.svg не растягивается \(нет data-resizable у корня\); масштаб инстанса задаётся transform/);
-    expect(e).toMatch(/#f: атрибут fill — инстанс настраивается параметрами/);
-    expect(e).toMatch(/#k: дети у <use> — у ui\/button.svg нет слотов/);
+    const e = c.errors.prefab;
+    expect(withCode(e, 'E_USE_NO_ID')[0]).toContain('<use href="ui/button.svg">');
+    const resize = withCode(e, 'E_PREFAB_RESIZE')[0];
+    expect(resize).toContain('#w: width');
+    expect(resize).toContain('ui/button.svg');
+    expect(withCode(e, 'E_USE_ATTR')[0]).toContain('#f: the attribute fill');
+    const slots = withCode(e, 'E_SLOT_UNKNOWN')[0];
+    expect(slots).toContain('#k');
+    expect(slots).toContain('ui/button.svg');
   });
 
   it('no loader / missing prefab — errors', () => {
-    expect(composeScene({ base: svg(`<use id="a" href="x.svg"/>`) }).errors.prefab[0]).toMatch(/нет загрузчика/);
-    expect(composeScene({ base: svg(`<use id="a" href="x.svg"/>`), loadScene: () => null }).errors.prefab[0]).toMatch(/#a: префаб x\.svg: сцены x\.svg нет/);
-    expect(errorsOf(() => mount({ base: svg(`<use id="a" href="x.svg"/>`), backend: createMockBackend(), context: {} }))[0]).toMatch(/нет загрузчика/);
+    expect(codesOf(composeScene({ base: svg(`<use id="a" href="x.svg"/>`) }).errors.prefab)).toEqual(['E_PREFAB_LOADER']);
+    const missing = composeScene({ base: svg(`<use id="a" href="x.svg"/>`), loadScene: () => null }).errors.prefab;
+    expect(codesOf(missing)).toEqual(['E_PREFAB_MISSING']);
+    expect(missing[0]).toMatch(/#a: prefab x\.svg: .*x\.svg/);
+    expect(codesOf(errorsOf(() => mount({ base: svg(`<use id="a" href="x.svg"/>`), backend: createMockBackend(), context: {} })))).toEqual(['E_PREFAB_LOADER']);
   });
 
   it('a prefab problem carries the instance prefix', () => {
     const fs = { 'bad.svg': { base: svg(`<rect id="r"/>`), heir: heirOf('bad.svg', `<tml:ref id="nope" tml:bind="1"/>`) } };
     const c = composeScene({ base: svg(`<use id="a" href="bad.svg"/>`), loadScene: loader(fs) });
-    expect(c.errors.prefab).toEqual(['#a (bad.svg): <tml:ref id="nope">: узла с таким id нет в базе.']);
+    expect(codesOf(c.errors.prefab)).toEqual(['E_REF_MISSING']);
+    expect(c.errors.prefab[0]).toMatch(/^E_REF_MISSING: #a \(bad\.svg\): <tml:ref id="nope">/);
   });
 });
 
@@ -177,17 +185,18 @@ describe('parameters and self', () => {
     const fs = { 'p.svg': { base: svg(`<text id="t">x</text>`, ' data-hit-size="4"'), heir: heirOf('p.svg', `<tml:ref id="t" tml:bind="self.hitSize + ':' + self.id"/>`) } };
     const s = mount({ base: svg(`<use id="q" href="p.svg"/>`), backend: createMockBackend(), context: {}, loadScene: loader(fs) });
     expect(isMockNode(s.byId.get('q/t')!).props.text).toBe('4:q');
-    expect(composeScene({ base: svg(`<use id="q" href="p.svg" data-call="x"/>`), loadScene: loader(fs) }).errors.prefab[0]).toMatch(/data-call — имя self\.call занято/);
+    expect(composeScene({ base: svg(`<use id="q" href="p.svg" data-call="x"/>`), loadScene: loader(fs) }).errors.prefab[0]).toMatch(/^E_PARAM_RESERVED: #q: .*data-call.*self\.call/);
   });
 
   it('required params (contract params) are checked per instance', () => {
     const c = composeScene({ base: svg(`<use id="settingsBtn" href="ui/button.svg" data-label="S"/>`), loadScene: loader(files()) });
-    expect(c.errors.prefab).toEqual(['#settingsBtn: не задан параметр data-action, его требует ui/button.svg.']);
+    expect(codesOf(c.errors.prefab)).toEqual(['E_PARAM_MISSING']);
+    expect(c.errors.prefab[0]).toMatch(/^E_PARAM_MISSING: #settingsBtn: .*data-action.*ui\/button\.svg/);
   });
 
   it('a syntax error in an =parameter is reported with the instance', () => {
     const c = composeScene({ base: svg(`<use id="x" href="ui/button.svg" data-label="=a +" data-action="b"/>`), loadScene: loader(files()) });
-    expect(c.errors.prefab[0]).toMatch(/^#x data-label: /);
+    expect(c.errors.prefab[0]).toMatch(/^E_EXPR_SYNTAX: #x data-label: /);
   });
 
   it('pointer events drive self.state → tml:bind-view swaps the data-views variant', () => {
@@ -208,7 +217,9 @@ describe('parameters and self', () => {
   });
 
   it('a backend without onPointer is told so', () => {
-    expect(() => mount({ base: MENU, backend: createMockBackend(), context: { t: (k: string) => k }, loadScene: loader(files()) })).toThrow(/нет onPointer/);
+    expect(() => mount({ base: MENU, backend: createMockBackend(), context: { t: (k: string) => k }, loadScene: loader(files()) })).toThrow(
+      expect.objectContaining({ code: 'E_BACKEND', message: expect.stringContaining('onPointer') }),
+    );
   });
 
   it('self.call of a missing function is a runtime error with its place', () => {
@@ -239,7 +250,8 @@ describe('scene heir onto instances', () => {
     const e = errorsOf(() =>
       mount({ base: svg(`<use id="ok" href="ui/button.svg" data-label="a" data-action="b"/>`), heir: heirOf('m.svg', `<tml:ref id="ok/nope" tml:bind="1"/>`), backend: backend().b, context: {}, loadScene: loader(files()) }),
     );
-    expect(e).toEqual(['<tml:ref id="ok/nope">: узла с таким id нет в базе.']);
+    expect(codesOf(e)).toEqual(['E_REF_MISSING']);
+    expect(e[0]).toContain('<tml:ref id="ok/nope">');
   });
 
   it('the scene base stays sterile: tml on a prefab node is not the scene\'s', () => {
@@ -257,7 +269,8 @@ describe('multi-level tml:extends', () => {
     expect(isMockNode(s.byId.get('g/label')!).props.text).toBe('Go');
     // data-action got a default from the heir → not required at the instance; data-label still is
     const c = composeScene({ base: svg(`<use id="g" href="ui/button-green.svg"/>`), loadScene: loader(files()) });
-    expect(c.errors.prefab).toEqual(['#g: не задан параметр data-label, его требует ui/button-green.svg.']);
+    expect(codesOf(c.errors.prefab)).toEqual(['E_PARAM_MISSING']);
+    expect(c.errors.prefab[0]).toMatch(/^E_PARAM_MISSING: #g: .*data-label.*ui\/button-green\.svg/);
   });
 
   it('three levels; the top scene itself may be an heir without base', () => {
@@ -275,37 +288,42 @@ describe('multi-level tml:extends', () => {
   it('a cycle of tml:extends is an error', () => {
     const fs = { 'a.svg': { heir: heirOf('b.svg', '') }, 'b.svg': { heir: heirOf('a.svg', '') } };
     const c = composeScene({ heir: heirOf('a.svg', ''), path: 'top.svg', loadScene: loader(fs) });
-    expect(c.errors.prefab.join('\n')).toMatch(/цикл tml:extends: top\.svg → a\.svg → b\.svg → a\.svg/);
+    expect(withCode(c.errors.prefab, 'E_EXTENDS_CYCLE')[0]).toContain('top.svg → a.svg → b.svg → a.svg');
     expect(c.tree).toBeNull();
   });
 
   it('tml:href onto a non-image is refused', () => {
     const fs = { 'p.svg': { base: svg(`<rect id="r"/>`) }, 'q.svg': { heir: heirOf('p.svg', `<tml:ref id="r" tml:href="x.png"/>`) } };
-    expect(composeScene({ heir: heirOf('q.svg', ''), loadScene: loader(fs) }).errors.prefab.join('\n')).toMatch(/подменить href можно только у <image>/);
+    const e = composeScene({ heir: heirOf('q.svg', ''), loadScene: loader(fs) }).errors.prefab;
+    expect(withCode(e, 'E_REF_HREF')[0]).toContain('<tml:ref id="r"');
   });
 
   it('an heir without a base and without tml:extends of another scene is an error', () => {
-    expect(composeScene({ heir: `<svg ${NS}/>` }).errors.parse[0]).toMatch(/нет базы/);
+    expect(codesOf(composeScene({ heir: `<svg ${NS}/>` }).errors.parse)).toEqual(['E_EMPTY_SCENE']);
   });
 });
 
 describe('contract', () => {
-  it('<use id href>: the right prefab passes, another is "ждали …, а это …", params on the root', () => {
+  it('<use id href>: the right prefab passes, another is "expected an instance of …", params on the root', () => {
     const contract = `<contract><use id="settingsBtn" href="ui/button.svg"/><text id="settingsBtn/label"/></contract>`;
     const ok = composeScene({ base: svg(`<use id="settingsBtn" href="ui/button.svg" data-label="a" data-action="b"/>`), contract, loadScene: loader(files()) });
     expect(ok.errors.contract).toEqual([]);
     const bad = composeScene({ base: svg(`<use id="settingsBtn" href="ui/button-green.svg" data-label="a"/>`), contract, loadScene: loader(files()) });
-    expect(bad.errors.contract).toEqual(['#settingsBtn: ждали ui/button.svg, а это ui/button-green.svg.']);
+    expect(codesOf(bad.errors.contract)).toEqual(['E_CONTRACT_TAG']);
+    expect(bad.errors.contract[0]).toMatch(/^E_CONTRACT_TAG: #settingsBtn: .*ui\/button\.svg.*ui\/button-green\.svg/);
     const notUse = composeScene({ base: svg(`<g id="settingsBtn"><text id="settingsBtn/label">x</text></g>`), contract });
-    expect(notUse.errors.contract[0]).toMatch(/контракт ждёт инстанс <use href="ui\/button.svg">, а в базе <g>/);
+    expect(notUse.errors.contract[0]).toMatch(/^E_CONTRACT_TAG: #settingsBtn: .*<use href="ui\/button\.svg">.*<g>/);
   });
 
   it('params need defaults on the prefab root when it is checked as a scene', () => {
     const c = parseContract('<contract params="data-label data-icon"/>');
     expect(c.params).toEqual(['data-label', 'data-icon']);
     const e = checkContract({ tag: 'svg', attrs: { 'data-label': 'x' }, tml: {}, children: [] }, c);
-    expect(e).toEqual(['корень <svg>: нет data-icon — параметр префаба (params), дайте значение по умолчанию.']);
-    expect(() => parseContract('<contract params="icon"/>')).toThrow(/параметр это data-\*/);
+    expect(codesOf(e)).toEqual(['E_CONTRACT_ATTR']);
+    expect(e[0]).toContain('data-icon');
+    const bad = thrown(() => parseContract('<contract params="icon"/>'));
+    expect(bad).toMatchObject({ code: 'E_CONTRACT_SYNTAX' });
+    expect(bad.message).toContain('"icon"');
   });
 
   it('the prefab checked alone: own contract against its base', () => {
@@ -338,6 +356,7 @@ describe('async loader', () => {
 
   it('a sync mount with an async loader says to use mountAsync', () => {
     const e = errorsOf(() => mount({ base: svg(`<use id="a" href="x.svg"/>`), backend: createMockBackend(), context: {}, loadScene: async () => null }));
-    expect(e[0]).toMatch(/используйте mountAsync/);
+    expect(codesOf(e)).toEqual(['E_PREFAB_LOADER']);
+    expect(e[0]).toContain('mountAsync');
   });
 });

@@ -5,6 +5,7 @@
 // (main.ts) and any host of `@trempel/scene/edit` call mountEditor() with their SceneIO.
 
 import { parseViewport, viewportLabel } from '../../view/viewport';
+import { coded, codeOf, within } from '../../src/core.js';
 import { createStageRuntime, loadViewModule } from '../../view/runtime';
 import type { ViewIssue } from '../../view/session';
 import { commands } from '../../editor/index.js';
@@ -119,14 +120,14 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   new Tree(ed, $('tree'), menu);
   // href «…»: the host's native picker, else the folder's images in a palette (dev server)
   const pickImage = async (): Promise<string | null> => {
-    if (opts.io.pick) return opts.io.pick({ title: 'Картинка', extensions: IMAGE_EXT });
+    if (opts.io.pick) return opts.io.pick({ title: 'Image', extensions: IMAGE_EXT });
     const sceneFiles = new Set(ed.scenes.flatMap((s) => [s.base, s.heir]).filter(Boolean));
     const files = ed.listing.files.filter((f) => IMAGE_EXT.includes(f.slice(f.lastIndexOf('.') + 1).toLowerCase()) && !sceneFiles.has(f));
-    return openPalette({ placeholder: 'Картинка из папки сцен…', items: files.map((f) => ({ label: f, value: f })), empty: 'в папке сцен нет картинок' });
+    return openPalette({ placeholder: 'Image from the scene folder…', items: files.map((f) => ({ label: f, value: f })), empty: 'no images in the scene folder' });
   };
   // v0.9: an instance's href — a scene of the folder
   const pickScene = async (): Promise<string | null> =>
-    openPalette({ placeholder: 'Префаб — сцена папки…', items: ed.prefabCandidates().map((f) => ({ label: f, value: f })), empty: 'в папке нет других сцен' });
+    openPalette({ placeholder: 'Prefab — a scene of the folder…', items: ed.prefabCandidates().map((f) => ({ label: f, value: f })), empty: 'no other scenes in the folder' });
   new Inspector(ed, $('inspector'), $('insp-what'), pickImage, pickScene, () => ops.pickPivot());
   // v0.9: the prefab palette (⌘P) — cards dragged onto the stage become instances
   const prefabs = new PrefabPalette(ed, config.prefabs ?? []);
@@ -138,7 +139,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   /** PNG of the rest pose at 1:1 → renders/<scene>-<stamp>.png (a host that writes text only — a download). */
   const snapshot = async (background: string | null | undefined): Promise<string> => {
     const entry = ed.entry;
-    if (!entry || !ed.doc) throw new Error('сцена не открыта');
+    if (!entry || !ed.doc) throw new Error(coded('E_EDIT_NO_SCENE', 'no scene is open'));
     await clips.stop();
     await ed.idle();
     const bytes = await scenePng(ed, background === undefined ? shotBackground() : background);
@@ -147,7 +148,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     const file = `${dir}renders/${stem}-${stamp()}.png`;
     try {
       await opts.io.write(file, bytes);
-      ed.log('info', `снимок для видео: ${file}`);
+      ed.log('info', `video snapshot: ${file}`);
       return file;
     } catch (e) {
       const a = document.createElement('a');
@@ -155,12 +156,15 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
       a.download = file.slice(file.lastIndexOf('/') + 1);
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-      ed.log('warn', `снимок не записан в папку (${e instanceof Error ? e.message : String(e)}) — отдан загрузкой: ${a.download}`);
+      ed.log('warn', coded('W_EDIT_SNAPSHOT', `the snapshot was not written to the folder (${e instanceof Error ? e.message : String(e)}) — downloaded instead: ${a.download}`));
       return a.download;
     }
   };
   mountClipsPanel(clips, () => {
-    snapshot(undefined).catch((e: unknown) => ed.log('error', `снимок для видео: ${e instanceof Error ? e.message : String(e)}`));
+    snapshot(undefined).catch((e: unknown) => {
+      const m = e instanceof Error ? e.message : String(e);
+      ed.log('error', within('video snapshot', codeOf(m) ? m : coded('E_EDIT_SNAPSHOT', m)));
+    });
   });
   ed.on('readonly', () => {
     const ro = $('readonly');
@@ -176,8 +180,8 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     $('ref-opacity').hidden = !on;
     $('ref-over-label').hidden = !on;
     $('ref-off').hidden = !on;
-    $('ref-pick').textContent = on ? 'эталон ●' : 'эталон…';
-    $('ref-pick').title = on ? `эталон: ${reference.state.file} — выбрать другой` : 'Эталон: картинка под сценой по её viewBox (в файл не пишется)';
+    $('ref-pick').textContent = on ? 'reference ●' : 'reference…';
+    $('ref-pick').title = on ? `reference: ${reference.state.file} — pick another` : 'Reference: a picture under the scene, fitted to its viewBox (not written to the file)';
   };
   reference.onChange(refSync);
   $('ref-pick').onclick = async () => {
@@ -214,15 +218,15 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   const runMacro = async (): Promise<void> => {
     const list = await tml.macros.reload();
     const name = await openPalette({
-      placeholder: 'Макрос…',
+      placeholder: 'Macro…',
       items: list.map((m) => ({ label: m.title, hint: m.file, value: m.name })),
-      empty: `макросов нет — положите .js в ${MACRO_DIR}/ папки сцен`,
+      empty: `no macros — put .js files into ${MACRO_DIR}/ of the scene folder`,
     });
     const m = list.find((x) => x.name === name);
     if (!m) return;
-    cons.print('input', [`макрос «${m.title}»`]);
+    cons.print('input', [`macro "${m.title}"`]);
     const ok = await cons.exec(() => tml.macros.run(m.name));
-    ed.log(ok ? 'info' : 'error', ok ? `макрос «${m.title}»` : `макрос «${m.title}»: ошибка — см. Консоль`);
+    ed.log(ok ? 'info' : 'error', ok ? `macro "${m.title}"` : coded('E_EDIT_SCRIPT', `macro "${m.title}" failed — see the Console`));
   };
   $('macros').onclick = () => void runMacro();
   window.addEventListener('beforeunload', (e) => {
@@ -245,7 +249,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   let store = '';
   ed.on('scenes', () => {
     if (ed.listing.name && ed.listing.name !== store) cons.useStore((store = ed.listing.name));
-    $('folder').textContent = `${ed.listing.name}${ed.listing.module ? ` · ${ed.listing.module}` : ''}${ed.listing.writable ? '' : ' · только чтение'}`;
+    $('folder').textContent = `${ed.listing.name}${ed.listing.module ? ` · ${ed.listing.module}` : ''}${ed.listing.writable ? '' : ' · read-only'}`;
     const ul = $('scenes');
     ul.replaceChildren();
     for (const s of ed.scenes) {
@@ -256,20 +260,20 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
       ul.append(li);
     }
     $('empty').hidden = ed.scenes.length > 0;
-    $('empty').textContent = ed.scenes.length ? '' : 'В папке нет сцен (X.svg).';
+    $('empty').textContent = ed.scenes.length ? '' : 'No scenes in the folder (X.svg).';
   });
   const renderIssues = (): void => {
     const list = ed.issues();
     const ul = $('issues');
     ul.replaceChildren();
-    if (!list.length) ul.append(h('li', 'ok', ed.doc ? 'ошибок нет' : '—'));
+    if (!list.length) ul.append(h('li', 'ok', ed.doc ? 'no errors' : '—'));
     for (const i of list) {
       const li = h('li', `${i.level}${i.id ? ' link' : ''}`);
       li.append(h('span', 'kind', i.kind), document.createTextNode(i.message));
       const clipName = i.kind === 'clips' ? /\$clip (\S+)/.exec(i.message)?.[1] : undefined;
       if (clipName && clips.list.some((c) => c.name === clipName)) {
         li.classList.add('link');
-        li.title = `открыть клип ${clipName} в панели «Клипы»`;
+        li.title = `open clip ${clipName} in the Clips panel`;
         li.onclick = () => {
           showTab('clips');
           try {
@@ -280,10 +284,10 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
         };
       } else if (i.kind === 'clips') {
         li.classList.add('link');
-        li.title = 'панель «Клипы»';
+        li.title = 'the Clips panel';
         li.onclick = () => showTab('clips');
       } else if (i.id) {
-        li.title = `выделить #${i.id}`;
+        li.title = `select #${i.id}`;
         li.onclick = () => {
           const p = ed.pathOfId(i.id!);
           if (p != null) ed.select([p], { scope: parentPath(p) });
@@ -325,15 +329,15 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     nb.hidden = !info;
     nb.replaceChildren();
     if (!info) return;
-    nb.append(h('span', '', 'наследник от '), h('code', '', info.extends.replace(/\.svg$/, '')), h('span', 'muted', ' — база правится там'));
+    nb.append(h('span', '', 'heir of '), h('code', '', info.extends.replace(/\.svg$/, '')), h('span', 'muted', ' — the base is edited there'));
     if (info.scene) {
-      const b = h('button', 'on', 'открыть') as HTMLButtonElement;
+      const b = h('button', 'on', 'open') as HTMLButtonElement;
       b.onclick = () => {
         const s = ed.scenes.find((x) => x.id === info.scene);
         if (s) void ed.openScene(s);
       };
       nb.append(b);
-    } else nb.append(h('span', 'muted', '(не в открытой папке)'));
+    } else nb.append(h('span', 'muted', '(not in the open folder)'));
   };
   ed.on('doc', syncNoBase);
   ed.on('render', syncDoc);
@@ -476,7 +480,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     if (!p) return;
     e.preventDefault();
     if (ed.readOnly) {
-      ed.log('warn', `сцена только для чтения: ${ed.readOnly}`);
+      ed.log('warn', coded('W_EDIT_READ_ONLY', `the scene is read-only: ${ed.readOnly}`));
       return;
     }
     void prefabs.place(p, scenePoint(e));
@@ -506,9 +510,9 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     hints();
   };
   const hints = (): void => {
-    $('tool-select').title = `Выделение${scheme === 'figma' ? ' (V)' : ''}`;
-    $('tool-path').title = `Контур (${keyHint('tool.path', scheme, isMac)}) — путь или линия`;
-    $('commands').title = `Палитра команд (${keyHint('palette.commands', scheme, isMac)})`;
+    $('tool-select').title = `Select${scheme === 'figma' ? ' (V)' : ''}`;
+    $('tool-path').title = `Contour (${keyHint('tool.path', scheme, isMac)}) — a path or a line`;
+    $('commands').title = `Command palette (${keyHint('palette.commands', scheme, isMac)})`;
   };
   hints();
 
@@ -516,12 +520,12 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   const runCommandPalette = async (): Promise<void> => {
     const macros = await tml.macros.list().catch(() => []);
     const extra: CommandEntry[] = [
-      { value: 'op:G', label: 'G — сдвиг', hint: 'оператор: X/Y ось, число, Enter' },
-      { value: 'op:R', label: 'R — поворот', hint: 'оператор вокруг пивота' },
-      { value: 'op:S', label: 'S — масштаб', hint: 'оператор от пивота' },
-      { value: 'op:.', label: '. — пивот в точку', hint: 'клик на сцене (node.setPivot keepWorld)' },
-      { value: 'op:ctrl+.', label: 'Ctrl+. — пивот в центр', hint: 'центр bounds выделенных' },
-      ...macros.map((m) => ({ value: `macro:${m.name}`, label: `макрос: ${m.title}`, hint: m.file })),
+      { value: 'op:G', label: 'G — move', hint: 'operator: X/Y axis, a number, Enter' },
+      { value: 'op:R', label: 'R — rotate', hint: 'operator about the pivot' },
+      { value: 'op:S', label: 'S — scale', hint: 'operator from the pivot' },
+      { value: 'op:.', label: '. — pivot to a point', hint: 'a click on the stage (node.setPivot keepWorld)' },
+      { value: 'op:ctrl+.', label: 'Ctrl+. — pivot to the centre', hint: 'the bounds centre of the selection' },
+      ...macros.map((m) => ({ value: `macro:${m.name}`, label: `macro: ${m.title}`, hint: m.file })),
     ];
     const pick = await openCommandPalette(commands, extra);
     if (!pick) return;
@@ -535,9 +539,9 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     if (pick.startsWith('macro:')) {
       const m = macros.find((x) => x.name === pick.slice(6));
       if (!m) return;
-      cons.print('input', [`макрос «${m.title}»`]);
+      cons.print('input', [`macro "${m.title}"`]);
       const ok = await cons.exec(() => tml.macros.run(m.name));
-      ed.log(ok ? 'info' : 'error', ok ? `макрос «${m.title}»` : `макрос «${m.title}»: ошибка — см. Консоль`);
+      ed.log(ok ? 'info' : 'error', ok ? `macro "${m.title}"` : coded('E_EDIT_SCRIPT', `macro "${m.title}" failed — see the Console`));
       return;
     }
     const c = commands[pick as keyof typeof commands];
@@ -549,7 +553,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     const args = props.length ? await openCommandForm(pick, c.describe, c.schema, defaults) : {};
     if (!args) return;
     const r = ed.exec(pick, args);
-    if (r?.ok) ed.log('info', `${pick} — выполнено`);
+    if (r?.ok) ed.log('info', `${pick} — done`);
   };
   $('commands').onclick = () => void runCommandPalette();
 
@@ -710,14 +714,14 @@ export function actions(ed: Editor) {
           // degenerate parent
         }
       }
-      ed.batch('сдвиг', calls);
+      ed.batch('nudge', calls);
     },
     duplicate(): void {
       const sel = movable();
       if (!sel.length) return;
       // later siblings first: earlier paths stay valid
       const sorted = [...sel].sort(comparePaths).reverse();
-      const res = ed.batch('дублировать', sorted.map((p) => ({ name: 'node.duplicate', args: { node: ed.ref(p) } })));
+      const res = ed.batch('duplicate', sorted.map((p) => ({ name: 'node.duplicate', args: { node: ed.ref(p) } })));
       if (res?.ok) {
         // each copy lands right after its original; shift for copies inserted before it among the same parent
         const out = sel.map((p) => {
@@ -734,7 +738,7 @@ export function actions(ed: Editor) {
       const sel = movable();
       if (!sel.length) return;
       const sorted = [...sel].sort(comparePaths).reverse().filter((p, i, all) => !all.some((q, j) => j !== i && p.startsWith(q + '/')));
-      const res = ed.batch('удалить', sorted.map((p) => ({ name: 'node.remove', args: { node: ed.ref(p) } })));
+      const res = ed.batch('delete', sorted.map((p) => ({ name: 'node.remove', args: { node: ed.ref(p) } })));
       if (res?.ok) ed.select([]);
     },
     newGroup(): void {
@@ -752,7 +756,7 @@ export function actions(ed: Editor) {
       if (!sel.length) return;
       const parent = parentPath(sel[0]);
       if (sel.some((p) => parentPath(p) !== parent)) {
-        ed.log('warn', 'обернуть в группу: выделенные узлы — у разных родителей');
+        ed.log('warn', coded('W_EDIT_SELECTION', 'wrap in group: the selected nodes have different parents'));
         return;
       }
       const id = freeId(ed, 'group');
@@ -764,7 +768,7 @@ export function actions(ed: Editor) {
         const at = parent === '' ? String(k) : `${parent}/${k}`;
         calls.push({ name: 'node.reparent', args: { node: ed.node(p)?.attrs.id ? ed.ref(p) : at, parent: id } });
       });
-      const res = ed.batch('обернуть в группу', calls);
+      const res = ed.batch('wrap in group', calls);
       if (res?.ok) ed.select([parent === '' ? String(index) : `${parent}/${index}`]);
     },
     /** clip.create rect = the node's bounds in its own space + clip.assign — one undo. */
@@ -776,13 +780,13 @@ export function actions(ed: Editor) {
       const b = ed.bounds.get(p);
       if (!n || !b) return;
       if (n.tag !== 'g' && n.tag !== 'image') {
-        ed.log('warn', `маска: clip-path назначается <g> или <image>, а это <${n.tag}> — оберните в группу`);
+        ed.log('warn', coded('W_EDIT_SELECTION', `mask: clip-path goes on a <g> or an <image>, this is a <${n.tag}> — wrap it in a group`));
         return;
       }
       const local = mapBox(invert(nodeWorld(doc.scene, p)), b);
       const r = (v: number): number => Math.round(v * 100) / 100;
       const id = freeId(ed, `${n.attrs.id ?? 'node'}-clip`);
-      ed.batch('маска по bounds', [
+      ed.batch('mask by bounds', [
         { name: 'clip.create', args: { id, shape: 'rect', attrs: { x: r(local.x), y: r(local.y), width: r(local.w), height: r(local.h) } } },
         { name: 'clip.assign', args: { node: ed.ref(p), clip: id } },
       ]);
@@ -823,12 +827,12 @@ function contextMenu(ed: Editor): (x: number, y: number) => void {
     const a = actions(ed);
     const one = ed.selection.length === 1 ? ed.node(ed.selection[0]) : null;
     const items: [string, () => void, boolean][] = [
-      ['Дублировать  ⌘D', a.duplicate, ed.selection.length > 0],
-      ['Удалить  ⌫', a.remove, ed.selection.length > 0],
-      ['Новая группа', a.newGroup, true],
-      ['Обернуть в группу', a.wrap, ed.selection.length > 0],
-      ['Маска по bounds', a.maskByBounds, !!one && (one.tag === 'g' || one.tag === 'image') && ed.bounds.has(ed.selection[0])],
-      ['Снять маску', a.unmask, ed.selection.some((p) => !!ed.node(p)?.attrs['clip-path'])],
+      ['Duplicate  ⌘D', a.duplicate, ed.selection.length > 0],
+      ['Delete  ⌫', a.remove, ed.selection.length > 0],
+      ['New group', a.newGroup, true],
+      ['Wrap in group', a.wrap, ed.selection.length > 0],
+      ['Mask by bounds', a.maskByBounds, !!one && (one.tag === 'g' || one.tag === 'image') && ed.bounds.has(ed.selection[0])],
+      ['Remove mask', a.unmask, ed.selection.some((p) => !!ed.node(p)?.attrs['clip-path'])],
     ];
     m.replaceChildren();
     for (const [label, fn, enabled] of items) {

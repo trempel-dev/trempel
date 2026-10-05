@@ -7,7 +7,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, mkdirSync
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mount, parse, parseTransform, multiply, type SceneNode } from '@trempel/scene/core';
+import { mount, parse, type SceneNode } from '@trempel/scene/core';
+import { parseTransform, multiply } from '@trempel/scene/internal/transform';
 import { openDocument } from '../editor/index.js';
 import { fitStage, parseViewport } from '../view/viewport';
 import { writeRenderFile, writeSceneFile } from '../view/plugin';
@@ -319,7 +320,7 @@ describe('edit — in the package only as a library (@trempel/scene/edit)', () =
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as Record<string, Record<string, unknown>>;
     expect(pkg.dependencies.moveable).toBeUndefined();
     expect(pkg.devDependencies.moveable).toBeUndefined();
-    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md']);
+    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md', 'CHANGELOG.md']);
     expect(JSON.parse(readFileSync(new URL('../editor/tsconfig.build.json', import.meta.url), 'utf8')).include.join()).not.toMatch(/edit\//);
     expect(pkg.exports['./edit']).toEqual({ types: './dist/edit/types/edit/lib.d.ts', import: './dist/edit/index.js' });
     const lib = readFileSync(new URL('./lib.ts', import.meta.url), 'utf8');
@@ -401,13 +402,13 @@ describe('tml.run — a script is one undo step', () => {
       tml.doc.exec('node.setAttr', { node: 'a', name: 'width', value: 30 });
       await Promise.resolve();
       return tml.doc.history.length;
-    `, 'двойной');
+    `, 'double');
     expect(v).toBe(0); // inside the script the step is still open
-    expect(ed.doc.history.map((h) => h.label)).toEqual(['двойной']);
+    expect(ed.doc.history.map((h) => h.label)).toEqual(['double']);
     expect(ed.doc.undo()).toBe(true);
     expect(ed.doc.serialize()).toBe(orig);
 
-    await expect(tml.run(`tml.doc.exec('node.move', { node: 'bg', dx: 5, dy: 0 }); throw new Error('стоп')`)).rejects.toThrow('стоп');
+    await expect(tml.run(`tml.doc.exec('node.move', { node: 'bg', dx: 5, dy: 0 }); throw new Error('stop')`)).rejects.toThrow('stop');
     expect(ed.doc.serialize()).toBe(orig);
     expect(ed.doc.history).toEqual([]);
     expect(ed.doc.grouping).toBe(false);
@@ -433,7 +434,7 @@ describe('tml.run — a script is one undo step', () => {
   it('macros: listed from .trempel/macros with their `// name:` titles, run by name as one step', async () => {
     const ed = host(SCENE);
     const files: Record<string, string> = {
-      '.trempel/macros/b.js': "// name: Сдвинуть фон\ntml.doc.exec('node.move', { node: 'bg', dx: 1, dy: 0 });\ntml.doc.exec('node.move', { node: 'bg', dx: 1, dy: 0 });",
+      '.trempel/macros/b.js': "// name: Nudge the background\ntml.doc.exec('node.move', { node: 'bg', dx: 1, dy: 0 });\ntml.doc.exec('node.move', { node: 'bg', dx: 1, dy: 0 });",
       '.trempel/macros/a.js': 'return 42',
     };
     const mio = {
@@ -443,12 +444,12 @@ describe('tml.run — a script is one undo step', () => {
     const tml = createTml(ed, mio, sink);
     expect(await tml.macros.list()).toEqual([
       { name: 'a', title: 'a', file: '.trempel/macros/a.js' },
-      { name: 'b', title: 'Сдвинуть фон', file: '.trempel/macros/b.js' },
+      { name: 'b', title: 'Nudge the background', file: '.trempel/macros/b.js' },
     ]);
     expect(await tml.macros.run('a')).toBe(42);
-    await tml.macros.run('Сдвинуть фон');
-    expect(ed.doc.history.map((h) => h.label)).toEqual(['Сдвинуть фон']);
-    await expect(tml.macros.run('нет')).rejects.toThrow(/макроса «нет» нет/);
+    await tml.macros.run('Nudge the background');
+    expect(ed.doc.history.map((h) => h.label)).toEqual(['Nudge the background']);
+    await expect(tml.macros.run('nope')).rejects.toThrow(/^E_EDIT_MACRO: no macro "nope"/);
   });
 
   it('relativeTo: href from the scene folder', () => {
@@ -491,7 +492,8 @@ $duration: 2
   it('compileSceneClips: errors prefixed with the file; playback is the md clip (v0.9.1: no .json fallback)', () => {
     const tree = parse(SCENE);
     const r = compileSceneClips({ 'anim/a.md': MD }, tree);
-    expect(r.errors).toEqual(['anim/a.md: $clip broken / $track ghost: узла #ghost в сцене нет.']);
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0]).toMatch(/^E_ANIM_TARGET: anim\/a\.md: .*#ghost/);
     expect(r.clips.map((c) => [c.name, c.file, c.duration])).toEqual([
       ['slide', 'anim/a.md', 2],
       ['broken', 'anim/a.md', 0],

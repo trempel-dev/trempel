@@ -10,27 +10,13 @@
 // any other name the scene's expressions use becomes a stub, so handlers (on-click) never crash
 // the viewer — clicks go to the log with the calls they made.
 
-import {
-  bindingErrors,
-  collectionErrors,
-  expandCollection,
-  composeScene,
-  geometryErrors,
-  propErrors,
-  ExpressionRuntimeError,
-  TrempelError,
-  mountTree,
-  parseHeir,
-  reactive,
-  resolveHref,
-  sceneNames,
-  type SceneLoader,
-  type MountedScene,
-  type NodeHandle,
-  type Registry,
-  type RendererBackend,
-  type SceneNode,
-} from '../src/core.js';
+import { coded, codeOf, expandCollection, composeScene, ExpressionRuntimeError, TrempelError, mountTree, parseHeir, reactive, type SceneLoader, type MountedScene, type NodeHandle, type Registry, type RendererBackend, type SceneNode } from '../src/core.js';
+import { bindingErrors } from '../src/binding.js';
+import { collectionErrors } from '../src/project.js';
+import { geometryErrors } from '../src/geom/check.js';
+import { propErrors } from '../src/props.js';
+import { resolveHref } from '../src/href.js';
+import { sceneNames } from '../src/names.js';
 import { parseViewBox, type ViewBox } from './viewport.js';
 
 export type IssueKind =
@@ -130,6 +116,12 @@ const fmtArg = (v: unknown): string => {
   }
 };
 
+/** A parse error of the heir document (`heir: …`, with or without a code in front). */
+export function isHeirError(m: string): boolean {
+  const code = codeOf(m);
+  return /^heir\b/.test(code ? m.slice(code.length + 2) : m);
+}
+
 /** Parse the stand-in state: an object, or an issue. */
 export function parseState(src: string | Record<string, unknown> | undefined): { state: Record<string, unknown>; issue?: ViewIssue } {
   if (src == null || src === '') return { state: {} };
@@ -137,9 +129,9 @@ export function parseState(src: string | Record<string, unknown> | undefined): {
   try {
     const v: unknown = JSON.parse(src);
     if (v && typeof v === 'object' && !Array.isArray(v)) return { state: v as Record<string, unknown> };
-    return { state: {}, issue: { level: 'error', kind: 'state', message: 'состояние должно быть JSON-объектом ({ … }) — это значение `state` в выражениях' } };
+    return { state: {}, issue: { level: 'error', kind: 'state', message: coded('E_STATE', 'the state must be a JSON object ({ … }) — it is the value of `state` in expressions') } };
   } catch (e) {
-    return { state: {}, issue: { level: 'error', kind: 'state', message: `состояние — не JSON: ${message(e)}` } };
+    return { state: {}, issue: { level: 'error', kind: 'state', message: coded('E_STATE', `the state is not JSON: ${message(e)}`) } };
   }
 }
 
@@ -173,7 +165,7 @@ export function openScene(input: OpenInput): ViewSession {
     }
   }
   if (base == null && (!extendsOther || !input.loadScene)) {
-    err('base', ['нет базы (X.svg рядом с наследником) — рисовать нечего']);
+    err('base', [coded('E_EMPTY_SCENE', 'no base (X.svg next to the heir) — nothing to draw')]);
     return session;
   }
 
@@ -201,8 +193,8 @@ export function openScene(input: OpenInput): ViewSession {
     const exprErrors = full.errors.merge.length || !full.tree ? [] : bindingErrors(full.tree);
     err('merge', full.errors.merge);
     err('expression', exprErrors);
-    if (full.errors.merge.length || exprErrors.length || full.errors.parse.some((e) => e.startsWith('наследник'))) {
-      add({ level: 'warn', kind: 'merge', message: 'наследник не применён — показана база без него' });
+    if (full.errors.merge.length || exprErrors.length || full.errors.parse.some(isHeirError)) {
+      add({ level: 'warn', kind: 'merge', message: coded('W_VIEW_HEIR', 'the heir is not applied — showing the base without it') });
       const bare = compose(true);
       err('prefab', bare.errors.prefab);
       tree = bare.tree;
@@ -231,7 +223,7 @@ export function openScene(input: OpenInput): ViewSession {
   try {
     consumer = input.context?.(state) ?? {};
   } catch (e) {
-    err('context', [`context() модуля просмотра: ${message(e)}`]);
+    err('context', [coded('E_VIEW_MODULE', `view module context(): ${message(e)}`)]);
   }
   let clicking: LogEntry | null = null;
   const context: Record<string, unknown> = { state, ...consumer };
@@ -244,7 +236,7 @@ export function openScene(input: OpenInput): ViewSession {
     };
   }
   if (session.stubs.length) {
-    add({ level: 'warn', kind: 'context', message: `нет в контексте — заглушки (вызовы кликов идут в лог): ${session.stubs.join(', ')}` });
+    add({ level: 'warn', kind: 'context', message: coded('W_CONTEXT_STUB', `not in the context — stubbed (click calls go to the log): ${session.stubs.join(', ')}`) });
   }
 
   // Clicks: the backend view logs each handler with its node and the stub calls it made.
@@ -265,7 +257,7 @@ export function openScene(input: OpenInput): ViewSession {
       backend.onClick(node, () => {
         if (!byHandle) byHandle = new Map([...(session.scene?.byId ?? [])].map(([id, h]) => [h, id]));
         const id = byHandle.get(node);
-        const entry: LogEntry = { seq: ++seq, node: id ? `#${id}` : '(узел без id)', expr: (id && clicks.get(id)) || '', calls: [] };
+        const entry: LogEntry = { seq: ++seq, node: id ? `#${id}` : '(node without id)', expr: (id && clicks.get(id)) || '', calls: [] };
         clicking = entry;
         try {
           handler();
@@ -300,8 +292,12 @@ export function openScene(input: OpenInput): ViewSession {
       onError: (info) => add({ level: 'error', kind: 'runtime', message: new ExpressionRuntimeError(info).message }, opened),
     });
   } catch (e) {
-    if (e instanceof TrempelError) err('merge', e.errors);
-    else err(/registry|component/i.test(message(e)) ? 'component' : 'runtime', [message(e)]);
+    const list = e instanceof TrempelError ? e.errors : [message(e)];
+    for (const m of list) {
+      const code = codeOf(m);
+      const component = code ? code === 'E_COMPONENT' || code === 'E_NO_REGISTRY' : /registry|component/i.test(m);
+      err(component ? 'component' : e instanceof TrempelError ? 'merge' : 'runtime', [m]);
+    }
     return session;
   } finally {
     opened = true;
@@ -319,7 +315,7 @@ export function openScene(input: OpenInput): ViewSession {
     ),
     new Promise<void>((resolve) => {
       timer = setTimeout(() => {
-        add({ level: 'warn', kind: 'asset', message: `текстуры не загрузились за ${timeout / 1000} с` }, true);
+        add({ level: 'warn', kind: 'asset', message: coded('W_VIEW_TEXTURE_TIMEOUT', `textures did not load within ${timeout / 1000} s`) }, true);
         resolve();
       }, timeout);
     }),

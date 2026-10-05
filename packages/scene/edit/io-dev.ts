@@ -6,6 +6,7 @@
 
 import type { FileChange, FolderListing, SceneIO } from './io';
 import type { ProjectInfo } from '../view/plugin';
+import { coded, codeOf, within } from '../src/core.js';
 
 const FILES = '/__tml/files/';
 
@@ -30,7 +31,7 @@ export function devIO(hot?: { on(event: string, cb: (data: FileChange) => void):
       if (dir) {
         const r = await fetch(`/__tml/list?dir=${encodeURIComponent(dir)}`, { cache: 'no-store' });
         const data = (await r.json().catch(() => ({}))) as { files?: string[]; error?: string };
-        return { name: dir, files: data.files ?? [], module: null, writable: false, error: r.ok ? undefined : (data.error ?? `HTTP ${r.status}`) };
+        return { name: dir, files: data.files ?? [], module: null, writable: false, error: r.ok ? undefined : (data.error ?? coded('E_FETCH', `${dir}: HTTP ${r.status}`)) };
       }
       const r = await fetch('/__tml/scenes');
       const data = (await r.json()) as FolderListing & { project?: ProjectInfo };
@@ -41,14 +42,17 @@ export function devIO(hot?: { on(event: string, cb: (data: FileChange) => void):
     },
     async read(path) {
       const r = await fetch(url(path), { cache: 'no-store' });
-      if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+      if (!r.ok) throw new Error(coded('E_FETCH', `${path}: HTTP ${r.status}`));
       return r.text();
     },
     async write(path, data) {
       const body = typeof data === 'string' ? { path, text: data } : { path, base64: toBase64(data) };
       const r = await fetch('/__tml/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const res = (await r.json().catch(() => ({}))) as { hash?: string; error?: string };
-      if (!r.ok || !res.hash) throw new Error(`запись ${path}: ${res.error ?? `HTTP ${r.status}`}`);
+      if (!r.ok || !res.hash) {
+        const m = res.error ?? `HTTP ${r.status}`;
+        throw new Error(within(`write ${path}`, codeOf(m) ? m : coded('E_EDIT_WRITE', m)));
+      }
       return { hash: res.hash };
     },
     watch(_dir, cb) {

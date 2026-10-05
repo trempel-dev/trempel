@@ -2,8 +2,11 @@
 // Shared by merge.ts and contract.ts so the two produce identical wording for the
 // checks they have in common (base id-uniqueness, base sterility) — mount() dedupes
 // the combined list, so identical strings collapse to one.
+//
+// @internal — `@trempel/scene/internal/tree`, for the kit and the editor: no stability promise.
 
 import type { SceneNode } from './parser.js';
+import { coded } from './codes.js';
 
 /** Preorder walk; the callback receives each node and its parent (null for the root). */
 export function walk(
@@ -58,23 +61,20 @@ export function baseTmlErrors(root: SceneNode): string[] {
     const keys = Object.keys(n.tml);
     if (keys.length) {
       const where = n.attrs.id ? `#${n.attrs.id}` : `<${n.tag}>`;
-      errors.push(
-        `База не стерильна: ${where} несёт ${keys.map((k) => `tml:${k}`).join(', ')} — ` +
-          `вся логика должна жить в наследнике (scene.tml.svg).`,
-      );
+      errors.push(coded('E_STERILE', `the base is not sterile: ${where} carries ${keys.map((k) => `tml:${k}`).join(', ')} — all logic lives in the heir (X.tml.svg).`));
     }
   });
   return errors;
 }
 
-/** Duplicate-id report for a list of ids, phrased with `where` (e.g. "базе"). */
+/** Duplicate-id report for a list of ids, phrased with `where` (e.g. "the base"). */
 export function duplicateIdErrors(ids: string[], where: string): string[] {
   const counts = new Map<string, number>();
   for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
   const errors: string[] = [];
   for (const [id, n] of counts) {
     if (n > 1) {
-      errors.push(`Дублирующийся id "${id}": встречается ${n} раз в ${where} — id должен быть уникален.`);
+      errors.push(coded('E_DUP_ID', `duplicate id "${id}": ${n} times in ${where} — an id must be unique.`));
     }
   }
   return errors;
@@ -84,6 +84,6 @@ export function duplicateIdErrors(ids: string[], where: string): string[] {
 export function baseDuplicateIdErrors(root: SceneNode): string[] {
   return duplicateIdErrors(
     collectIds(root).map((e) => e.id),
-    'базе',
+    'the base',
   );
 }

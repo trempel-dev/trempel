@@ -42,10 +42,10 @@ export async function acquire(maxWaitMs = 30 * 60_000): Promise<void> {
       continue;
     }
     if (!told) {
-      console.log(`e2e: ждём другой прогон (pid ${owner}, ${LOCK})…`);
+      console.log(`e2e: waiting for another run (pid ${owner}, ${LOCK})…`);
       told = true;
     }
-    if (Date.now() - t0 > maxWaitMs) throw new Error(`e2e: ${LOCK} занят pid ${owner} дольше ${Math.round(maxWaitMs / 60000)} мин`);
+    if (Date.now() - t0 > maxWaitMs) throw new Error(`e2e: ${LOCK} held by pid ${owner} for more than ${Math.round(maxWaitMs / 60000)} min`);
     await new Promise((r) => setTimeout(r, 1000));
   }
 }

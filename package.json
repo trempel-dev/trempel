@@ -7,7 +7,13 @@
   "license": "MIT",
   "author": "Denys Vynohradskyi",
   "homepage": "https://trempel.dev",
-  "repository": "github:trempel-dev/trempel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trempel-dev/trempel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trempel-dev/trempel/issues"
+  },
   "workspaces": [
     "packages/scene",
     "packages/kit",
@@ -26,9 +32,24 @@
     "edit": "npm run edit -w @trempel/scene --",
     "dev": "npm run dev -w @trempel/scene --",
     "editor:commands": "npm run editor:commands -w @trempel/scene",
-    "build:browser": "npm run build:browser -w @trempel/scene"
+    "build:browser": "npm run build:browser -w @trempel/scene",
+    "error-codes": "npm run error-codes -w @trempel/scene",
+    "visual-gate": "npm run visual-gate -w @trempel/scene --"
   },
   "engines": {
     "node": ">=22.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "playwright": "^1.63.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "overrides": {
+    "pixi.js": "8.22.0",
+    "sharp": "^0.34.5"
   }
 }

@@ -4,11 +4,14 @@
 // Expressions are parsed once (expr.ts) — a syntax error surfaces at mount, not on first change.
 // v0.6.1: a runtime failure (field of undefined, a throwing context function, a pipe) is loud by
 // default — reported to `onError`, or thrown with its place; v0.5 silence only with `lenient`.
+//
+// @internal — `@trempel/scene/internal/binding`, for the kit and the editor: no stability promise.
 
 import { applyPipes, compile, ExpressionError, run, unknownPipes, type CompiledExpr } from './expr.js';
 import { PIPES } from './pipes.js';
 import { effect } from './reactive.js';
-import { ExpressionRuntimeError, type ExpressionErrorInfo } from './errors.js';
+import { ExpressionRuntimeError, trempelError, type ExpressionErrorInfo } from './errors.js';
+import { coded } from './codes.js';
 import type { SceneNode } from './parser.js';
 import type { NodeHandle, RendererBackend } from './render/backend.js';
 import { walk } from './tree.js';
@@ -114,11 +117,11 @@ export function bindingErrors(tree: SceneNode): string[] {
       try {
         const c = compile(v);
         for (const p of unknownPipes(c)) {
-          errors.push(`${where} tml:${k}: неизвестный пайп «${p}» (есть: ${Object.keys(PIPES).join(', ')}).`);
+          errors.push(coded('E_PIPE_UNKNOWN', `${where} tml:${k}: unknown pipe "${p}" (pipes: ${Object.keys(PIPES).join(', ')}).`));
         }
       } catch (e) {
         if (!(e instanceof ExpressionError)) throw e;
-        errors.push(`${where} tml:${k}: ${e.reason}, позиция ${e.pos + 1}:\n${pointAt(e.src, e.pos)}`);
+        errors.push(coded(e.code, `${where} tml:${k}: ${e.reason} (col ${e.pos + 1}):\n${pointAt(e.src, e.pos)}`));
       }
     }
   });
@@ -158,9 +161,7 @@ export function applyBindings(
   if (tml.bind !== undefined) {
     const prop = defaultBindProp(tag);
     if (!prop) {
-      throw new Error(
-        `Trempel binding error: <${tag}> has no default bind property — use tml:bind-<attr> instead.`,
-      );
+      throw trempelError('E_BIND_DEFAULT', `<${tag}> has no default bind property — use tml:bind-<attr> instead.`);
     }
     bind('bind', prop);
   }

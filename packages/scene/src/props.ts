@@ -17,8 +17,12 @@
 //
 // tml:bind-style is not supported (switching blend modes is not a thing). Used by mount(), the CLI
 // checker and the editor core; wording names the node (#id or <tag>).
+//
+// @internal — `@trempel/scene/internal/props`, for the kit and the editor: no stability promise.
 
 import type { SceneNode } from './parser.js';
+import { coded, within } from './codes.js';
+import { trempelError } from './errors.js';
 import { layoutErrors } from './layout.js';
 import { walk } from './tree.js';
 
@@ -60,9 +64,9 @@ export function parseBlend(style: string | undefined): string | undefined {
   let mode: string | undefined;
   for (const [k, v] of declarations(style)) {
     if (k !== 'mix-blend-mode') {
-      throw new Error(`style: «${k}» не поддерживается — стили атрибутами (fill, opacity…); в style читается только mix-blend-mode.`);
+      throw trempelError('E_STYLE', `style: "${k}" is not supported — styles are attributes (fill, opacity…); style holds only mix-blend-mode.`);
     }
-    if (!BLEND_MODES.includes(v)) throw new Error(`mix-blend-mode: ${v || '(пусто)'} — бывает ${BLEND_MODES.join(', ')}.`);
+    if (!BLEND_MODES.includes(v)) throw trempelError('E_BLEND', `mix-blend-mode: ${v || '(empty)'} — expected ${BLEND_MODES.join(', ')}.`);
     mode = v;
   }
   return mode;
@@ -75,20 +79,20 @@ export function parseTint(value: string): number {
   if (m) return parseInt(m[1], 16);
   m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v);
   if (m) return parseInt(m[1] + m[1] + m[2] + m[2] + m[3] + m[3], 16);
-  throw new Error(`data-tint="${value}" — ожидается цвет #rrggbb.`);
+  throw trempelError('E_TINT', `data-tint="${value}" — expected a colour #rrggbb.`);
 }
 
 /** data-z → integer. @throws Error unless an integer. */
 export function parseZ(value: string): number {
   const v = value.trim();
-  if (!/^[-+]?\d+$/.test(v)) throw new Error(`data-z="${value}" — ожидается целое число.`);
+  if (!/^[-+]?\d+$/.test(v)) throw trempelError('E_Z', `data-z="${value}" — expected an integer.`);
   return Number(v);
 }
 
 /** data-pivot="x y" → point. @throws Error unless two numbers. */
 export function parsePivot(value: string): { x: number; y: number } {
   const p = value.trim().split(/[\s,]+/).filter(Boolean).map(Number);
-  if (p.length !== 2 || !p.every(Number.isFinite)) throw new Error(`data-pivot="${value}" — ожидается «x y» (два числа).`);
+  if (p.length !== 2 || !p.every(Number.isFinite)) throw trempelError('E_PIVOT', `data-pivot="${value}" — expected "x y" (two numbers).`);
   return { x: p[0], y: p[1] };
 }
 
@@ -103,7 +107,7 @@ export function parseDashArray(value: string): number[] | null {
   if (v === 'none') return null;
   const parts = v.split(/[\s,]+/).filter(Boolean);
   if (!parts.length || !parts.every((p) => PLAIN_NUMBER.test(p)) || parts.some((p) => Number(p) < 0)) {
-    throw new Error(`stroke-dasharray="${value}" — ожидаются неотрицательные числа через пробел или запятую (или none).`);
+    throw trempelError('E_STROKE', `stroke-dasharray="${value}" — expected non-negative numbers separated by spaces or commas (or none).`);
   }
   const dash = parts.map(Number);
   return dash.some((d) => d > 0) ? dash : null;
@@ -111,14 +115,14 @@ export function parseDashArray(value: string): number[] | null {
 
 /** stroke-dashoffset / a number attribute → number. @throws Error unless a plain number. */
 export function parseNumberAttr(name: string, value: string): number {
-  if (!PLAIN_NUMBER.test(value.trim())) throw new Error(`${name}="${value}" — ожидается число.`);
+  if (!PLAIN_NUMBER.test(value.trim())) throw trempelError(name.startsWith('stroke') ? 'E_STROKE' : 'E_NUMBER', `${name}="${value}" — expected a number.`);
   return Number(value.trim());
 }
 
 /** pathLength → a positive number. @throws Error otherwise. */
 export function parsePathLength(value: string): number {
   const v = PLAIN_NUMBER.test(value.trim()) ? Number(value.trim()) : NaN;
-  if (!(v > 0)) throw new Error(`pathLength="${value}" — ожидается положительное число.`);
+  if (!(v > 0)) throw trempelError('E_STROKE', `pathLength="${value}" — expected a positive number.`);
   return v;
 }
 
@@ -126,7 +130,7 @@ export function parsePathLength(value: string): number {
 export function parseLineStyle(name: 'stroke-linecap' | 'stroke-linejoin', value: string): string {
   const allowed = name === 'stroke-linecap' ? LINE_CAPS : LINE_JOINS;
   const v = value.trim();
-  if (!allowed.includes(v)) throw new Error(`${name}="${value}" — бывает ${allowed.join(', ')}.`);
+  if (!allowed.includes(v)) throw trempelError('E_STROKE', `${name}="${value}" — expected ${allowed.join(', ')}.`);
   return v;
 }
 
@@ -138,7 +142,7 @@ export function strokeErrors(tag: string, attrs: Record<string, string>): string
     const v = attrs[k];
     if (v == null) continue;
     if (!STROKE_HOSTS.has(tag)) {
-      errors.push(`${k} на <${tag}> не поддерживается — только на ${[...STROKE_HOSTS].join(', ')}.`);
+      errors.push(coded('E_STROKE', `${k} on <${tag}> is not supported — only on ${[...STROKE_HOSTS].join(', ')}.`));
       continue;
     }
     try {
@@ -162,12 +166,12 @@ export function parseViews(value: string): Map<string, string> {
     const i = part.indexOf(':');
     const name = i < 0 ? '' : part.slice(0, i).trim();
     const href = i < 0 ? '' : part.slice(i + 1).trim();
-    if (!name || !href) throw new Error(`data-views: «${part}» — ожидается имя:href (например front:art/head-f.png).`);
-    if (!/^[\w.-]+$/.test(name)) throw new Error(`data-views: имя «${name}» — буквы, цифры, _ . -`);
-    if (out.has(name)) throw new Error(`data-views: имя «${name}» дважды.`);
+    if (!name || !href) throw trempelError('E_VIEWS', `data-views: "${part}" — expected name:href (e.g. front:art/head-f.png).`);
+    if (!/^[\w.-]+$/.test(name)) throw trempelError('E_VIEWS', `data-views: the name "${name}" — letters, digits, _ . -`);
+    if (out.has(name)) throw trempelError('E_VIEWS', `data-views: the name "${name}" twice.`);
     out.set(name, href);
   }
-  if (!out.size) throw new Error('data-views пуст — ожидается «имя:href, имя:href».');
+  if (!out.size) throw trempelError('E_VIEWS', 'data-views is empty — expected "name:href, name:href".');
   return out;
 }
 
@@ -194,57 +198,57 @@ export function propErrors(tree: SceneNode): string[] {
       try {
         const mode = parseBlend(style);
         if (mode !== undefined && !BLEND_HOSTS.has(n.tag)) {
-          errors.push(`${w}: mix-blend-mode на <${n.tag}> не поддерживается — только на ${[...BLEND_HOSTS].join(', ')}.`);
+          errors.push(coded('E_BLEND', `${w}: mix-blend-mode on <${n.tag}> is not supported — only on ${[...BLEND_HOSTS].join(', ')}.`));
         }
       } catch (e) {
-        errors.push(`${w}: ${(e as Error).message}`);
+        errors.push(within(w, (e as Error).message));
       }
     }
     if (n.tml['bind-style'] !== undefined) {
-      errors.push(`${w}: tml:bind-style не поддерживается — режим наложения задаётся в базе и не переключается.`);
+      errors.push(coded('E_BIND_STYLE', `${w}: tml:bind-style is not supported — the blend mode is set in the base and does not switch.`));
     }
     const tint = n.attrs['data-tint'];
     if (tint != null) {
-      if (!TINT_HOSTS.has(n.tag)) errors.push(`${w}: data-tint на <${n.tag}> не поддерживается — только на <image> и <g>.`);
+      if (!TINT_HOSTS.has(n.tag)) errors.push(coded('E_TINT', `${w}: data-tint on <${n.tag}> is not supported — only on <image> and <g>.`));
       else {
         try {
           parseTint(tint);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }
     const z = n.attrs['data-z'];
     if (z != null) {
-      if (UNDRAWN.has(n.tag)) errors.push(`${w}: data-z на <${n.tag}> ничего не значит — узел не рисуется.`);
+      if (UNDRAWN.has(n.tag)) errors.push(coded('E_Z', `${w}: data-z on <${n.tag}> means nothing — the node is not drawn.`));
       else {
         try {
           parseZ(z);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }
     const pivot = n.attrs['data-pivot'];
     if (pivot != null) {
-      if (UNDRAWN.has(n.tag)) errors.push(`${w}: data-pivot на <${n.tag}> ничего не значит — узел не рисуется.`);
+      if (UNDRAWN.has(n.tag)) errors.push(coded('E_PIVOT', `${w}: data-pivot on <${n.tag}> means nothing — the node is not drawn.`));
       else {
         try {
           parsePivot(pivot);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }
-    for (const e of strokeErrors(n.tag, n.attrs)) errors.push(`${w}: ${e}`);
+    for (const e of strokeErrors(n.tag, n.attrs)) errors.push(within(w, e));
     const views = n.attrs['data-views'];
     if (views != null) {
-      if (n.tag !== 'image') errors.push(`${w}: data-views на <${n.tag}> не поддерживается — только на <image>.`);
+      if (n.tag !== 'image') errors.push(coded('E_VIEWS', `${w}: data-views on <${n.tag}> is not supported — only on <image>.`));
       else {
         try {
           parseViews(views);
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }

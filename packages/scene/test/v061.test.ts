@@ -10,6 +10,7 @@ import { TrempelError, ExpressionRuntimeError, type ExpressionErrorInfo } from '
 import { ExpressionError } from '../src/expr';
 import { localMatrix, multiply } from '../src/transform';
 import { createMockBackend, isMockNode } from './helpers/mockBackend';
+import { codesOf, thrown } from './helpers/codes';
 
 const metrics = (): { ascent: number; descent: number } => ({ ascent: 8, descent: 2 });
 const tex = (w: number, h: number): Texture => new Texture({ source: new TextureSource({ width: w, height: h }) });
@@ -99,10 +100,10 @@ describe('PixiBackend extension: createImage + track (v0.6.1)', () => {
     await loads.settle('late/broken.png', new Error('404'));
     const err = await b.whenReady().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(TrempelError);
-    expect((err as TrempelError).errors).toEqual([
-      'Текстура не загрузилась: "late/broken.png".',
-      'Текстура не загрузилась: "scenes/ui/slices.json".',
-    ]);
+    const { errors } = err as TrempelError;
+    expect(codesOf(errors)).toEqual(['E_TEXTURE', 'E_TEXTURE']);
+    expect(errors[0]).toContain('"late/broken.png"');
+    expect(errors[1]).toContain('"scenes/ui/slices.json"');
   });
 
   it('whenReady waits for a subclass load that settles later', async () => {
@@ -189,7 +190,9 @@ describe('runtime expression errors (v0.6.1)', () => {
   it('bind: without onError the mount throws with the place', () => {
     const run = (): unknown => mountScene(SCENE, { backend: createMockBackend(), context: { state: { box: null }, play() {} } });
     expect(run).toThrow(ExpressionRuntimeError);
-    expect(run).toThrow('#lbl tml:bind="state.box.n": чтение поля «n» у null');
+    const e = thrown(run);
+    expect(e).toMatchObject({ code: 'E_EXPR_FIELD' });
+    expect(e.message).toContain('#lbl tml:bind="state.box.n":');
   });
 
   it('bind / visible: a later state change that breaks the expression throws from the write', () => {
@@ -234,7 +237,8 @@ describe('runtime expression errors (v0.6.1)', () => {
       err = e;
     }
     expect(err).toBeInstanceOf(ExpressionRuntimeError);
-    expect((err as Error).message).toBe('#btn tml:on-click="play()": no money');
+    expect(err).toMatchObject({ code: 'E_EXPR_RUNTIME' });
+    expect((err as Error).message).toContain('#btn tml:on-click="play()": no money');
     expect((err as ExpressionRuntimeError).error).toBe(boom);
 
     const seen: ExpressionErrorInfo[] = [];
@@ -245,7 +249,10 @@ describe('runtime expression errors (v0.6.1)', () => {
 
   it('on-click: calling something that is not in the context is an error too', () => {
     const scene = mountScene(SCENE, { backend: createMockBackend(), context: { state: ok() } });
-    expect(() => isMockNode(scene.byId.get('btn')!).clicks[0]()).toThrow(/#btn tml:on-click="play\(\)": имя «play» не определено/);
+    const e = thrown(() => isMockNode(scene.byId.get('btn')!).clicks[0]());
+    expect(e).toBeInstanceOf(ExpressionRuntimeError);
+    expect(e).toMatchObject({ code: 'E_EXPR_UNDEF' });
+    expect(e.message).toContain('#btn tml:on-click="play()":');
   });
 
   it('lenient: v0.5 silence — undefined is written, a failed click is swallowed; onError is still told', () => {
@@ -272,11 +279,13 @@ describe('runtime expression errors (v0.6.1)', () => {
   });
 
   it('a node without id is named by its tag', () => {
-    expect(() =>
+    const e = thrown(() =>
       mountScene(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"><text tml:bind="nope"/></svg>`, {
         backend: createMockBackend(),
         context: {},
       }),
-    ).toThrow('<text> tml:bind="nope": имя «nope» не определено в контексте');
+    );
+    expect(e).toMatchObject({ code: 'E_EXPR_UNDEF' });
+    expect(e.message).toContain('<text> tml:bind="nope":');
   });
 });

@@ -9,9 +9,13 @@
 // either <tml:ref id="..."> overrides of base nodes or ordinary SVG subtrees carrying
 // tml:insert. Structural validation of those directives lives in merge.ts — parseHeir only
 // extracts them (so every problem can be reported together, not one exception at a time).
+//
+// @internal — `@trempel/scene/internal/parser`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): parse, parseHeir, SceneNode, HeirDoc, HeirRef, HeirInsert, PrefabInstance, InstanceScope.
 
 import { DOMParser } from '@xmldom/xmldom';
 import { upgradeDocument } from './compat.js';
+import { trempelError } from './errors.js';
 
 /** A node of the parsed scene tree. */
 export interface SceneNode {
@@ -79,9 +83,9 @@ export const ALLOWED_TAGS: ReadonlySet<string> = new Set(['svg', 'g', 'image', '
 
 /** Tags people reach for that the format deliberately lacks — the error says what to use instead. */
 const HINTS: Record<string, string> = {
-  mask: 'мягкие маски (<mask>, альфа, градиент) — вне формата; только геометрическая <clipPath> + clip-path="url(#id)"',
-  polygon: 'используйте <path d="M … Z">',
-  polyline: 'используйте <path d="M … L …">',
+  mask: 'soft masks (<mask>, alpha, gradients) are outside the format; use a geometric <clipPath> + clip-path="url(#id)"',
+  polygon: 'use <path d="M … Z">',
+  polyline: 'use <path d="M … L …">',
 };
 
 const ELEMENT_NODE = 1;
@@ -94,7 +98,7 @@ const TEXT_NODE = 3;
 export function parse(svg: string): SceneNode {
   const root = parseXmlRoot(svg);
   if (root.nodeName !== 'svg') {
-    throw new Error(`Trempel parse error: root element must be <svg>, got <${root.nodeName}>`);
+    throw trempelError('E_ROOT', `the root element must be <svg>, got <${root.nodeName}>`);
   }
   return parseElement(root);
 }
@@ -138,7 +142,7 @@ export interface HeirDoc {
 export function parseHeir(svg: string): HeirDoc {
   const root = parseXmlRoot(svg);
   if (root.nodeName !== 'svg') {
-    throw new Error(`Trempel parse error: heir root must be <svg>, got <${root.nodeName}>`);
+    throw trempelError('E_ROOT', `the heir root must be <svg>, got <${root.nodeName}>`);
   }
 
   const extendsAttr = readAttrs(root).find((a) => a.name === 'tml:extends');
@@ -204,8 +208,22 @@ interface XmlElement extends XmlNode {
   childNodes: ArrayLike<XmlNode>;
 }
 
+/**
+ * A scene document never needs a DTD: `<!DOCTYPE` / `<!ENTITY` are refused before any XML parser
+ * sees them (entity expansion bombs, external entities) — `E_DOCTYPE`. Shared by every document
+ * of the format (base, heir, prefab, contract).
+ */
+export function refuseDoctype(src: string): void {
+  const m = /<!(DOCTYPE|ENTITY)\b/i.exec(src);
+  if (m) {
+    const line = src.slice(0, m.index).split('\n').length;
+    throw trempelError('E_DOCTYPE', `<!${m[1].toUpperCase()}> is not allowed in a scene document — it needs no DTD and entities are refused (line ${line})`);
+  }
+}
+
 /** Parse a string and return its validated root element. @throws on any XML failure. */
 function parseXmlRoot(src: string): XmlElement {
+  refuseDoctype(src);
   const errors: string[] = [];
   const parser = new DOMParser({
     onError: (level, message) => {
@@ -215,16 +233,16 @@ function parseXmlRoot(src: string): XmlElement {
 
   const doc = parser.parseFromString(upgradeDocument(src), 'text/xml');
   if (errors.length) {
-    throw new Error(`Trempel parse error: malformed XML — ${errors.join('; ')}`);
+    throw trempelError('E_XML', `malformed XML — ${errors.join('; ')}`);
   }
 
   const root = doc.documentElement as unknown as XmlElement | null;
   if (!root) {
-    throw new Error('Trempel parse error: document has no root element');
+    throw trempelError('E_XML', 'the document has no root element');
   }
   // Native DOMParser reports failures as a <parsererror> element; guard for that too.
   if (root.nodeName === 'parsererror') {
-    throw new Error(`Trempel parse error: ${(root.textContent ?? '').trim()}`);
+    throw trempelError('E_XML', (root.textContent ?? '').trim());
   }
   return root;
 }
@@ -243,11 +261,7 @@ function readAttrs(el: XmlElement): { name: string; value: string }[] {
 function parseElement(el: XmlElement): SceneNode {
   const tag = el.nodeName;
   if (!ALLOWED_TAGS.has(tag)) {
-    throw new Error(
-      `Trempel parse error: unsupported element <${tag}>. ` +
-        (HINTS[tag] ? `${HINTS[tag]}. ` : '') +
-        `Supported: ${[...ALLOWED_TAGS].join(', ')}.`,
-    );
+    throw trempelError('E_TAG', `unsupported element <${tag}>. ` + (HINTS[tag] ? `${HINTS[tag]}. ` : '') + `Supported: ${[...ALLOWED_TAGS].join(', ')}.`);
   }
 
   const attrs: Record<string, string> = {};

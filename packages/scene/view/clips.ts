@@ -10,7 +10,7 @@
 //
 // Stop (back to the rest pose) is the host's business: it reopens the scene.
 
-import { Animator, compileClipsResult, type AnimClip, type Handle, type MountedScene, type RendererBackend, type SceneNode } from '../src/core.js';
+import { Animator, compileClipsResult, within, type AnimClip, type Handle, type MountedScene, type RendererBackend, type SceneNode } from '../src/core.js';
 
 export interface SceneClip {
   name: string;
@@ -45,7 +45,7 @@ export function compileSceneClips(md: Record<string, string>, tree: SceneNode | 
   const errors: string[] = [];
   for (const [file, text] of Object.entries(md)) {
     const r = compileClipsResult(text, tree ?? undefined);
-    errors.push(...r.errors.map((e) => `${file}: ${e}`));
+    errors.push(...r.errors.map((e) => within(file, e)));
     for (const [name, clip] of Object.entries(r.clips)) clips.push({ name, file, clip, duration: clipDuration(clip) });
   }
   return { clips, errors };

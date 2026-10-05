@@ -5,7 +5,8 @@
 // Alt+click on the contour — path.insertPoint at the nearest t, Delete — path.removePoint, double
 // click on an anchor — path.setNodeType, C / O — path.close / path.open, Esc / Enter — leave.
 
-import { parsePathData } from '../../src/core.js';
+import { coded } from '../../src/core.js';
+import { parsePathData } from '../../src/geom/pathdata.js';
 import { anchorPoints, handlesAt, nodeTypeAt, segmentCurves, setHandle, setPoint, subpathAt, toEditCmds, type EditCmd } from '../../editor/path.js';
 import { apply, invert, multiply, nodeWorld, type Matrix, type Pt } from '../geometry';
 import type { Editor } from './editor';
@@ -197,7 +198,7 @@ export class PathTool {
     const y = r2(d.to.y);
     if (t.tag === 'line') {
       const [kx, ky] = d.index === 0 ? ['x1', 'y1'] : ['x2', 'y2'];
-      this.ed.batch('точка линии', [
+      this.ed.batch('line point', [
         { name: 'node.setAttr', args: { node: ref, name: kx, value: x } },
         { name: 'node.setAttr', args: { node: ref, name: ky, value: y } },
       ]);
@@ -209,7 +210,7 @@ export class PathTool {
   /** Alt+click on the contour: a point at the nearest t of the nearest segment. */
   private insertAt(e: PointerEvent, t: NonNullable<ReturnType<PathTool['target']>>): void {
     if (t.tag !== 'path') {
-      this.ed.log('warn', 'у <line> только две точки — для изгиба нужен <path>');
+      this.ed.log('warn', coded('W_EDIT_SELECTION', 'a <line> has only two points — a curve needs a <path>'));
       return;
     }
     const r = this.root.getBoundingClientRect();

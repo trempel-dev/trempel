@@ -82,8 +82,8 @@ describe('view:shot — headless', () => {
     const one = shot('examples/motion/scene.tml.svg', '--clip', 'nope', '--t', '1', '--out', join(tmp, 'one.png'));
     expect(one.code).toBe(1);
     expect(one.json.errors.map((e) => e.kind)).toEqual(['clips']);
-    expect(one.json.errors[0].message).toMatch(/клипа «nope» у сцены нет \(есть: fly, idle, wave/);
-    expect(shot('examples/motion/scene.tml.svg', '--t', '1').json.errors[0].message).toMatch(/--t без --clip/);
+    expect(one.json.errors[0].message).toMatch(/^E_ANIM_UNKNOWN: .*"nope".*fly, idle, wave/);
+    expect(shot('examples/motion/scene.tml.svg', '--t', '1').json.errors[0].message).toMatch(/^E_CLI: --t without --clip/);
   }, 120_000);
 
   it('examples/finddiff (v0.9.1: a folder stands for its scene; <use> prefab, hidden zones): no errors, exit 0', () => {
@@ -132,7 +132,7 @@ describe('view:shot — headless', () => {
     const { code, json } = shot('test/fixtures/view/broken.svg', '--out', out);
     expect(code).toBe(1);
     expect(json.errors.map((e) => e.kind).sort()).toEqual(['contract', 'runtime']);
-    expect(json.errors.find((e) => e.kind === 'runtime')!.message).toBe('#label tml:bind="state.box.n": чтение поля «n» у null');
+    expect(json.errors.find((e) => e.kind === 'runtime')!.message).toMatch(/^E_EXPR_FIELD: #label tml:bind="state.box.n": .*"n".*null/);
     expect(json.warnings.map((w) => w.kind)).toEqual(['context']);
     expect(pngSize(out)).toEqual({ w: 400, h: 300 });
   }, 120_000);

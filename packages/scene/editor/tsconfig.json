@@ -5,7 +5,8 @@
     "lib": ["ES2022"],
     "types": ["node"],
     "paths": {
-      "@trempel/scene/core": ["../src/core.ts"]
+      "@trempel/scene/core": ["../src/core.ts"],
+      "@trempel/scene/internal/*": ["../src/*"]
     }
   },
   "include": ["**/*.ts"],

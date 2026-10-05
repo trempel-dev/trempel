@@ -1,7 +1,10 @@
 // easing.ts — named easing curves + arbitrary cubic-bezier.
 // All easing functions map progress p in [0,1] to an eased value with e(0)=0, e(1)=1.
+//
+// @internal — `@trempel/scene/internal/anim/easing`, for the kit and the editor: no stability promise.
 
 import type { Ease, EaseName } from './types.js';
+import { trempelError } from '../errors.js';
 
 const c1 = 1.70158;
 const c3 = c1 + 1;
@@ -80,6 +83,6 @@ export function resolveEase(ease?: Ease): EaseFn {
   if (!ease) return NAMED.linear;
   if (Array.isArray(ease)) return cubicBezier(ease[0], ease[1], ease[2], ease[3]);
   const fn = Object.prototype.hasOwnProperty.call(NAMED, ease) ? NAMED[ease] : undefined;
-  if (!fn) throw new Error(`Trempel easing error: unknown ease "${ease}"`);
+  if (!fn) throw trempelError('E_ANIM_EASE', `unknown ease "${ease}"`);
   return fn;
 }

@@ -20,6 +20,7 @@
 
 import type { HeirDoc, SceneNode } from './parser.js';
 import { TrempelError } from './errors.js';
+import { coded } from './codes.js';
 import { baseTmlErrors, collectIds, duplicateIdErrors, parentMap } from './tree.js';
 
 export interface MergeOutcome {
@@ -51,7 +52,7 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
   // 2. Duplicate ids: base nodes plus everything the heir's inserts introduce.
   const baseIds = collectIds(base);
   const insertIds = heir.inserts.flatMap((ins) => collectIds(ins.node));
-  errors.push(...duplicateIdErrors([...baseIds, ...insertIds].map((e) => e.id), 'базе/наследнике'));
+  errors.push(...duplicateIdErrors([...baseIds, ...insertIds].map((e) => e.id), 'the base and the heir'));
 
   // First-wins lookup for ref/insert targeting (duplicates already reported above).
   const byId = new Map<string, SceneNode>();
@@ -66,33 +67,30 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
   const seenRefs = new Set<string>();
   for (const ref of heir.refs) {
     if (ref.id == null) {
-      errors.push('<tml:ref> без атрибута id — ref обязан указывать id узла базы.');
+      errors.push(coded('E_REF_NO_ID', '<tml:ref> without an id — a ref names the id of a base node.'));
       continue;
     }
     if (ref.foreign.length) {
-      errors.push(
-        `<tml:ref id="${ref.id}">: не-tml атрибут(ы) ${ref.foreign.join(', ')} запрещены — ` +
-          `геометрию и стиль правят в базе.`,
-      );
+      errors.push(coded('E_REF_FOREIGN', `<tml:ref id="${ref.id}">: non-tml attribute(s) ${ref.foreign.join(', ')} are not allowed — geometry and style are edited in the base.`));
     }
     if (seenRefs.has(ref.id)) {
-      errors.push(`<tml:ref id="${ref.id}"> встречается более одного раза.`);
+      errors.push(coded('E_REF_TWICE', `<tml:ref id="${ref.id}"> occurs more than once.`));
     }
     seenRefs.add(ref.id);
 
     const target = byId.get(ref.id);
     if (!target) {
-      errors.push(`<tml:ref id="${ref.id}">: узла с таким id нет в базе.`);
+      errors.push(coded('E_REF_MISSING', `<tml:ref id="${ref.id}">: no such id in the base.`));
       continue;
     }
     if (inDefs(target)) {
-      errors.push(`<tml:ref id="${ref.id}">: узел в <defs> — служебная геометрия не биндится.`);
+      errors.push(coded('E_REF_DEFS', `<tml:ref id="${ref.id}">: the node is in <defs> — service geometry is not bound.`));
       continue;
     }
     for (const [k, v] of Object.entries(ref.tml)) {
       if (k === 'href') {
         if (target.tag !== 'image') {
-          errors.push(`<tml:ref id="${ref.id}" tml:href>: подменить href можно только у <image>, а это <${target.tag}>.`);
+          errors.push(coded('E_REF_HREF', `<tml:ref id="${ref.id}" tml:href>: only an <image> can swap its href, this is <${target.tag}>.`));
         } else {
           target.attrs.href = opts.href ? opts.href(v) : v;
         }
@@ -107,7 +105,7 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
   for (const ins of heir.inserts) {
     const m = INSERT_RE.exec(ins.raw.trim());
     if (!m) {
-      errors.push(`tml:insert="${ins.raw}": ожидается 'after <id>' или 'into <id>'.`);
+      errors.push(coded('E_INSERT_SYNTAX', `tml:insert="${ins.raw}": expected 'after <id>' or 'into <id>'.`));
       continue;
     }
     const mode = m[1] as 'after' | 'into';
@@ -117,8 +115,8 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
       const idlessDefs = targetId === 'defs' && base.children.some((c) => c.tag === 'defs' && !c.attrs.id);
       errors.push(
         idlessDefs
-          ? `tml:insert="${ins.raw}": вставка в defs без id — дайте <defs> базы id (например id="defs").`
-          : `tml:insert="${ins.raw}": узла "${targetId}" нет в базе.`,
+          ? coded('E_INSERT_TARGET', `tml:insert="${ins.raw}": an insert into an id-less <defs> — give the base's <defs> an id (e.g. id="defs").`)
+          : coded('E_INSERT_TARGET', `tml:insert="${ins.raw}": the base has no node "${targetId}".`),
       );
       continue;
     }
@@ -127,7 +125,7 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
     } else {
       const parent = parents.get(target);
       if (!parent) {
-        errors.push(`tml:insert="${ins.raw}": у корневого узла нет родителя для вставки after.`);
+        errors.push(coded('E_INSERT_ROOT', `tml:insert="${ins.raw}": the root has no parent to insert after it.`));
         continue;
       }
       const idx = parent.children.indexOf(target);
@@ -137,10 +135,7 @@ export function mergeScene(base: SceneNode, heir: HeirDoc, opts: MergeOptions = 
 
   // 5. Heir children that fit neither shape.
   for (const stray of heir.strays) {
-    errors.push(
-      `Элемент наследника <${stray.tag}> — не <tml:ref> и без tml:insert; ` +
-        `дети наследника должны быть ref'ом или insert-поддеревом.`,
-    );
+    errors.push(coded('E_HEIR_STRAY', `heir element <${stray.tag}> is neither a <tml:ref> nor carries tml:insert; children of the heir are refs or insert subtrees.`));
   }
 
   return { tree: base, errors };

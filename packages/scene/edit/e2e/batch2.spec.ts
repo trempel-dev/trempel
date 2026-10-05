@@ -164,10 +164,10 @@ describe('editor e2e — batch 2: clips, reference, onion, snapshot (examples/mo
     async () => {
       await e.page.evaluate(() => window.tml!.reference.set('scene.mockup.png', { opacity: 50, over: false }));
       const r = await e.page.evaluate(() => window.tml!.macros.run('similarity'));
-      expect(String(r)).toMatch(/^среднее \d\.\d{3} по \d+; ниже 0\.85: /);
+      expect(String(r)).toMatch(/\d\.\d{3}\D+\d+\D+0\.85: /);
       const out = await e.page.textContent('#console-out');
-      expect(out).toContain('эталон scene.mockup.png, рендер 800×500');
-      expect(out).toMatch(/узел\s+сходство/);
+      expect(out).toContain('scene.mockup.png');
+      expect(out).toContain('800×500');
       expect(out).toMatch(/birdImg\s+\d\.\d{3}/);
     },
     T,
@@ -201,13 +201,13 @@ describe('editor e2e — batch 2: clips, reference, onion, snapshot (examples/mo
   );
 
   it(
-    '«снимок для видео» writes renders/scene-<time>.png: viewBox 1:1, rest pose, the background of the setting',
+    'the video snapshot writes renders/scene-<time>.png: viewBox 1:1, rest pose, the background of the setting',
     async () => {
       await e.page.evaluate(() => window.tml!.anim.play('wave'));
       await e.page.fill('#shot-bg', '#00ff00');
       await e.page.dispatchEvent('#shot-bg', 'change');
       await e.page.click('#shot-take');
-      await e.page.waitForFunction(() => window.tmlEdit!.logs.some((l) => l.text.startsWith('снимок для видео: renders/')), null, { timeout: 30_000 });
+      await e.page.waitForFunction(() => window.tmlEdit!.logs.some((l) => l.text.startsWith('video snapshot: renders/')), null, { timeout: 30_000 });
       expect(await e.page.evaluate(() => window.tmlEdit!.readOnly)).toBeNull(); // the clip was stopped
       const files = existsSync(join(dir, 'renders')) ? readdirSync(join(dir, 'renders')) : [];
       expect(files).toHaveLength(1);

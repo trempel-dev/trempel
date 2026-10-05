@@ -8,6 +8,7 @@
 
 import { Assets, Sprite, type Texture } from 'pixi.js';
 import type { SceneIO } from '../io';
+import { coded, codeOf, within } from '../../src/core.js';
 import type { Editor } from './editor';
 import { viewBoxOf, type Pixels, type SceneBox } from './snapshot';
 
@@ -112,7 +113,7 @@ export class Reference {
       this.sprite.texture = texture;
       this.place();
     } catch (e) {
-      this.ed.log('error', `эталон ${file}: ${msg(e)}`);
+      this.ed.log('error', within(`reference ${file}`, codeOf(msg(e)) ? msg(e) : coded('E_EDIT_REFERENCE', msg(e))));
       this.sprite = null;
     }
     this.changed();

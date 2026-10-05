@@ -44,6 +44,7 @@
 
 import { parse as parseMd, type Block } from '../md/index.js';
 import { TrempelError } from '../errors.js';
+import { coded, within } from '../codes.js';
 import { GEOMETRY_TAGS } from '../geom/pathdata.js';
 import type { SceneNode } from '../parser.js';
 import { parseTint, parseViews, singleImage } from '../props.js';
@@ -85,7 +86,7 @@ function parseTable(body: string, where: string, errors: string[]): Table | null
   const lines = body.split(/\r?\n/).map((l) => l.trim());
   const rowsAt = lines.map((l, i) => ({ l, i })).filter(({ l }) => l.startsWith('|'));
   if (!rowsAt.length) {
-    errors.push(`${where}: нет таблицы ключей (| t | … |).`);
+    errors.push(coded('E_ANIM_SYNTAX', `${where}: no key table (| t | … |).`));
     return null;
   }
   const split = (l: string): string[] => {
@@ -95,7 +96,7 @@ function parseTable(body: string, where: string, errors: string[]): Table | null
   const columns = split(rowsAt[0].l);
   const sep = rowsAt[1];
   if (!sep || !split(sep.l).every((c) => /^:?-{1,}:?$/.test(c))) {
-    errors.push(`${where}: под заголовком таблицы нужна строка |---|---|.`);
+    errors.push(coded('E_ANIM_SYNTAX', `${where}: the table header needs a |---|---| row under it.`));
     return null;
   }
   const rows: Table['rows'] = [];
@@ -137,7 +138,7 @@ function texTemplate(raw: string | undefined, where: string, errors: string[]): 
   if (raw === undefined) return null;
   const tpl = raw.trim();
   if (!tpl.includes('{}')) {
-    errors.push(`${where}: $tex: «${raw}» — шаблон без {} (например art/{}.png; имя по одному — таблица ## $tex | name | href |).`);
+    errors.push(coded('E_ANIM_TEX', `${where}: $tex: "${raw}" — a template without {} (e.g. art/{}.png; one name at a time — a ## $tex | name | href | table).`));
     return null;
   }
   return (name) => tpl.replaceAll('{}', name);
@@ -149,16 +150,16 @@ function texTable(block: Block, where: string, errors: string[]): Map<string, st
   const table = parseTable(bodyText(block), where, errors);
   if (!table) return out;
   if (!table.columns.includes('name') || !table.columns.includes('href')) {
-    errors.push(`${where}: нужны колонки name и href.`);
+    errors.push(coded('E_ANIM_TEX', `${where}: the table needs the columns name and href.`));
     return out;
   }
   for (const row of table.rows) {
     const { name, href } = row.cells;
     if (!name || !href) {
-      errors.push(`${where}, строка ${row.line}: пустое ${!name ? 'name' : 'href'}.`);
+      errors.push(coded('E_ANIM_TEX', `${where}, row ${row.line}: empty ${!name ? 'name' : 'href'}.`));
       continue;
     }
-    if (out.has(name)) errors.push(`${where}, строка ${row.line}: имя «${name}» дважды.`);
+    if (out.has(name)) errors.push(coded('E_ANIM_TEX', `${where}, row ${row.line}: the name "${name}" twice.`));
     out.set(name, href);
   }
   return out;
@@ -196,34 +197,34 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
   try {
     doc = parseMd(md);
   } catch (e) {
-    return { clips, errors: [`клипы не разобрать как md-клипы: ${(e as Error).message}`] };
+    return { clips, errors: [coded('E_ANIM_SYNTAX', `cannot read the md clips: ${(e as Error).message}`)] };
   }
 
   // File-level $tex (an attribute before the first clip).
-  const fileTex = texTemplate(attrText(doc.root, 'tex'), 'файл', errors);
+  const fileTex = texTemplate(attrText(doc.root, 'tex'), 'file', errors);
 
   for (const block of doc.root.children) {
     if (block.name !== 'clip') {
-      errors.push(`блок $${block.name}${block.id ? ` ${block.id}` : ''} на верхнем уровне — ожидается # $clip <имя>.`);
+      errors.push(coded('E_ANIM_SYNTAX', `block $${block.name}${block.id ? ` ${block.id}` : ''} at the top level — expected # $clip <name>.`));
       continue;
     }
     const name = block.id;
     if (!name) {
-      errors.push('# $clip без имени — нужно # $clip <имя>.');
+      errors.push(coded('E_ANIM_SYNTAX', '# $clip without a name — write # $clip <name>.'));
       continue;
     }
-    if (clips[name]) errors.push(`$clip ${name}: имя встречается дважды.`);
+    if (clips[name]) errors.push(coded('E_ANIM_TWICE', `$clip ${name}: the name occurs twice.`));
     const cw = `$clip ${name}`;
     for (const a of block.attrs) {
       const k = a.key.join('.');
-      if (!CLIP_ATTRS.has(k)) errors.push(`${cw}: неизвестный атрибут $${k} (есть: $duration, $loop, $tex).`);
+      if (!CLIP_ATTRS.has(k)) errors.push(coded('E_ANIM_SYNTAX', `${cw}: unknown attribute $${k} (attributes: $duration, $loop, $tex).`));
     }
     const clipTex = texTemplate(attrText(block, 'tex'), cw, errors);
     const texNames = new Map<string, string>();
     for (const sub of block.children) {
       if (sub.name !== 'tex') continue;
       for (const [k, v] of texTable(sub, `${cw} / $tex`, errors)) {
-        if (texNames.has(k)) errors.push(`${cw} / $tex: имя «${k}» дважды.`);
+        if (texNames.has(k)) errors.push(coded('E_ANIM_TEX', `${cw} / $tex: the name "${k}" twice.`));
         texNames.set(k, v);
       }
     }
@@ -232,12 +233,12 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
     let duration: number | undefined;
     if (durRaw !== undefined) {
       duration = Number(durRaw);
-      if (!(duration > 0)) errors.push(`${cw}: $duration="${durRaw}" — нужно положительное число секунд.`);
+      if (!(duration > 0)) errors.push(coded('E_ANIM_VALUE', `${cw}: $duration="${durRaw}" — expected a positive number of seconds.`));
       else clip.duration = duration;
     }
     const loopRaw = attrText(block, 'loop');
     if (loopRaw !== undefined) {
-      if (loopRaw !== 'true' && loopRaw !== 'false') errors.push(`${cw}: $loop="${loopRaw}" — true или false.`);
+      if (loopRaw !== 'true' && loopRaw !== 'false') errors.push(coded('E_ANIM_VALUE', `${cw}: $loop="${loopRaw}" — expected true or false.`));
       else if (loopRaw === 'true') clip.loop = true;
     }
 
@@ -249,58 +250,58 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
         const table = parseTable(bodyText(sub), tw, errors);
         if (!table) continue;
         if (!table.columns.includes('t') || !table.columns.includes('event')) {
-          errors.push(`${tw}: нужны колонки t и event.`);
+          errors.push(coded('E_ANIM_COLUMN', `${tw}: the table needs the columns t and event.`));
           continue;
         }
         const markers: Marker[] = clip.markers ?? [];
         for (const row of table.rows) {
           const t = Number(row.cells.t);
           if (row.cells.t === '' || !Number.isFinite(t) || t < 0) {
-            errors.push(`${tw}, строка ${row.line}: t="${row.cells.t}" — нужно число секунд ≥ 0.`);
+            errors.push(coded('E_ANIM_TIME', `${tw}, row ${row.line}: t="${row.cells.t}" — expected seconds ≥ 0.`));
             continue;
           }
           if (!row.cells.event) {
-            errors.push(`${tw}, строка ${row.line}: пустое имя события.`);
+            errors.push(coded('E_ANIM_VALUE', `${tw}, row ${row.line}: an empty event name.`));
             continue;
           }
-          if (duration !== undefined && t > duration + 1e-9) errors.push(`${tw}: событие на ${t} с — позже $duration ${duration}.`);
+          if (duration !== undefined && t > duration + 1e-9) errors.push(coded('E_ANIM_TIME', `${tw}: an event at ${t} s — past $duration ${duration}.`));
           markers.push({ t, name: row.cells.event });
         }
         clip.markers = markers.sort((a, b) => a.t - b.t);
         continue;
       }
       if (sub.name !== 'track') {
-        errors.push(`${cw}: блок $${sub.name} не бывает в клипе (есть: $track <id>, $events, $tex).`);
+        errors.push(coded('E_ANIM_SYNTAX', `${cw}: a clip has no block $${sub.name} (blocks: $track <id>, $events, $tex).`));
         continue;
       }
       const target = sub.id;
       if (!target) {
-        errors.push(`${cw}: ## $track без id цели.`);
+        errors.push(coded('E_ANIM_SYNTAX', `${cw}: ## $track without a target id.`));
         continue;
       }
       const tw = `${cw} / $track ${target}`;
       for (const a of sub.attrs) {
         const k = a.key.join('.');
-        if (!TRACK_ATTRS.has(k)) errors.push(`${tw}: неизвестный атрибут $${k} (есть: $path, $orient, $orient-offset, $offset, $tex).`);
+        if (!TRACK_ATTRS.has(k)) errors.push(coded('E_ANIM_SYNTAX', `${tw}: unknown attribute $${k} (attributes: $path, $orient, $orient-offset, $offset, $tex).`));
       }
       const table = parseTable(bodyText(sub), tw, errors);
       if (!table) continue;
       const unknown = table.columns.filter((c) => !COLUMNS.has(c));
-      if (unknown.length) errors.push(`${tw}: неизвестные колонки ${unknown.join(', ')} (есть: ${[...COLUMNS].join(', ')}).`);
+      if (unknown.length) errors.push(coded('E_ANIM_COLUMN', `${tw}: unknown column(s) ${unknown.join(', ')} (columns: ${[...COLUMNS].join(', ')}).`));
       if (!table.columns.includes('t')) {
-        errors.push(`${tw}: нет колонки t.`);
+        errors.push(coded('E_ANIM_COLUMN', `${tw}: no t column.`));
         continue;
       }
       const cols = new Set(table.columns);
       if (cols.has('scale') && (cols.has('scaleX') || cols.has('scaleY'))) {
-        errors.push(`${tw}: scale и scaleX/scaleY в одной таблице — выберите одно.`);
+        errors.push(coded('E_ANIM_COLUMN', `${tw}: scale and scaleX/scaleY in one table — choose one.`));
       }
 
       // Scene target checks ($param targets are bound at play time).
       const sceneTarget = ids && !target.startsWith('$') ? ids.get(target) : undefined;
       if (ids && !target.startsWith('$')) {
-        if (!sceneTarget) errors.push(`${tw}: узла #${target} в сцене нет.`);
-        else if (sceneTarget.inDefs) errors.push(`${tw}: #${target} в <defs> — служебная геометрия не анимируется.`);
+        if (!sceneTarget) errors.push(coded('E_ANIM_TARGET', `${tw}: the scene has no node #${target}.`));
+        else if (sceneTarget.inDefs) errors.push(coded('E_ANIM_TARGET', `${tw}: #${target} is in <defs> — service geometry is not animated.`));
       }
 
       // Times: numbers, ascending.
@@ -309,13 +310,13 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
       table.rows.forEach((row, i) => {
         const t = Number(row.cells.t);
         if (row.cells.t === '' || !Number.isFinite(t) || t < 0) {
-          errors.push(`${tw}, строка ${row.line}: t="${row.cells.t}" — нужно число секунд ≥ 0.`);
+          errors.push(coded('E_ANIM_TIME', `${tw}, row ${row.line}: t="${row.cells.t}" — expected seconds ≥ 0.`));
           timesOk = false;
         } else if (i > 0 && t <= times[i - 1]) {
-          errors.push(`${tw}, строка ${row.line}: t=${t} — времена должны идти по возрастанию.`);
+          errors.push(coded('E_ANIM_TIME', `${tw}, row ${row.line}: t=${t} — times must ascend.`));
           timesOk = false;
         } else if (duration !== undefined && t > duration + 1e-9) {
-          errors.push(`${tw}, строка ${row.line}: t=${t} позже $duration ${duration}.`);
+          errors.push(coded('E_ANIM_TIME', `${tw}, row ${row.line}: t=${t} is past $duration ${duration}.`));
         }
         times.push(t);
       });
@@ -327,7 +328,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
         if (!raw) return undefined;
         const e = parseEase(raw);
         if (!e) {
-          errors.push(`${tw}, строка ${row.line}: ease «${raw}» неизвестен (есть: ${Object.keys(NAMED).join(', ')} или [x1,y1,x2,y2]).`);
+          errors.push(coded('E_ANIM_EASE', `${tw}, row ${row.line}: unknown ease "${raw}" (eases: ${Object.keys(NAMED).join(', ')} or [x1,y1,x2,y2]).`));
           return undefined;
         }
         return e;
@@ -355,7 +356,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
       const numeric = (col: string, scale = 1) => (raw: string, line: number): number | null => {
         const v = Number(raw);
         if (!Number.isFinite(v)) {
-          errors.push(`${tw}, строка ${line}: ${col}="${raw}" — не число.`);
+          errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: ${col}="${raw}" — not a number.`));
           return null;
         }
         return v * scale;
@@ -363,7 +364,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
 
       const push = (tr: Track): void => {
         const key = `${tr.target}.${tr.property}`;
-        if (seen.has(key)) errors.push(`${tw}: свойство ${tr.property} у #${target} задано дважды в одном клипе.`);
+        if (seen.has(key)) errors.push(coded('E_ANIM_TWICE', `${tw}: the property ${tr.property} of #${target} is keyed twice in one clip.`));
         seen.add(key);
         // Stable field order for a readable anim.json: what, how, then keys.
         const { keys, ...head } = tr;
@@ -375,20 +376,20 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
       const orientOffset = attrText(sub, 'orient-offset');
       const offset = attrText(sub, 'offset');
       const hasMotion = cols.has('motion');
-      if (pathId !== undefined && !hasMotion) errors.push(`${tw}: $path без колонки motion — движению нечем управлять.`);
-      if (hasMotion && pathId === undefined) errors.push(`${tw}: колонка motion без $path.`);
+      if (pathId !== undefined && !hasMotion) errors.push(coded('E_ANIM_MOTION', `${tw}: $path without a motion column — nothing drives the motion.`));
+      if (hasMotion && pathId === undefined) errors.push(coded('E_ANIM_MOTION', `${tw}: a motion column without $path.`));
       const trackTexRaw = attrText(sub, 'tex');
-      if (trackTexRaw !== undefined && !cols.has('tex')) errors.push(`${tw}: $tex без колонки tex — подменять нечего.`);
+      if (trackTexRaw !== undefined && !cols.has('tex')) errors.push(coded('E_ANIM_TEX', `${tw}: $tex without a tex column — nothing to swap.`));
       const trackTex = texTemplate(trackTexRaw, tw, errors);
       /** tex cell → href: --tex (override) → the track's template → the clip's table → clip → file template → as is. */
       const tex = (name: string): string =>
         opts.tex ? opts.tex(name) : trackTex ? trackTex(name) : texNames.get(name) ?? (clipTex ?? fileTex ?? ((n: string) => n))(name);
       if (!hasMotion && (orient !== undefined || orientOffset !== undefined || offset !== undefined)) {
-        errors.push(`${tw}: $orient/$orient-offset/$offset — только у трека с motion.`);
+        errors.push(coded('E_ANIM_MOTION', `${tw}: $orient/$orient-offset/$offset — only on a track with motion.`));
       }
-      if (hasMotion && (cols.has('x') || cols.has('y'))) errors.push(`${tw}: motion и x/y в одном треке — путь сам ставит x и y.`);
+      if (hasMotion && (cols.has('x') || cols.has('y'))) errors.push(coded('E_ANIM_MOTION', `${tw}: motion and x/y in one track — the path sets x and y itself.`));
       if (hasMotion && orient === 'auto' && cols.has('rotation')) {
-        errors.push(`${tw}: motion с $orient: auto и колонка rotation — поворот задаёт путь.`);
+        errors.push(coded('E_ANIM_MOTION', `${tw}: motion with $orient: auto and a rotation column — the path sets the rotation.`));
       }
 
       for (const col of table.columns) {
@@ -427,11 +428,11 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
               const v = numeric(col)(raw, line);
               if (v === null) return null;
               if (col === 'strokeWidth' && v < 0) {
-                errors.push(`${tw}, строка ${line}: strokeWidth="${raw}" — толщина не бывает отрицательной.`);
+                errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: strokeWidth="${raw}" — a width cannot be negative.`));
                 return null;
               }
               if (col === 'strokeAlpha' && (v < 0 || v > 1)) {
-                errors.push(`${tw}, строка ${line}: strokeAlpha="${raw}" — от 0 до 1.`);
+                errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: strokeAlpha="${raw}" — expected 0 to 1.`));
                 return null;
               }
               return v;
@@ -439,9 +440,9 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
             if (sceneTarget && !sceneTarget.inDefs) {
               const n = sceneTarget.node;
               if (!GEOMETRY_TAGS.has(n.tag)) {
-                errors.push(`${tw}: ${col} — #${target} это <${n.tag}>, обводка анимируется у ${[...GEOMETRY_TAGS].join(', ')}.`);
+                errors.push(coded('E_ANIM_TARGET', `${tw}: ${col} — #${target} is <${n.tag}>; strokes animate on ${[...GEOMETRY_TAGS].join(', ')}.`));
               } else if (col === 'dash' && (n.attrs['stroke-dasharray'] == null || n.attrs['stroke-dasharray'].trim() === 'none')) {
-                errors.push(`${tw}: dash — у #${target} нет stroke-dasharray, сдвигать нечего.`);
+                errors.push(coded('E_ANIM_TARGET', `${tw}: dash — #${target} has no stroke-dasharray, nothing to shift.`));
               }
             }
             push({ target, property: STROKE_COLUMNS[col], keys: keysOf(col, value) });
@@ -455,17 +456,17 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
               if (n.instance) {
                 if (!n.instance.resizable?.includes(axis)) {
                   errors.push(
-                    `${tw}: ${col} — ${n.instance.href} ${n.instance.resizable ? `растягивается только по ${n.instance.resizable}` : 'не растягиваемый (нет data-resizable)'}.`,
+                    coded('E_ANIM_TARGET', `${tw}: ${col} — ${n.instance.href} ${n.instance.resizable ? `resizes only along ${n.instance.resizable}` : 'is not resizable (no data-resizable)'}.`),
                   );
                 }
               } else if (n.tag !== 'image' || n.attrs['data-slices'] == null) {
-                errors.push(`${tw}: ${col} — width/height анимируются только у data-slices (и у инстансов растягиваемых префабов), а #${target} это <${n.tag}>${n.tag === 'image' ? ' без data-slices' : ''}.`);
+                errors.push(coded('E_ANIM_TARGET', `${tw}: ${col} — width/height animate only on data-slices (and instances of resizable prefabs), #${target} is <${n.tag}>${n.tag === 'image' ? ' without data-slices' : ''}.`));
               }
             }
             const size = (raw: string, line: number): number | null => {
               const v = numeric(col)(raw, line);
               if (v !== null && v < 0) {
-                errors.push(`${tw}, строка ${line}: ${col}="${raw}" — размер не бывает отрицательным.`);
+                errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: ${col}="${raw}" — a size cannot be negative.`));
                 return null;
               }
               return v;
@@ -478,7 +479,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
               try {
                 return parseTint(raw);
               } catch {
-                errors.push(`${tw}, строка ${line}: tint="${raw}" — ожидается цвет #rrggbb.`);
+                errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: tint="${raw}" — expected a colour #rrggbb.`));
                 return null;
               }
             };
@@ -489,7 +490,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
             const int = (raw: string, line: number): number | null => {
               const v = Number(raw);
               if (!Number.isInteger(v)) {
-                errors.push(`${tw}, строка ${line}: z="${raw}" — нужно целое число.`);
+                errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: z="${raw}" — expected an integer.`));
                 return null;
               }
               return v;
@@ -500,17 +501,17 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
           case 'view': {
             // name → href by the data-views of the target's image (the scene is required).
             let views: Map<string, string> | null = null;
-            if (!ids) errors.push(`${tw}: колонка view — варианты берутся из data-views сцены; компилируйте со сценой.`);
+            if (!ids) errors.push(coded('E_ANIM_TARGET', `${tw}: the view column takes variants from the scene's data-views; compile with the scene.`));
             else if (sceneTarget && !sceneTarget.inDefs) {
               const img = singleImage(sceneTarget.node);
               const raw = img?.attrs['data-views'];
-              if (!img) errors.push(`${tw}: view — у #${target} нет единственной <image> (подменить можно, только когда картинка одна).`);
-              else if (raw == null) errors.push(`${tw}: view — у картинки #${target} нет data-views.`);
+              if (!img) errors.push(coded('E_ANIM_TARGET', `${tw}: view — #${target} has no single <image> (a picture can be swapped only when there is one).`));
+              else if (raw == null) errors.push(coded('E_ANIM_TARGET', `${tw}: view — the picture #${target} has no data-views.`));
               else {
                 try {
                   views = parseViews(raw);
                 } catch (e) {
-                  errors.push(`${tw}: ${(e as Error).message}`);
+                  errors.push(within(tw, (e as Error).message));
                 }
               }
             }
@@ -518,7 +519,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
               if (!views) return raw;
               const h = views.get(raw);
               if (h === undefined) {
-                errors.push(`${tw}, строка ${line}: view «${raw}» — в data-views #${target} нет (есть: ${[...views.keys()].join(', ')}).`);
+                errors.push(coded('E_ANIM_TARGET', `${tw}, row ${line}: view "${raw}" — not in the data-views of #${target} (views: ${[...views.keys()].join(', ')}).`));
                 return null;
               }
               return h;
@@ -532,7 +533,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
               const n = sceneTarget.node;
               const images = n.tag === 'image' ? 1 : countImages(n);
               if (images !== 1) {
-                errors.push(`${tw}: tex — у #${target} ${images} <image> внутри; подменить можно, только когда картинка одна.`);
+                errors.push(coded('E_ANIM_TARGET', `${tw}: tex — #${target} holds ${images} <image>; a picture can be swapped only when there is one.`));
               }
             }
             push({ target, property: 'href', keys });
@@ -542,24 +543,24 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
             if (pathId === undefined) break;
             const tr: Track = { target, property: 'motion', path: pathId, keys: keysOf(col, numeric(col)) };
             if (orient !== undefined) {
-              if (orient !== 'auto') errors.push(`${tw}: $orient="${orient}" — бывает только auto.`);
+              if (orient !== 'auto') errors.push(coded('E_ANIM_MOTION', `${tw}: $orient="${orient}" — only auto.`));
               else tr.orient = 'auto';
             }
             if (orientOffset !== undefined) {
               const d = Number(orientOffset);
-              if (!Number.isFinite(d)) errors.push(`${tw}: $orient-offset="${orientOffset}" — градусы числом.`);
+              if (!Number.isFinite(d)) errors.push(coded('E_ANIM_MOTION', `${tw}: $orient-offset="${orientOffset}" — expected degrees as a number.`));
               else if (d !== 0) tr.orientOffset = d * RAD;
             }
             if (offset !== undefined) {
               const parts = offset.split(/[\s,]+/).filter(Boolean).map(Number);
-              if (parts.length !== 2 || !parts.every(Number.isFinite)) errors.push(`${tw}: $offset="${offset}" — ожидается «dx, dy».`);
+              if (parts.length !== 2 || !parts.every(Number.isFinite)) errors.push(coded('E_ANIM_MOTION', `${tw}: $offset="${offset}" — expected "dx, dy".`));
               else tr.offset = [parts[0], parts[1]];
             }
             if (ids) {
               const p = ids.get(pathId);
-              if (!p) errors.push(`${tw}: $path ${pathId} — узла в сцене нет.`);
+              if (!p) errors.push(coded('E_ANIM_MOTION', `${tw}: $path ${pathId} — the scene has no such node.`));
               else if (!GEOMETRY_TAGS.has(p.node.tag)) {
-                errors.push(`${tw}: $path ${pathId} — это <${p.node.tag}>, путём может быть ${[...GEOMETRY_TAGS].join(', ')}.`);
+                errors.push(coded('E_ANIM_MOTION', `${tw}: $path ${pathId} — this is <${p.node.tag}>; a path is one of ${[...GEOMETRY_TAGS].join(', ')}.`));
               }
             }
             push(tr);

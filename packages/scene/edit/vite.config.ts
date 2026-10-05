@@ -11,7 +11,7 @@ import { findModule, trempelView } from '../view/plugin';
 const here = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
 
 const dir = process.env.TML_VIEW_DIR;
-if (!dir) throw new Error('TML_VIEW_DIR is not set — start the editor with `npm run edit -- <folder>`');
+if (!dir) throw new Error('E_CLI: TML_VIEW_DIR is not set — start the editor with `npm run edit -- <folder>`');
 const module = findModule(dir, process.env.TML_VIEW_MODULE || undefined) ?? undefined;
 
 export default defineConfig({
@@ -24,6 +24,7 @@ export default defineConfig({
     alias: [
       { find: /^@trempel\/scene\/view$/, replacement: here('../view/api.ts') },
       { find: /^@trempel\/scene\/core$/, replacement: here('../src/core.ts') },
+      { find: /^@trempel\/scene\/internal\/(.*)$/, replacement: `${here('../src/')}$1` },
       { find: /^@trempel\/scene$/, replacement: here('../src/index.ts') },
     ],
     dedupe: ['pixi.js'],

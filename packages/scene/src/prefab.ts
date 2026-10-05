@@ -27,8 +27,13 @@
 //
 // v1.1 collections: `@name/…` is a space of its own — a prefab at `@skin/button.svg` rebases its
 // relative hrefs to `@skin/art/…`, `url(rel)` (mount: collections → folder URLs) maps them to files.
+//
+// @internal — `@trempel/scene/internal/prefab`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): composeScene, preloadScenes, fetchSceneLoader, SceneSource, SceneLoader, AsyncSceneLoader, ComposeInput, Composed, ComposeErrors.
 
 import { readHeirAsync } from './compat.js';
+import { coded, within } from './codes.js';
+import { trempelError } from './errors.js';
 import { checkContract, parseContract, slotContractErrors, type Contract } from './contract.js';
 import { compile, ExpressionError } from './expr.js';
 import { resolveHref } from './href.js';
@@ -126,22 +131,22 @@ class Resolver {
   /** The documents at `rel`; null + an error when missing / unloadable. */
   source(rel: string, what: string, errs: string[]): SceneSource | null {
     if (!this.load) {
-      errs.push(`${what}: нет загрузчика сцен (MountOptions.loadScene) — ${rel} не загрузить.`);
+      errs.push(coded('E_PREFAB_LOADER', `${what}: no scene loader (MountOptions.loadScene) — ${rel} cannot be loaded.`));
       return null;
     }
     let src: ReturnType<SceneLoader>;
     try {
       src = this.load(this.url(rel));
     } catch (e) {
-      errs.push(`${what}: ${rel} не загрузился — ${(e as Error).message ?? String(e)}`);
+      errs.push(coded('E_PREFAB_MISSING', `${what}: ${rel} failed to load — ${(e as Error).message ?? String(e)}`));
       return null;
     }
     if (src && typeof (src as unknown as PromiseLike<unknown>).then === 'function') {
-      errs.push(`${what}: загрузчик асинхронный — используйте mountAsync() (или preloadScenes).`);
+      errs.push(coded('E_PREFAB_LOADER', `${what}: the scene loader is asynchronous — use mountAsync() (or preloadScenes).`));
       return null;
     }
     if (!src || (src.base == null && src.heir == null)) {
-      errs.push(`${what}: сцены ${rel} нет.`);
+      errs.push(coded('E_PREFAB_MISSING', `${what}: no scene ${rel}.`));
       return null;
     }
     return src;
@@ -163,7 +168,7 @@ class Resolver {
       try {
         contract = parseContract(src.contract);
       } catch (e) {
-        errs.parse.push(`контракт: ${(e as Error).message}`);
+        errs.parse.push(within('contract', (e as Error).message));
       }
     }
     let heir: HeirDoc | null = null;
@@ -171,7 +176,7 @@ class Resolver {
       try {
         heir = parseHeir(src.heir);
       } catch (e) {
-        errs.parse.push(`наследник: ${(e as Error).message}`);
+        errs.parse.push(within('heir', (e as Error).message));
       }
     }
     const ext = heir?.extends ? rebase(heir.extends, rel) : null;
@@ -183,27 +188,27 @@ class Resolver {
       try {
         tree = parse(src.base);
       } catch (e) {
-        errs.parse.push(`база: ${(e as Error).message}`);
+        errs.parse.push(within('base', (e as Error).message));
         return null;
       }
       if (ext && stack.length > 1 && ext !== rel) {
-        errs.prefab.push(`у ${rel} своя база, а наследник расширяет ${ext} — база одна: уберите файл базы или tml:extends.`);
+        errs.prefab.push(coded('E_EXTENDS_BASE', `${rel} has its own base, and its heir extends ${ext} — one base: remove the base file or tml:extends.`));
       }
       rebaseTree(tree, rel);
     } else if (ext) {
       if (ext === rel) {
-        errs.parse.push(`нет базы: наследник расширяет ${ext}, а такого файла нет.`);
+        errs.parse.push(coded('E_EXTENDS_MISSING', `no base: the heir extends ${ext}, and there is no such file.`));
         return null;
       }
       if (stack.includes(ext)) {
-        errs.prefab.push(`цикл tml:extends: ${[...stack, ext].join(' → ')}.`);
+        errs.prefab.push(coded('E_EXTENDS_CYCLE', `tml:extends cycle: ${[...stack, ext].join(' → ')}.`));
         return null;
       }
       const parent = this.source(ext, `tml:extends="${heir!.extends}"`, errs.prefab);
       if (!parent) return null;
       const sub = { prefab: [] as string[], merge: [] as string[], parse: [] as string[] };
       const r = this.doc(parent, ext, [...stack, ext], sub);
-      const tag = (e: string): string => `${ext}: ${e}`;
+      const tag = (e: string): string => within(ext, e);
       errs.prefab.push(...sub.parse.map(tag), ...sub.merge.map(tag), ...sub.prefab.map(tag));
       if (!r) return null;
       tree = r.tree;
@@ -213,8 +218,8 @@ class Resolver {
     } else {
       errs.parse.push(
         src.heir != null
-          ? 'нет базы: наследник без своей X.svg должен расширять другую сцену (tml:extends="other.svg").'
-          : 'нет базы — рисовать нечего.',
+          ? coded('E_EMPTY_SCENE', 'no base: an heir without its own X.svg must extend another scene (tml:extends="other.svg").')
+          : coded('E_EMPTY_SCENE', 'no base — nothing to draw.'),
       );
       return null;
     }
@@ -270,10 +275,10 @@ class Resolver {
         if (k !== 'x' && k !== 'y') g.attrs[k] = v;
       } else if (k === 'width' || k === 'height') {
         const n = /^\s*[+]?(\d+\.?\d*|\.\d+)\s*$/.test(v) ? Number(v) : NaN;
-        if (!(n > 0)) problems.push(`${where}: ${k}="${v}" — размер инстанса положительным числом.`);
+        if (!(n > 0)) problems.push(coded('E_USE_ATTR', `${where}: ${k}="${v}" — an instance size is a positive number.`));
         else size[k] = n;
       } else {
-        problems.push(`${where}: атрибут ${k} — инстанс настраивается параметрами (data-*) и трансформом.`);
+        problems.push(coded('E_USE_ATTR', `${where}: the attribute ${k} — an instance is configured by parameters (data-*) and transform.`));
       }
     }
     const x = use.attrs.x ?? '0';
@@ -281,18 +286,18 @@ class Resolver {
     if (Number(x) || Number(y)) {
       g.attrs.transform = [use.attrs.transform?.trim(), `translate(${x} ${y})`].filter(Boolean).join(' ');
     }
-    if (!id) problems.push(`${where}: инстанс без id — по id его адресуют наследник и контракт.`);
-    if (!href) problems.push(`${where}: нет href — какой префаб ставить.`);
-    if (use.text) problems.push(`${where}: текст внутри <use> не бывает — дети инстанса это узлы для слотов префаба.`);
+    if (!id) problems.push(coded('E_USE_NO_ID', `${where}: an instance without an id — the heir and the contract address it by id.`));
+    if (!href) problems.push(coded('E_USE_NO_HREF', `${where}: no href — which prefab to place?`));
+    if (use.text) problems.push(coded('E_TEXT', `${where}: text inside <use> — the children of an instance are nodes for the prefab's slots.`));
     for (const k of Object.keys(own)) {
       const name = paramName(k);
-      if (SELF_RESERVED.has(name)) problems.push(`${where}: параметр ${k} — имя self.${name} занято.`);
+      if (SELF_RESERVED.has(name)) problems.push(coded('E_PARAM_RESERVED', `${where}: the parameter ${k} — the name self.${name} is taken.`));
       if (own[k].startsWith('=')) {
         try {
           compile(own[k].slice(1));
         } catch (e) {
           if (!(e instanceof ExpressionError)) throw e;
-          problems.push(`${where} ${k}: ${e.reason}, позиция ${e.pos + 2}.`);
+          problems.push(coded(e.code, `${where} ${k}: ${e.reason} (col ${e.pos + 2}).`));
         }
       }
     }
@@ -303,14 +308,14 @@ class Resolver {
 
     const prel = rebase(href, TOP); // already in the top scene's space (rebaseTree)
     if (stack.includes(prel)) {
-      errs.push(`${where}: цикл префабов: ${[...stack, prel].join(' → ')}.`);
+      errs.push(coded('E_PREFAB_CYCLE', `${where}: prefab cycle: ${[...stack, prel].join(' → ')}.`));
       return g;
     }
     const sub = { prefab: [] as string[], merge: [] as string[], parse: [] as string[] };
-    const src = this.source(prel, `${where}: префаб ${href}`, errs);
+    const src = this.source(prel, `${where}: prefab ${href}`, errs);
     if (!src) return g;
     const r = this.doc(src, prel, [...stack, prel], sub);
-    const tag = (e: string): string => `${where} (${href}): ${e}`;
+    const tag = (e: string): string => within(`${where} (${href})`, e);
     errs.push(...sub.parse.map(tag), ...sub.merge.map(tag), ...sub.prefab.map(tag));
     if (!r) return g;
 
@@ -329,11 +334,11 @@ class Resolver {
       if (v === undefined) continue;
       const axis = k === 'width' ? 'x' : 'y';
       if (!resizable) {
-        problems.push(`${where}: ${k} на <use> — ${href} не растягивается (нет data-resizable у корня); масштаб инстанса задаётся transform.`);
+        problems.push(coded('E_PREFAB_RESIZE', `${where}: ${k} on <use> — ${href} is not resizable (no data-resizable on its root); scale an instance with transform.`));
       } else if (!resizable.includes(axis)) {
-        problems.push(`${where}: ${k} — ${href} растягивается только по ${resizable} (data-resizable="${resizable}").`);
+        problems.push(coded('E_PREFAB_RESIZE', `${where}: ${k} — ${href} resizes only along ${resizable} (data-resizable="${resizable}").`));
       } else if (min && v < (k === 'width' ? min.w : min.h) - 1e-9) {
-        problems.push(`${where}: ${k}="${v}" меньше минимального ${k === 'width' ? min.w : min.h} (viewBox ${href}).`);
+        problems.push(coded('E_PREFAB_MIN_SIZE', `${where}: ${k}="${v}" is less than the minimum ${k === 'width' ? min.w : min.h} (the viewBox of ${href}).`));
       }
     }
 
@@ -341,7 +346,7 @@ class Resolver {
     for (const [k, v] of Object.entries(r.tree.attrs)) if (k.startsWith('data-') && !BOX_ROOT_DATA.has(k)) defaults[k] = v;
     const params: Record<string, string> = { ...defaults, ...own };
     for (const p of r.contract?.params ?? []) {
-      if (own[p] === undefined && !r.overridden.has(p)) errs.push(`${where}: не задан параметр ${p}, его требует ${href}.`);
+      if (own[p] === undefined && !r.overridden.has(p)) errs.push(coded('E_PARAM_MISSING', `${where}: the parameter ${p} is not set, ${href} requires it.`));
     }
 
     const scope: InstanceScope = { node: g, params };
@@ -390,14 +395,14 @@ class Resolver {
         const words = raw.trim().split(/\s+/).filter(Boolean);
         const name = words[0];
         if (!name || words.length > 2 || (words.length === 2 && words[1] !== 'default')) {
-          errs.push(`${where} (${href}): tml:slot="${raw}" — ожидается «имя» или «имя default».`);
+          errs.push(coded('E_SLOT', `${where} (${href}): tml:slot="${raw}" — expected "name" or "name default".`));
           return;
         }
-        if (n.tag !== 'g') errs.push(`${where} (${href}): tml:slot на <${n.tag}> — слот это группа <g>.`);
-        if (slots.has(name)) errs.push(`${where} (${href}): слот «${name}» помечен дважды.`);
+        if (n.tag !== 'g') errs.push(coded('E_SLOT', `${where} (${href}): tml:slot on <${n.tag}> — a slot is a <g> group.`));
+        if (slots.has(name)) errs.push(coded('E_SLOT', `${where} (${href}): the slot "${name}" is marked twice.`));
         slots.set(name, n);
         if (words[1] === 'default' || name === 'default') {
-          if (fallback && fallback !== n) errs.push(`${where} (${href}): слотов по умолчанию два — default у одного.`);
+          if (fallback && fallback !== n) errs.push(coded('E_SLOT', `${where} (${href}): two default slots — only one is the default.`));
           fallback = n;
         }
       });
@@ -411,14 +416,14 @@ class Resolver {
       const target = name != null ? slots.get(name) : fallback;
       const cw = c.attrs.id ? `#${c.attrs.id}` : `<${c.tag}>`;
       if (!slots.size) {
-        errs.push(`${where}: дети у <use> — у ${href} нет слотов (tml:slot в наследнике префаба); настройка — параметрами data-*.`);
+        errs.push(coded('E_SLOT_UNKNOWN', `${where}: children of <use> — ${href} has no slots (tml:slot in the prefab's heir); configure it with data-* parameters.`));
         return;
       }
       if (!target) {
         errs.push(
           name != null
-            ? `${where}: ${cw} slot="${name}" — у ${href} такого слота нет (есть: ${[...slots.keys()].join(', ')}).`
-            : `${where}: ${cw} без slot — у ${href} нет слота по умолчанию (есть: ${[...slots.keys()].join(', ')}).`,
+            ? coded('E_SLOT_UNKNOWN', `${where}: ${cw} slot="${name}" — ${href} has no such slot (slots: ${[...slots.keys()].join(', ')}).`)
+            : coded('E_SLOT_UNKNOWN', `${where}: ${cw} without slot — ${href} has no default slot (slots: ${[...slots.keys()].join(', ')}).`),
         );
         continue;
       }
@@ -530,11 +535,11 @@ export async function preloadScenes(input: Omit<ComposeInput, 'loadScene'>, load
  * absent). `fetchFn` defaults to the global fetch.
  */
 export function fetchSceneLoader(fetchFn: typeof fetch = globalThis.fetch): AsyncSceneLoader {
-  if (!fetchFn) throw new Error('Trempel: fetch недоступен — передайте loadScene.');
+  if (!fetchFn) throw trempelError('E_FETCH', 'fetch is not available — pass loadScene.');
   const get = async (url: string): Promise<string | undefined> => {
     const r = await fetchFn(url);
     if (r.status === 404) return undefined;
-    if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+    if (!r.ok) throw trempelError('E_FETCH', `${url}: HTTP ${r.status}`);
     return r.text();
   };
   return async (url) => {

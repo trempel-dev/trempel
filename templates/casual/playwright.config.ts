@@ -4,6 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 // SDK stubbed). `npm run e2e` builds both first. E2E_PORT moves the servers.
 const PORT = Number(process.env.E2E_PORT ?? 4280);
 export const YT_PORT = PORT + 1;
+// WebGL: Metal on a Mac; elsewhere (CI runners without a GPU) Chromium's software GL.
+const GL = process.platform === 'darwin' ? ['--use-angle=metal', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
 
 export default defineConfig({
   testDir: 'e2e',
@@ -14,7 +16,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 414, height: 800 }, hasTouch: true, launchOptions: { args: ['--use-angle=metal', '--ignore-gpu-blocklist'] } },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 414, height: 800 }, hasTouch: true, launchOptions: { args: GL } },
     },
   ],
   webServer: [

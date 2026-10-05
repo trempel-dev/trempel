@@ -12,6 +12,7 @@
 // throws on what it cannot read.
 
 import { DOMImplementation, type CDATASection, type Comment, type Document, type Element, type Node, type Text } from '@xmldom/xmldom';
+import { coded } from '@trempel/scene/core';
 
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -87,7 +88,7 @@ class Tokenizer {
   fail(msg: string): never {
     const before = this.s.slice(0, this.i);
     const line = before.split('\n').length;
-    throw new Error(`XML: ${msg} (строка ${line})`);
+    throw new Error(coded('E_XML', `${msg} (line ${line})`));
   }
 
   ws(): string {
@@ -101,7 +102,7 @@ class Tokenizer {
   name(): string {
     NAME.lastIndex = this.i;
     const m = NAME.exec(this.s);
-    if (!m) this.fail(`ожидается имя, а тут «${this.s.slice(this.i, this.i + 10)}»`);
+    if (!m) this.fail(`expected a name, found "${this.s.slice(this.i, this.i + 10)}"`);
     this.i = NAME.lastIndex;
     return m[0];
   }
@@ -109,7 +110,7 @@ class Tokenizer {
   /** Raw text up to and including `end`. */
   until(end: string): string {
     const j = this.s.indexOf(end, this.i);
-    if (j < 0) this.fail(`нет закрывающего «${end}»`);
+    if (j < 0) this.fail(`no closing "${end}"`);
     const out = this.s.slice(this.i, j + end.length);
     this.i = j + end.length;
     return out;
@@ -137,7 +138,7 @@ export function parseSource(text: string): SourceDoc {
       break;
     }
   }
-  if (!root) throw new Error('XML: в документе нет корневого элемента');
+  if (!root) throw new Error(coded('E_XML', 'the document has no root element'));
   doc.appendChild(root);
   return { doc, root, prolog: text.slice(0, prologEnd), epilog: text.slice(t.i) };
 }
@@ -161,7 +162,7 @@ function skipDoctype(t: Tokenizer): void {
       return;
     }
   }
-  t.fail('незакрытый DOCTYPE');
+  t.fail('an unclosed DOCTYPE');
 }
 
 function readElement(t: Tokenizer, doc: Document): Element {
@@ -186,21 +187,21 @@ function readElement(t: Tokenizer, doc: Document): Element {
       t.i += 2;
       break;
     }
-    if (c === undefined) t.fail(`незакрытый тег <${tag}>`);
-    if (!ws) t.fail(`<${tag}>: между атрибутами нужен пробел`);
+    if (c === undefined) t.fail(`an unclosed tag <${tag}>`);
+    if (!ws) t.fail(`<${tag}>: attributes need whitespace between them`);
     const at = t.i - ws.length;
     const name = t.name();
     const eqAt = t.i;
     t.ws();
-    if (t.s[t.i] !== '=') t.fail(`<${tag}> ${name}: ожидается =`);
+    if (t.s[t.i] !== '=') t.fail(`<${tag}> ${name}: expected =`);
     t.i++;
     t.ws();
     const eq = t.s.slice(eqAt, t.i);
     const quote = t.s[t.i];
-    if (quote !== '"' && quote !== "'") t.fail(`<${tag}> ${name}: значение без кавычек`);
+    if (quote !== '"' && quote !== "'") t.fail(`<${tag}> ${name}: an unquoted value`);
     t.i++;
     const vEnd = t.s.indexOf(quote, t.i);
-    if (vEnd < 0) t.fail(`<${tag}> ${name}: незакрытые кавычки`);
+    if (vEnd < 0) t.fail(`<${tag}> ${name}: unclosed quotes`);
     // XML attribute-value normalization: literal tab/newline become spaces.
     const value = decodeEntities(t.s.slice(t.i, vEnd).replace(/[\t\n\r]/g, ' '));
     t.i = vEnd + 1;
@@ -216,9 +217,9 @@ function readElement(t: Tokenizer, doc: Document): Element {
     const endAt = t.i;
     t.i += 2; // </
     const closing = t.name();
-    if (closing !== tag) t.fail(`ожидается </${tag}>, а тут </${closing}>`);
+    if (closing !== tag) t.fail(`expected </${tag}>, found </${closing}>`);
     t.ws();
-    if (t.s[t.i] !== '>') t.fail(`</${tag}: ожидается >`);
+    if (t.s[t.i] !== '>') t.fail(`</${tag}: expected >`);
     t.i++;
     end = t.s.slice(endAt, t.i);
   }
@@ -240,7 +241,7 @@ function readContent(t: Tokenizer, doc: Document, out: Node[], parent: string | 
       continue;
     }
     if (s.startsWith('</', t.i)) {
-      if (parent == null) t.fail('лишний закрывающий тег');
+      if (parent == null) t.fail('a stray closing tag');
       return;
     }
     if (s.startsWith('<!--', t.i)) {
@@ -262,7 +263,7 @@ function readContent(t: Tokenizer, doc: Document, out: Node[], parent: string | 
       out.push(readElement(t, doc));
     }
   }
-  if (parent != null) t.fail(`нет </${parent}>`);
+  if (parent != null) t.fail(`no </${parent}>`);
 }
 
 /** The document back to text: remembered source where nothing changed. */

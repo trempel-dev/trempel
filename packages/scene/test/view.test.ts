@@ -70,7 +70,7 @@ describe('view — viewport', () => {
     expect(parseViewport('scene')).toEqual({ kind: 'scene' });
     expect(parseViewport('9:19.5')).toEqual({ kind: 'aspect', w: 9, h: 19.5 });
     expect(parseViewport('1080x1920')).toEqual({ kind: 'size', w: 1080, h: 1920 });
-    expect(() => parseViewport('wide')).toThrow(/вьюпорт/);
+    expect(() => parseViewport('wide')).toThrow(/^E_VIEW_VIEWPORT: /);
   });
 
   it('scene = the viewBox; an aspect contains it centred at scale 1; a size fits it', () => {
@@ -103,7 +103,7 @@ describe('view — session', () => {
   it('bad state JSON is a panel error, the scene still opens', () => {
     const s = openScene({ sources: { base: BASE }, state: '{ title: ', backend: createMockBackend() });
     expect(kinds(s.issues)).toEqual(['error:state']);
-    expect(s.issues[0].message).toMatch(/не JSON/);
+    expect(s.issues[0].message).toMatch(/^E_STATE: /);
     expect(s.scene).not.toBeNull();
     expect(kinds(openScene({ sources: { base: BASE }, state: '[1]', backend: createMockBackend() }).issues)).toEqual(['error:state']);
   });
@@ -127,7 +127,8 @@ describe('view — session', () => {
 
     const expr = openScene({ sources: { base: BASE, heir: heir(`<tml:ref id="label" tml:bind="state.a >> 1"/>`) }, backend: createMockBackend() });
     expect(kinds(expr.issues)).toEqual(['error:expression', 'warn:merge']);
-    expect(expr.issues[0].message).toMatch(/#label tml:bind: .*позиция/);
+    expect(expr.issues[0].message).toMatch(/^E_EXPR_SYNTAX: /);
+    expect(expr.issues[0].message).toContain('#label tml:bind');
     expect(byId(expr.scene!.root as MockNode, 'label')!.props.text).toBe('layout');
   });
 
@@ -140,12 +141,13 @@ describe('view — session', () => {
       onIssue: (i) => late.push(i),
     });
     expect(kinds(s.issues)).toEqual(['error:runtime']);
-    expect(s.issues[0].message).toBe('#label tml:bind="state.box.n": чтение поля «n» у null');
+    expect(s.issues[0].message).toMatch(/^E_EXPR_FIELD: .*#label tml:bind="state\.box\.n"/);
     expect(late).toEqual([]); // found during open: in the list, not "late"
 
     s.state.box = { n: 1 };
     s.state.box = undefined;
-    expect(late.map((i) => i.message)).toEqual(['#label tml:bind="state.box.n": чтение поля «n» у undefined']);
+    expect(late).toHaveLength(1);
+    expect(late[0].message).toMatch(/^E_EXPR_FIELD: .*#label tml:bind="state\.box\.n"/);
   });
 
   it('a component problem is a panel error', () => {
@@ -185,7 +187,7 @@ describe('view — session', () => {
   it('textures that fail to load become asset errors once ready settles', async () => {
     const backend: RendererBackend = {
       ...createMockBackend(),
-      whenReady: () => Promise.reject(new TrempelError(['Текстура не загрузилась: "a.png".'])),
+      whenReady: () => Promise.reject(new TrempelError(['E_TEXTURE: a texture did not load: "a.png"'])),
     };
     const late: ViewIssue[] = [];
     const s = openScene({ sources: { base: BASE }, backend, onIssue: (i) => late.push(i) });
@@ -208,8 +210,9 @@ describe('view — stays out of the package', () => {
     const read = (p: string): Record<string, any> => JSON.parse(readFileSync(new URL(p, new URL('..', import.meta.url)), 'utf8'));
     expect(read('tsconfig.build.json').include).toEqual(['src']);
     const pkg = read('package.json');
-    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md']); // публикация (d4f6e37): + лицензия и README
+    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md', 'CHANGELOG.md']); // публикация (d4f6e37): + лицензия и README
     expect(pkg.dependencies.playwright).toBeUndefined();
-    expect(pkg.devDependencies.playwright).toBeDefined();
+    // dev tools come from the monorepo root (TRM-7)
+    expect(read('../../package.json').devDependencies.playwright).toBeDefined();
   });
 });

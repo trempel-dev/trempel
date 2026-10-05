@@ -5,7 +5,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { multiply, parseTransform, pathFromNode, IDENTITY, type Matrix, type SceneNode } from '@trempel/scene/core';
+import { codeOf, type SceneNode } from '@trempel/scene/core';
+import { multiply, parseTransform, IDENTITY, type Matrix } from '@trempel/scene/internal/transform';
+import { pathFromNode } from '@trempel/scene/internal/geom/path';
 import { commands, openDocument, type EditorDocument } from './index.js';
 import { parseSource, serializeSource } from './xml.js';
 import { insertPoint, type EditCmd } from './path.js';
@@ -199,7 +201,7 @@ describe('commands — direct action, undo, redo', () => {
     const before = doc.serialize();
     const bad = doc.exec('node.setAttr', { node: 'r', name: 'tml:bind', value: 'x' });
     expect(bad.ok).toBe(false);
-    expect(bad.errors![0]).toMatch(/стерильна/);
+    expect(bad.errors![0]).toMatch(/^E_STERILE: /);
     expect(doc.serialize()).toBe(before);
   });
 
@@ -214,7 +216,7 @@ describe('commands — direct action, undo, redo', () => {
     expect(doc.exec('node.setText', { node: 't', text: '' }).changed).toEqual([]);
     const bad = doc.exec('node.setText', { node: 'r', text: 'x' });
     expect(bad.ok).toBe(false);
-    expect(bad.errors![0]).toMatch(/только у <text>/);
+    expect(bad.errors![0]).toMatch(/^E_EDITOR_TAG: /);
   });
 
   it('node.setId renames and updates clip-path references; warns about clips', () => {
@@ -226,9 +228,11 @@ describe('commands — direct action, undo, redo', () => {
     });
     const res = doc.exec('node.setId', { node: 'bird', id: 'crow' });
     expect(res.ok).toBe(true);
-    expect(res.warnings).toEqual(['клип anim/motion.md ссылается на старый id "bird"']);
-    expect(doc.errors.some((e) => e.startsWith('anim/motion.md:') && e.includes('bird'))).toBe(true);
-    expect(doc.exec('node.setId', { node: 'crow', id: 'sun' }).errors![0]).toMatch(/уже есть/);
+    expect(res.warnings!.map(codeOf)).toEqual(['W_EDITOR_CLIP_REF']);
+    expect(res.warnings![0]).toContain('anim/motion.md');
+    expect(res.warnings![0]).toContain('"bird"');
+    expect(doc.errors.some((e) => codeOf(e) === 'E_ANIM_TARGET' && e.includes('anim/motion.md:') && e.includes('bird'))).toBe(true);
+    expect(doc.exec('node.setId', { node: 'crow', id: 'sun' }).errors![0]).toMatch(/^E_EDITOR_ID_TAKEN: /);
   });
 
   it('node.move: g translate (separator kept), x/y, cx/cy, line ends, path points, through a rotation', () => {
@@ -306,10 +310,9 @@ describe('commands — direct action, undo, redo', () => {
     const doc = openDocument(SMALL);
     doc.exec('node.setAttr', { node: 'a', name: 'style', value: 'mix-blend-mode: overlay' });
     doc.exec('node.setAttr', { node: 'r', name: 'data-z', value: 'x' });
-    expect(doc.errors).toEqual([
-      '#a: mix-blend-mode: overlay — бывает normal, plus-lighter, multiply, screen.',
-      '#r: data-z="x" — ожидается целое число.',
-    ]);
+    expect(doc.errors.map(codeOf)).toEqual(['E_BLEND', 'E_Z']);
+    expect(doc.errors[0]).toContain('#a');
+    expect(doc.errors[1]).toContain('#r');
   });
 
   it('node.reorder changes z-order among siblings', () => {
@@ -347,10 +350,10 @@ describe('commands — direct action, undo, redo', () => {
     roundtripCommand(doc, 'node.insert', { parent: 'b', xml: '<g id="inner">\n  <rect width="1" height="1"/>\n</g>' }, (after) => {
       expect(after).toContain(`<g id="b">\n    <g id="inner">\n      <rect width="1" height="1"/>\n    </g>\n  </g>`);
     });
-    expect(doc.exec('node.insert', { parent: 'a', xml: '<polygon points="0 0"/>' }).errors![0]).toMatch(/вне формата/);
-    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect id="r"/>' }).errors![0]).toMatch(/уже есть/);
-    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect/><rect/>' }).errors![0]).toMatch(/ровно один/);
-    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect tml:bind="x"/>' }).errors![0]).toMatch(/стерильна/);
+    expect(doc.exec('node.insert', { parent: 'a', xml: '<polygon points="0 0"/>' }).errors![0]).toMatch(/^E_TAG: /);
+    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect id="r"/>' }).errors![0]).toMatch(/^E_EDITOR_ID_TAKEN: /);
+    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect/><rect/>' }).errors![0]).toMatch(/^E_EDITOR_FRAGMENT: /);
+    expect(doc.exec('node.insert', { parent: 'a', xml: '<rect tml:bind="x"/>' }).errors![0]).toMatch(/^E_STERILE: /);
   });
 
   it('node.remove takes the subtree and its line', () => {
@@ -360,7 +363,9 @@ describe('commands — direct action, undo, redo', () => {
       expect(after).toContain('<!-- a comment -->\n\n  <g id="b"/>');
     });
     const m = openDocument(MOTION, { clips: MOTION_CLIPS });
-    expect(m.exec('node.remove', { node: 'mascotHead' }).warnings).toEqual(['клип anim/motion.md ссылается на удалённый id "mascotHead"']);
+    const warnings = m.exec('node.remove', { node: 'mascotHead' }).warnings!;
+    expect(warnings.map(codeOf)).toEqual(['W_EDITOR_CLIP_REF']);
+    expect(warnings[0]).toContain('"mascotHead"');
   });
 
   it('node.duplicate: next to the original, fresh ids', () => {
@@ -387,7 +392,7 @@ describe('commands — direct action, undo, redo', () => {
     roundtripCommand(doc, 'clip.assign', { node: 'a', clip: 'm' }, (after) => expect(after).toContain('<g id="a" transform="translate(10,20)" clip-path="url(#m)">'));
     expect(doc.errors).toEqual([]);
     expect(doc.exec('clip.assign', { node: 'r', clip: 'm' }).ok).toBe(false);
-    expect(doc.exec('clip.assign', { node: 'a', clip: 'b' }).errors![0]).toMatch(/не <clipPath>|а не <clipPath>/);
+    expect(doc.exec('clip.assign', { node: 'a', clip: 'b' }).errors![0]).toMatch(/^E_EDITOR_TAG: /);
     doc.exec('clip.assign', { node: 'a', clip: 'm' });
     roundtripCommand(doc, 'clip.assign', { node: 'a', clip: null }, (after) => expect(after).not.toContain('clip-path'));
     roundtripCommand(doc, 'layer.create', { id: 'fx', index: 2 }, () => {
@@ -412,7 +417,7 @@ describe('path commands', () => {
   it('path.setData', () => {
     const doc = openDocument(CURVE);
     roundtripCommand(doc, 'path.setData', { node: 'c', d: 'M0 0L1 1' }, () => expect(d(doc)).toBe('M0 0L1 1'));
-    expect(doc.exec('path.setData', { node: 'c', d: 'M0 0 X' }).errors![0]).toMatch(/^d:/);
+    expect(doc.exec('path.setData', { node: 'c', d: 'M0 0 X' }).errors![0]).toMatch(/^E_PATH_DATA: d: /);
   });
 
   it('path.setPoint moves the anchor with its handles', () => {
@@ -428,7 +433,7 @@ describe('path commands', () => {
     roundtripCommand(doc, 'path.setHandle', { node: 'c', index: 1, which: 'in', x: 200, y: 100, linked: true }, () =>
       expect(d(doc)).toBe('M0 0C64 128 200 100 256 0C312 -100 256 64 256 64'),
     );
-    expect(doc.exec('path.setHandle', { node: 'c', index: 0, which: 'in', x: 1, y: 1 }).errors![0]).toMatch(/нет входящего/);
+    expect(doc.exec('path.setHandle', { node: 'c', index: 0, which: 'in', x: 1, y: 1 }).errors![0]).toMatch(/^E_EDITOR_PATH: /);
   });
 
   it('path.insertPoint keeps the shape (20 equal steps of length, 1e-3)', () => {
@@ -469,7 +474,7 @@ describe('path commands', () => {
     const first = openDocument(CURVE);
     roundtripCommand(first, 'path.removePoint', { node: 'c', index: 0 }, () => expect(d(first)).toBe('M256 0L256 64'));
     const one = openDocument(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path id="c" d="M0 0"/></svg>`);
-    expect(one.exec('path.removePoint', { node: 'c', index: 0 }).errors![0]).toMatch(/последняя точка/);
+    expect(one.exec('path.removePoint', { node: 'c', index: 0 }).errors![0]).toMatch(/^E_EDITOR_PATH: /);
   });
 
   it('path.close / path.open', () => {
@@ -498,7 +503,8 @@ describe('path commands', () => {
     const before = pathFromNode(find(doc.scene, 'c')!);
     const res = doc.exec('path.setPoint', { node: 'c', index: 0, x: 10, y: 10 });
     expect(res.ok).toBe(true);
-    expect(res.warnings).toEqual(['#c: d переписан в абсолютные M L C Z (дуги A — аппроксимация кубиками)']);
+    expect(res.warnings!.map(codeOf)).toEqual(['W_EDITOR_PATH_REWRITTEN']);
+    expect(res.warnings![0]).toMatch(/^W_EDITOR_PATH_REWRITTEN: #c: /);
     expect(d(doc)).toMatch(/^M10 10L30 10L30 30C/);
     expect(d(doc)).toMatch(/^[MLCZ\d\s.-]+$/);
     const after = pathFromNode(find(doc.scene, 'c')!);
@@ -522,7 +528,7 @@ describe('path commands', () => {
 
   it('path commands refuse a non-path node', () => {
     const doc = openDocument(MOTION);
-    expect(doc.exec('path.setPoint', { node: 'sun', index: 0, x: 0, y: 0 }).errors![0]).toMatch(/<path>/);
+    expect(doc.exec('path.setPoint', { node: 'sun', index: 0, x: 0, y: 0 }).errors![0]).toMatch(/^E_EDITOR_TAG: /);
   });
 });
 
@@ -534,7 +540,7 @@ describe('document', () => {
     const orig = doc.serialize();
     const events: string[] = [];
     doc.on('change', (e) => events.push(e.type));
-    doc.begin('скрипт');
+    doc.begin('script');
     expect(doc.grouping).toBe(true);
     doc.exec('node.move', { node: 'a', dx: 1, dy: 0 });
     doc.begin('inner');
@@ -545,24 +551,24 @@ describe('document', () => {
     expect(doc.history).toEqual([]);
     doc.end();
     expect(doc.grouping).toBe(false);
-    expect(doc.history.map((h) => h.label)).toEqual(['скрипт']);
+    expect(doc.history.map((h) => h.label)).toEqual(['script']);
     const changed = doc.serialize();
     doc.undo();
     expect(doc.serialize()).toBe(orig);
     doc.redo();
     expect(doc.serialize()).toBe(changed);
 
-    doc.begin('сломанный');
+    doc.begin('broken');
     doc.exec('node.move', { node: 'b', dx: 5, dy: 5 });
     doc.abort();
     expect(doc.serialize()).toBe(changed);
-    expect(doc.history.map((h) => h.label)).toEqual(['скрипт']);
+    expect(doc.history.map((h) => h.label)).toEqual(['script']);
     expect(events).toEqual(['exec', 'batch', 'batch', 'undo', 'redo', 'exec', 'rollback']);
 
-    doc.begin('пусто');
+    doc.begin('empty');
     doc.end();
     expect(doc.history.length).toBe(1);
-    expect(() => doc.end()).toThrow();
+    expect(() => doc.end()).toThrow(/^E_EDITOR_API: /);
   });
 
   it('batch is one undo entry; a failing batch changes nothing', () => {
@@ -589,26 +595,27 @@ describe('document', () => {
       { name: 'node.remove', args: { node: 'nope' } },
     ]);
     expect(bad.ok).toBe(false);
-    expect(bad.errors![0]).toMatch(/^\[1\] node\.remove: /);
+    expect(bad.errors![0]).toMatch(/^E_EDITOR_NO_NODE: \[1\] node\.remove: /);
     expect(doc.serialize()).toBe(changed);
     expect(doc.history.length).toBe(1);
   });
 
   it('arguments are checked by the schema; the document is untouched', () => {
     const doc = openDocument(SMALL);
-    const cases: [string, unknown, RegExp][] = [
-      ['node.move', { node: 'a', dx: '1', dy: 0 }, /dx: ожидается число/],
-      ['node.move', { node: 'a', dx: 1 }, /dy: обязательный/],
-      ['node.move', { node: 'a', dx: 1, dy: 1, extra: 1 }, /extra: неизвестный/],
-      ['path.setHandle', { node: 'p', index: 0, which: 'up', x: 0, y: 0 }, /which: одно из/],
-      ['node.setId', { node: 'a', id: '1bad' }, /id: «1bad» не подходит/],
-      ['no.such', {}, /команды «no\.such» нет/],
-      ['node.move', { node: 'ghost', dx: 1, dy: 1 }, /узла "ghost" нет/],
+    const cases: [string, unknown, string, string][] = [
+      ['node.move', { node: 'a', dx: '1', dy: 0 }, 'E_EDITOR_ARGS', 'dx: '],
+      ['node.move', { node: 'a', dx: 1 }, 'E_EDITOR_ARGS', 'dy: '],
+      ['node.move', { node: 'a', dx: 1, dy: 1, extra: 1 }, 'E_EDITOR_ARGS', 'extra: '],
+      ['path.setHandle', { node: 'p', index: 0, which: 'up', x: 0, y: 0 }, 'E_EDITOR_ARGS', 'which: '],
+      ['node.setId', { node: 'a', id: '1bad' }, 'E_EDITOR_ARGS', 'id: '],
+      ['no.such', {}, 'E_EDITOR_COMMAND', 'no.such'],
+      ['node.move', { node: 'ghost', dx: 1, dy: 1 }, 'E_EDITOR_NO_NODE', 'ghost'],
     ];
-    for (const [name, args, re] of cases) {
+    for (const [name, args, code, what] of cases) {
       const res = doc.exec(name, args);
       expect(res.ok, name).toBe(false);
-      expect(res.errors!.join('\n')).toMatch(re);
+      expect(res.errors!.map(codeOf), name).toEqual([code]);
+      expect(res.errors![0], name).toContain(what);
     }
     expect(doc.serialize()).toBe(SMALL);
     expect(doc.history).toEqual([]);
@@ -628,10 +635,10 @@ describe('document', () => {
     const res = doc.exec('node.remove', { node: 'window' });
     expect(res.ok).toBe(true);
     expect(doc.serialize()).not.toContain('id="window"');
-    expect(doc.errors.some((e) => e.includes('#window') && e.includes('контракт'))).toBe(true);
-    expect(doc.errors.some((e) => e.startsWith('наследник: ') && e.includes('window'))).toBe(true);
+    expect(doc.errors.some((e) => codeOf(e) === 'E_CONTRACT_MISSING' && e.includes('#window'))).toBe(true);
+    expect(doc.errors.some((e) => codeOf(e) === 'E_REF_MISSING' && e.includes(': heir: ') && e.includes('window'))).toBe(true);
     doc.exec('node.setAttr', { node: 'fly1', name: 'd', value: 'M 0 0 X' });
-    expect(doc.errors.some((e) => e.startsWith('#fly1: d:'))).toBe(true);
+    expect(doc.errors.some((e) => codeOf(e) === 'E_PATH_DATA' && e.includes('#fly1: d:'))).toBe(true);
     doc.exec('node.insert', { parent: '', xml: '<g id="sun"/>' }); // refused (duplicate) — no event
     doc.undo();
     doc.undo();
@@ -644,7 +651,7 @@ describe('document', () => {
     doc.exec('node.setId', { node: 'b2', id: 'b3' });
     expect(doc.errors).toEqual([]);
     const dup = openDocument(SMALL.replace('<g id="b"/>', '<g id="b"/><g id="b"/>'));
-    expect(dup.errors.some((e) => e.includes('Дублирующийся id "b"'))).toBe(true);
+    expect(dup.errors.map(codeOf)).toContain('E_DUP_ID');
   });
 
   it('editor/README.md lists every command of the registry (npm run editor:commands)', () => {

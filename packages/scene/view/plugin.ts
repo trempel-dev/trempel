@@ -21,6 +21,7 @@ import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, sta
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import type { Plugin } from 'vite';
 import { isHeirFile, legacyName, VIEW_MODULE, VIEW_MODULES } from '../src/compat.js';
+import { coded } from '../src/core.js';
 import { loadProject, isInside, type Project } from '../src/node/project.js';
 import { discoverScenes, SKIP_DIRS, type SceneEntry } from './discover';
 
@@ -135,15 +136,15 @@ export function servedFile(pathname: string, root: string, collections: Record<s
     const rest = pathname.slice(COLL.length);
     const i = rest.indexOf('/');
     const name = decodeURIComponent(i < 0 ? rest : rest.slice(0, i));
-    if (!Object.prototype.hasOwnProperty.call(collections, name)) return { status: 404, error: `коллекции @${name} нет в проекте` };
+    if (!Object.prototype.hasOwnProperty.call(collections, name)) return { status: 404, error: coded('E_COLLECTION_UNKNOWN', `the project has no collection @${name}`) };
     base = collections[name];
     rel = i < 0 ? '' : rest.slice(i + 1);
   } else return null;
   const file = resolve(base, decodeURIComponent(rel));
-  if (!isInside(base, file) || file === resolve(base)) return { status: 403, error: `${decodeURIComponent(rel)}: вне корня проекта и коллекций` };
+  if (!isInside(base, file) || file === resolve(base)) return { status: 403, error: coded('E_VIEW_ACCESS', `${decodeURIComponent(rel)}: outside the project root and its collections`) };
   // dot-folders (.git, .env…) and node_modules / dist of the project are not served
   if (relative(base, file).split(sep).some((p) => (p.startsWith('.') && p !== '.trempel') || SKIP_DIRS.has(p))) {
-    return { status: 403, error: `${decodeURIComponent(rel)}: служебная папка` };
+    return { status: 403, error: coded('E_VIEW_ACCESS', `${decodeURIComponent(rel)}: a service folder`) };
   }
   return { file };
 }
@@ -159,14 +160,14 @@ export type WriteResult = { status: 200; file: string; hash: string } | { status
  * prefab.extract creates `X.tml.svg` next to a new prefab (an existing heir is never overwritten).
  */
 export function writeSceneFile(dir: string, rel: unknown, text: unknown): WriteResult {
-  if (typeof rel !== 'string' || !rel || typeof text !== 'string') return { status: 400, error: 'ожидается { path: string, text: string }' };
+  if (typeof rel !== 'string' || !rel || typeof text !== 'string') return { status: 400, error: coded('E_VIEW_REQUEST', 'expected { path: string, text: string }') };
   const root = resolve(dir);
   const file = resolve(root, rel);
-  if (!file.startsWith(root + sep)) return { status: 403, error: `${rel}: вне папки сцен` };
-  if (isHeirFile(file) && existsSync(file)) return { status: 403, error: `${rel}: наследник уже есть — редактор не переписывает .tml.svg` };
-  if (!file.endsWith('.svg')) return { status: 403, error: `${rel}: редактор пишет только базу сцены (X.svg)` };
+  if (!file.startsWith(root + sep)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: outside the scene folder`) };
+  if (isHeirFile(file) && existsSync(file)) return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the heir already exists — the editor does not overwrite .tml.svg`) };
+  if (!file.endsWith('.svg')) return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the editor writes only a scene base (X.svg)`) };
   const parts = relative(root, file).split(sep);
-  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: `${rel}: служебная папка` };
+  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text);
   return { status: 200, file, hash: textHash(text) };
@@ -177,13 +178,13 @@ export function writeSceneFile(dir: string, rel: unknown, text: unknown): WriteR
  * `renders/` folder below the scene folder (created when missing).
  */
 export function writeRenderFile(dir: string, rel: unknown, base64: unknown): WriteResult {
-  if (typeof rel !== 'string' || !rel || typeof base64 !== 'string') return { status: 400, error: 'ожидается { path: string, base64: string }' };
+  if (typeof rel !== 'string' || !rel || typeof base64 !== 'string') return { status: 400, error: coded('E_VIEW_REQUEST', 'expected { path: string, base64: string }') };
   const root = resolve(dir);
   const file = resolve(root, rel);
-  if (!file.startsWith(root + sep)) return { status: 403, error: `${rel}: вне папки сцен` };
+  if (!file.startsWith(root + sep)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: outside the scene folder`) };
   const parts = relative(root, file).split(sep);
-  if (!file.endsWith('.png') || parts.at(-2) !== 'renders') return { status: 403, error: `${rel}: картинки пишутся только в renders/*.png` };
-  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: `${rel}: служебная папка` };
+  if (!file.endsWith('.png') || parts.at(-2) !== 'renders') return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: pictures are written only to renders/*.png`) };
+  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
   const data = Buffer.from(base64, 'base64');
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, data);
@@ -275,7 +276,7 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
           res.statusCode = files ? 200 : 403;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.setHeader('Cache-Control', 'no-store');
-          res.end(JSON.stringify(files ? { files } : { error: 'вне папки сцен' }));
+          res.end(JSON.stringify(files ? { files } : { error: coded('E_VIEW_ACCESS', 'outside the scene folder') }));
           return;
         }
         if (url.pathname === '/__tml/write' && req.method === 'POST') {
@@ -284,14 +285,14 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify(body));
           };
-          if (!opts.writable) return send(403, { error: 'папка открыта только на чтение (npm run view) — запись есть в npm run edit' });
+          if (!opts.writable) return send(403, { error: coded('E_VIEW_WRITE', 'the folder is open read-only (npm run view) — writing is in npm run edit') });
           readBody(req)
             .then((raw) => {
               let body: { path?: unknown; text?: unknown; base64?: unknown } = {};
               try {
                 body = JSON.parse(raw) as typeof body;
               } catch {
-                return send(400, { error: 'тело — не JSON' });
+                return send(400, { error: coded('E_VIEW_REQUEST', 'the body is not JSON') });
               }
               const r = body.base64 !== undefined ? writeRenderFile(dir, body.path, body.base64) : writeSceneFile(dir, body.path, body.text);
               if (r.status !== 200) return send(r.status, { error: r.error });
@@ -312,7 +313,7 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
           const file = hit ? hit.file : resolve(dir, rel);
           if (!hit && !file.startsWith(dir + sep)) {
             res.statusCode = 403;
-            res.end(`${rel}: вне папки сцен`);
+            res.end(coded('E_VIEW_ACCESS', `${rel}: outside the scene folder`));
             return;
           }
           if (!existsSync(file) || !statSync(file).isFile()) {

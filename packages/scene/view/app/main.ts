@@ -7,7 +7,7 @@
 import { Application, Container, Graphics, Rectangle } from 'pixi.js';
 import { ClipPlayer, compileSceneClips } from '../clips';
 import { clipFiles, type SceneEntry } from '../discover';
-import { fetchSceneLoader } from '../../src/core.js';
+import { coded, fetchSceneLoader, within } from '../../src/core.js';
 import type { ProjectInfo } from '../plugin';
 import { clearContainer, createStageRuntime, folderSceneLoader, loadViewModule, type Opened, type StageRuntime } from '../runtime';
 import type { LogEntry, OpenInput, ViewIssue, ViewSession } from '../session';
@@ -88,7 +88,7 @@ function background(w: number, h: number): Graphics | null {
 async function text(rel: string | undefined): Promise<string | undefined> {
   if (!rel) return undefined;
   const r = await fetch(fileUrl(rel));
-  if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+  if (!r.ok) throw new Error(coded('E_FETCH', `${rel}: HTTP ${r.status}`));
   return r.text();
 }
 
@@ -252,7 +252,7 @@ function renderIssues(): void {
   const list = allIssues();
   const ul = $('issues');
   ul.innerHTML = '';
-  if (!list.length) ul.append(el('li', 'ok', current ? 'ошибок нет' : '—'));
+  if (!list.length) ul.append(el('li', 'ok', current ? 'no errors' : '—'));
   for (const i of list) {
     const li = el('li', i.level);
     li.append(el('span', 'kind', i.kind));
@@ -277,7 +277,7 @@ function renderLog(): void {
 }
 
 function renderStateMeta(): void {
-  $('state-src').textContent = current?.state ? `${current.state}${stateDirty ? ' (правка)' : ''}` : stateDirty ? 'правка' : 'файла нет';
+  $('state-src').textContent = current?.state ? `${current.state}${stateDirty ? ' (edited)' : ''}` : stateDirty ? 'edited' : 'no file';
   $('state').classList.toggle('dirty', stateDirty);
 }
 
@@ -402,19 +402,27 @@ async function loadList(): Promise<void> {
   projectIssues = (project?.errors ?? []).map((message) => ({ level: 'error', kind: 'collection', message }));
   if (current) current = scenes.find((s) => s.id === current!.id) ?? null;
   $('empty').hidden = scenes.length > 0;
-  $('empty').textContent = scenes.length ? '' : 'В папке нет сцен (X.svg / X.tml.svg).';
+  $('empty').textContent = scenes.length ? '' : 'No scenes in the folder (X.svg / X.tml.svg).';
   renderList();
 }
 
 // ---- page API for the headless shot -------------------------------------------------------------
+//
+// view:shot runs the page on Playwright's virtual clock: `open` mounts the scene and waits for its
+// textures without waiting on any frame or timer; shot.mjs then moves the virtual time in fixed
+// frame steps (`--settle`), and `snap` / `pose` take the pictures. Nothing here waits on time, so
+// the PNG depends only on the scene and the number of frames played.
 
-interface ShotResult {
+interface OpenResult {
   id: string;
   width: number;
   height: number;
   viewport: string;
-  issues: ViewIssue[];
   stubs: string[];
+}
+
+interface ShotResult {
+  issues: ViewIssue[];
   png: string;
   /** With `clip`: one PNG per requested time (seconds). */
   frames?: { t: number; png: string }[];
@@ -424,7 +432,10 @@ declare global {
   interface Window {
     tmlView?: {
       scenes(): SceneEntry[];
-      shoot(id: string, opts?: { state?: string; viewport?: string; clip?: string; t?: number[] }): Promise<ShotResult>;
+      /** Mount a scene and wait for its textures (no frames, no timers). */
+      open(id: string, opts?: { state?: string; viewport?: string }): Promise<OpenResult>;
+      /** Snapshot of the opened scene, or (with `clip`) one per time of that clip. */
+      snap(opts?: { clip?: string; t?: number[] }): Promise<ShotResult>;
     };
   }
 }
@@ -436,7 +447,7 @@ declare global {
 async function clipFrames(entry: SceneEntry, name: string, times: number[]): Promise<{ frames: { t: number; png: string }[]; issues: ViewIssue[] }> {
   const issues: ViewIssue[] = [];
   const scene = session?.scene;
-  if (!session || !scene || !session.animBackend) return { frames: [], issues: [{ level: 'error', kind: 'clips', message: `клип ${name}: сцена не смонтирована` }] };
+  if (!session || !scene || !session.animBackend) return { frames: [], issues: [{ level: 'error', kind: 'clips', message: coded('E_ANIM_PLAY', `clip ${name}: the scene is not mounted`) }] };
   const md: Record<string, string> = {};
   for (const f of clipFiles(folderFiles, entry.id)) md[f] = (await text(f)) ?? '';
   const compiled = compileSceneClips(md, session.tree);
@@ -444,7 +455,7 @@ async function clipFrames(entry: SceneEntry, name: string, times: number[]): Pro
   const clip = compiled.clips.find((c) => c.name === name);
   if (!clip) {
     const have = compiled.clips.map((c) => c.name).join(', ') || '—';
-    issues.push({ level: 'error', kind: 'clips', message: `клипа «${name}» у сцены нет (есть: ${have}; файлы: ${Object.keys(md).join(', ') || '—'})` });
+    issues.push({ level: 'error', kind: 'clips', message: coded('E_ANIM_UNKNOWN', `the scene has no clip "${name}" (clips: ${have}; files: ${Object.keys(md).join(', ') || '—'})`) });
     return { frames: [], issues };
   }
   const player = new ClipPlayer(scene, session.animBackend);
@@ -459,11 +470,10 @@ async function clipFrames(entry: SceneEntry, name: string, times: number[]): Pro
       } catch (e) {
         issues.push({ level: 'error', kind: 'asset', message: msg(e) });
       }
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
       frames.push({ t, png: await snapshot() });
     }
   } catch (e) {
-    issues.push({ level: 'error', kind: 'clips', message: `клип ${name}: ${msg(e)}` });
+    issues.push({ level: 'error', kind: 'clips', message: within(`clip ${name}`, /^[EW]_[A-Z0-9_]+: /.test(msg(e)) ? msg(e) : coded('E_ANIM_PLAY', msg(e))) });
   }
   return { frames, issues };
 }
@@ -471,9 +481,9 @@ async function clipFrames(entry: SceneEntry, name: string, times: number[]): Pro
 function exposeApi(): void {
   window.tmlView = {
     scenes: () => scenes,
-    async shoot(id, opts = {}) {
+    async open(id, opts = {}) {
       const entry = scenes.find((s) => s.id === id);
-      if (!entry) throw new Error(`сцены «${id}» в папке нет; есть: ${scenes.map((s) => s.id).join(', ') || '—'}`);
+      if (!entry) throw new Error(`no scene "${id}" in the folder; scenes: ${scenes.map((s) => s.id).join(', ') || '—'}`);
       if (opts.viewport) viewport = parseViewport(opts.viewport);
       if (opts.state != null) {
         stateText = opts.state;
@@ -482,15 +492,15 @@ function exposeApi(): void {
       }
       await opening;
       await open(entry, { keepState: opts.state != null });
-      // One frame so the canvas shows what the PNG holds (for a human watching).
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
       const f = fit ?? { width: 0, height: 0 };
-      const base = { id, width: f.width, height: f.height, viewport: viewportLabel(viewport), stubs: session?.stubs ?? [] };
-      if (opts.clip) {
-        const { frames, issues } = await clipFrames(entry, opts.clip, opts.t?.length ? opts.t : [0]);
-        return { ...base, issues: [...allIssues(), ...issues], png: frames[0]?.png ?? (await snapshot()), frames };
+      return { id, width: f.width, height: f.height, viewport: viewportLabel(viewport), stubs: session?.stubs ?? [] };
+    },
+    async snap(opts = {}) {
+      if (current && opts.clip) {
+        const { frames, issues } = await clipFrames(current, opts.clip, opts.t?.length ? opts.t : [0]);
+        return { issues: [...allIssues(), ...issues], png: frames[0]?.png ?? (await snapshot()), frames };
       }
-      return { ...base, issues: allIssues(), png: await snapshot() };
+      return { issues: allIssues(), png: await snapshot() };
     },
   };
 }

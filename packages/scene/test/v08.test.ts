@@ -11,6 +11,7 @@ import { propErrors, parseBlend, parseViews, parsePivot } from '../src/props';
 import { compileClips, compileClipsResult } from '../src/anim/compile';
 import { Animator } from '../src/anim/player';
 import { TrempelError } from '../src/errors';
+import { codesOf, thrown } from './helpers/codes';
 
 const metrics = (): { ascent: number; descent: number } => ({ ascent: 8, descent: 2 });
 const tex = (w: number, h: number): Texture => new Texture({ source: new TextureSource({ width: w, height: h }) });
@@ -50,8 +51,10 @@ describe('v0.8 — mix-blend-mode', () => {
     expect(parseBlend('mix-blend-mode: plus-lighter')).toBe('plus-lighter');
     expect(parseBlend('mix-blend-mode:screen;')).toBe('screen');
     expect(parseBlend(undefined)).toBeUndefined();
-    expect(() => parseBlend('fill: red')).toThrow(/стили атрибутами/);
-    expect(() => parseBlend('mix-blend-mode: overlay')).toThrow(/normal, plus-lighter, multiply, screen/);
+    expect(thrown(() => parseBlend('fill: red'))).toMatchObject({ code: 'E_STYLE' });
+    const mode = thrown(() => parseBlend('mix-blend-mode: overlay'));
+    expect(mode).toMatchObject({ code: 'E_BLEND' });
+    expect(mode.message).toContain('normal, plus-lighter, multiply, screen');
   });
 
   it('checks: style with something else, unknown mode, text host, tml:bind-style', () => {
@@ -62,11 +65,10 @@ describe('v0.8 — mix-blend-mode', () => {
         ),
       ),
     );
-    expect(errs).toEqual([
-      '#a: style: «opacity» не поддерживается — стили атрибутами (fill, opacity…); в style читается только mix-blend-mode.',
-      '#b: mix-blend-mode: darken — бывает normal, plus-lighter, multiply, screen.',
-      '#c: mix-blend-mode на <text> не поддерживается — только на g, image, rect, path, circle, ellipse, line.',
-    ]);
+    expect(codesOf(errs)).toEqual(['E_STYLE', 'E_BLEND', 'E_BLEND']);
+    expect(errs[0]).toMatch(/^E_STYLE: #a: style: "opacity"/);
+    expect(errs[1]).toMatch(/^E_BLEND: #b: mix-blend-mode: darken/);
+    expect(errs[2]).toMatch(/^E_BLEND: #c: .*<text>/);
     expect(mountErrors('<g id="a" style="color: red"/>')).toHaveLength(1);
   });
 
@@ -107,10 +109,10 @@ describe('v0.8 — data-tint', () => {
   });
 
   it('checks: bad colour, wrong host', () => {
-    expect(propErrors(parse(svg('<image id="a" data-tint="red"/><rect id="r" data-tint="#fff"/>')))).toEqual([
-      '#a: data-tint="red" — ожидается цвет #rrggbb.',
-      '#r: data-tint на <rect> не поддерживается — только на <image> и <g>.',
-    ]);
+    const errs = propErrors(parse(svg('<image id="a" data-tint="red"/><rect id="r" data-tint="#fff"/>')));
+    expect(codesOf(errs)).toEqual(['E_TINT', 'E_TINT']);
+    expect(errs[0]).toMatch(/^E_TINT: #a: data-tint="red"/);
+    expect(errs[1]).toMatch(/^E_TINT: #r: .*<rect>/);
   });
 
   it('setProp tint on a group reaches every image (a clipped image too)', () => {
@@ -176,10 +178,10 @@ describe('v0.8 — data-z', () => {
   });
 
   it('checks: not an integer, an undrawn node', () => {
-    expect(propErrors(parse(svg('<rect id="a" data-z="1.5"/><defs id="d" data-z="1"/>')))).toEqual([
-      '#a: data-z="1.5" — ожидается целое число.',
-      '#d: data-z на <defs> ничего не значит — узел не рисуется.',
-    ]);
+    const errs = propErrors(parse(svg('<rect id="a" data-z="1.5"/><defs id="d" data-z="1"/>')));
+    expect(codesOf(errs)).toEqual(['E_Z', 'E_Z']);
+    expect(errs[0]).toMatch(/^E_Z: #a: data-z="1\.5"/);
+    expect(errs[1]).toMatch(/^E_Z: #d: .*<defs>/);
   });
 
   it('z track: step by default, reorders (a parent without data-z starts sorting)', () => {
@@ -213,7 +215,8 @@ describe('v0.8 — data-z', () => {
 |---|-----|
 | 0 | 0.5 |
 `);
-    expect(errors).toEqual(['$clip bad / $track d, строка 3: z="0.5" — нужно целое число.']);
+    expect(codesOf(errors)).toEqual(['E_ANIM_VALUE']);
+    expect(errors[0]).toMatch(/^E_ANIM_VALUE: \$clip bad \/ \$track d, row 3: z="0\.5"/);
   });
 });
 
@@ -252,9 +255,15 @@ describe('v0.8 — data-views and the view column', () => {
       ['front', 'art/f.png'],
       ['side', 'art/s.png'],
     ]);
-    expect(() => parseViews('front')).toThrow(/имя:href/);
-    expect(() => parseViews('a:x.png, a:y.png')).toThrow(/дважды/);
-    expect(propErrors(parse(svg('<g id="g" data-views="a:x.png"/>')))).toEqual(['#g: data-views на <g> не поддерживается — только на <image>.']);
+    const malformed = thrown(() => parseViews('front'));
+    expect(malformed).toMatchObject({ code: 'E_VIEWS' });
+    expect(malformed.message).toContain('"front"');
+    const twice = thrown(() => parseViews('a:x.png, a:y.png'));
+    expect(twice).toMatchObject({ code: 'E_VIEWS' });
+    expect(twice.message).toContain('"a"');
+    const host = propErrors(parse(svg('<g id="g" data-views="a:x.png"/>')));
+    expect(codesOf(host)).toEqual(['E_VIEWS']);
+    expect(host[0]).toMatch(/^E_VIEWS: #g: .*<g>/);
   });
 
   it('view → href track resolved by data-views (target: image or a group with one image)', () => {
@@ -288,20 +297,24 @@ describe('v0.8 — data-views and the view column', () => {
 | 0 | ${v} |
 `;
     const tree = parse(svg(RIG));
-    expect(compileClipsResult(md('head', 'view', 'shut'), tree).errors).toEqual([
-      '$clip x / $track head, строка 3: view «shut» — в data-views #head нет (есть: open, closed, wide).',
-    ]);
-    expect(compileClipsResult(md('bare', 'view', 'open'), tree).errors).toEqual(['$clip x / $track bare: view — у картинки #bare нет data-views.']);
-    expect(compileClipsResult(md('head', 'view', 'open')).errors).toEqual([
-      '$clip x / $track head: колонка view — варианты берутся из data-views сцены; компилируйте со сценой.',
-    ]);
+    const unknown = compileClipsResult(md('head', 'view', 'shut'), tree).errors;
+    expect(codesOf(unknown)).toEqual(['E_ANIM_TARGET']);
+    expect(unknown[0]).toMatch(/^E_ANIM_TARGET: \$clip x \/ \$track head, row 3: view "shut" .*#head.*open, closed, wide/);
+    const noViews = compileClipsResult(md('bare', 'view', 'open'), tree).errors;
+    expect(codesOf(noViews)).toEqual(['E_ANIM_TARGET']);
+    expect(noViews[0]).toMatch(/^E_ANIM_TARGET: \$clip x \/ \$track bare: view — .*#bare/);
+    const noScene = compileClipsResult(md('head', 'view', 'open')).errors;
+    expect(codesOf(noScene)).toEqual(['E_ANIM_TARGET']);
+    expect(noScene[0]).toMatch(/^E_ANIM_TARGET: \$clip x \/ \$track head: /);
     const both = `# $clip x
 ## $track head
 | t | view | tex |
 |---|---|---|
 | 0 | open | b |
 `;
-    expect(compileClipsResult(both, tree).errors).toEqual(['$clip x / $track head: свойство href у #head задано дважды в одном клипе.']);
+    const twice = compileClipsResult(both, tree).errors;
+    expect(codesOf(twice)).toEqual(['E_ANIM_TWICE']);
+    expect(twice[0]).toMatch(/^E_ANIM_TWICE: \$clip x \/ \$track head: .*href.*#head/);
   });
 
   it('view track plays (href swaps); MountedScene.setView for logic', () => {
@@ -324,8 +337,12 @@ describe('v0.8 — data-views and the view column', () => {
     expect(node<Sprite>('headImg').texture).toBe(Assets.cache.get('v08/b.png'));
     s.setView('headImg', 'open');
     expect(node<Sprite>('headImg').texture).toBe(Assets.cache.get('v08/a.png'));
-    expect(() => s.setView('head', 'nope')).toThrow(/варианта «nope» нет \(есть: open, closed, wide\)/);
-    expect(() => s.setView('bare', 'open')).toThrow(/нет <image> с data-views/);
+    const variant = thrown(() => s.setView('head', 'nope'));
+    expect(variant).toMatchObject({ code: 'E_VIEW' });
+    expect(variant.message).toMatch(/#head .*"nope".*open, closed, wide/);
+    const bare = thrown(() => s.setView('bare', 'open'));
+    expect(bare).toMatchObject({ code: 'E_VIEW' });
+    expect(bare.message).toContain('#bare');
   });
 });
 
@@ -338,7 +355,9 @@ describe('v0.8 — data-pivot', () => {
 
   it('parsePivot; checks', () => {
     expect(parsePivot('10 -4')).toEqual({ x: 10, y: -4 });
-    expect(propErrors(parse(svg('<g id="a" data-pivot="1"/>')))).toEqual(['#a: data-pivot="1" — ожидается «x y» (два числа).']);
+    const errs = propErrors(parse(svg('<g id="a" data-pivot="1"/>')));
+    expect(codesOf(errs)).toEqual(['E_PIVOT']);
+    expect(errs[0]).toMatch(/^E_PIVOT: #a: data-pivot="1"/);
   });
 
   it('the node matrix is the same with and without data-pivot (g, rect, image)', () => {

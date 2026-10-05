@@ -151,6 +151,6 @@ describe('Trempel collections (v1.1): createGame({ collections })', () => {
 
   it('an unknown collection is a mount error, not a silent 404', () => {
     expect(() => new Screen('bad', { base: SCENE.replace('@skin/', '@ui/') }, 'expand', { backend: new PixiBackend(), context: {}, collections })).toThrow(TrempelError);
-    expect(() => withCollections((h) => h, collections)('@ui/x.png')).toThrow(/коллекции @ui нет/);
+    expect(() => withCollections((h) => h, collections)('@ui/x.png')).toThrow(expect.objectContaining({ code: 'E_COLLECTION_UNKNOWN' }));
   });
 });

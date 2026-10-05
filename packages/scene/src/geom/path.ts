@@ -13,9 +13,14 @@
 // open end), not the library's getTangentAtLength: that one is reversed on arcs (svg-path-properties
 // 2.1.0 — a clockwise arc reports the counter-clockwise direction) and zero where control points
 // coincide with an end point.
+//
+// @internal — `@trempel/scene/internal/geom/path`, for the kit and the editor: no stability promise.
+// Stable (re-exported by @trempel/scene): ScenePath, PathPoint.
 
 import { svgPathProperties } from 'svg-path-properties';
 import type { SceneNode } from '../parser.js';
+import { within } from '../codes.js';
+import { TrempelError, trempelError } from '../errors.js';
 import { parseTransform, type Matrix } from '../transform.js';
 import { GEOMETRY_TAGS, shapeCommands, toPathData } from './pathdata.js';
 
@@ -49,28 +54,25 @@ export function pathFromNode(node: SceneNode): ScenePath {
   const hit = cache.get(node);
   if (hit) return hit;
   if (!GEOMETRY_TAGS.has(node.tag)) {
-    throw new Error(`${where(node)} — <${node.tag}>, не геометрия: путём может быть ${[...GEOMETRY_TAGS].join(', ')}.`);
+    throw trempelError('E_GEOMETRY', `${where(node)} — <${node.tag}> is not geometry: a path is one of ${[...GEOMETRY_TAGS].join(', ')}.`);
   }
   let cmds;
   try {
     cmds = shapeCommands(node.tag, node.attrs);
   } catch (e) {
-    throw new Error(`${where(node)}: ${(e as Error).message}`);
+    throw new TrempelError([within(where(node), (e as Error).message)]);
   }
   let m: Matrix;
   try {
     m = parseTransform(node.attrs.transform);
   } catch (e) {
-    throw new Error(`${where(node)}: ${(e as Error).message}`);
+    throw new TrempelError([within(where(node), (e as Error).message)]);
   }
   const [a, b, c, d, e, f] = m;
   // Similarity: columns orthogonal and of equal length (rotation/uniform scale, optionally mirrored).
   const k = Math.hypot(a, b);
   if (Math.abs(Math.hypot(c, d) - k) > 1e-9 * Math.max(1, k) || Math.abs(a * c + b * d) > 1e-9 * Math.max(1, k * k) || k === 0) {
-    throw new Error(
-      `${where(node)}: transform="${node.attrs.transform}" растягивает или скашивает путь — длины по нему ` +
-        `не посчитать; допустимы translate, rotate, равномерный scale.`,
-    );
+    throw trempelError('E_PATH_SIMILARITY', `${where(node)}: transform="${node.attrs.transform}" stretches or skews the path — lengths along it are undefined; translate, rotate and uniform scale are allowed.`);
   }
 
   const closed = cmds.length > 0 && cmds[cmds.length - 1][0] === 'Z';

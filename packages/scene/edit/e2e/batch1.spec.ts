@@ -120,11 +120,12 @@ describe('editor e2e — batch 1: pan/zoom, console, macros (examples/motion cop
       const lefts = await e.page.evaluate(() => ['sun', 'satellite', 'window'].map((id) => window.tml!.bounds(id)!.x));
       await pressMod(e.page, 'k');
       await e.page.waitForSelector('#palette input');
-      await e.page.keyboard.type('левому');
+      await e.page.keyboard.type('align-left');
       await e.page.keyboard.press('Enter');
       await e.page.waitForFunction(() => window.tmlEdit!.doc!.history.length > 0 && !window.tmlEdit!.doc!.grouping);
       await idle(e.page);
-      expect(await e.page.evaluate(() => window.tmlEdit!.doc!.history.map((h) => h.label))).toEqual(['Выровнять выделение по левому краю']);
+      const title = await e.page.evaluate(async () => (await window.tml!.macros.list()).find((m) => m.name === 'align-left')!.title);
+      expect(await e.page.evaluate(() => window.tmlEdit!.doc!.history.map((h) => h.label))).toEqual([title]);
       const after = await e.page.evaluate(() => ['sun', 'satellite', 'window'].map((id) => window.tml!.bounds(id)!.x));
       for (const x of after) expect(x).toBeCloseTo(Math.min(...lefts), 1);
       await pressMod(e.page, 'z');

@@ -4,6 +4,7 @@ import { reactive } from '../src/reactive';
 import { Registry } from '../src/registry';
 import { createTileGrid, type TileGridInstance } from './helpers/tileGrid';
 import { createMockBackend, isMockNode } from './helpers/mockBackend';
+import { thrown } from './helpers/codes';
 
 const SCENE = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" viewBox="0 0 1280 800">
   <g id="board" tml:type="tile-grid" tml:cols="3" tml:rows="3" tml:cellw="200" tml:cellh="200"/>
@@ -51,8 +52,9 @@ describe('scene', () => {
 
   it('throws on tml:type without a registry', () => {
     const backend = createMockBackend();
-    expect(() =>
+    const e = thrown(() =>
       mountScene(SCENE, { backend, context: { state: reactive({ balance: 0, bonus: 0 }) } }),
-    ).toThrowError(/no registry provided|unknown component/);
+    );
+    expect(e).toMatchObject({ code: 'E_NO_REGISTRY' });
   });
 });

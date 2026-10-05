@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { apply, localMatrix, parseTransform, type Matrix } from '../src/transform';
+import { thrown } from './helpers/codes';
 
 const close = (m: Matrix, want: Matrix): void => {
   m.forEach((v, i) => expect(v).toBeCloseTo(want[i], 9));
@@ -80,12 +81,15 @@ describe('transform — chains compose like SVG (rightmost applies first)', () =
 
 describe('transform — errors are explicit', () => {
   it.each([
-    ['perspective(3)', /функция «perspective» не поддерживается/],
-    ['translate(1,2,3)', /translate\(1,2,3\) — ожидается 1 или 2/],
-    ['matrix(1 0 0 1)', /ожидается 6/],
-    ['scale(a)', /ожидается 1 или 2/],
-    ['translate(1,2) garbage', /не разобрать с позиции 16/],
-  ])('%s', (src, re) => {
-    expect(() => parseTransform(src)).toThrow(re);
+    // the code, plus what the message names: the function, its arguments, the expected arity, the column
+    ['perspective(3)', '"perspective"'],
+    ['translate(1,2,3)', 'translate(1,2,3)'],
+    ['matrix(1 0 0 1)', '6'],
+    ['scale(a)', 'scale(a)'],
+    ['translate(1,2) garbage', '16'],
+  ])('%s', (src, named) => {
+    const e = thrown(() => parseTransform(src));
+    expect(e).toMatchObject({ code: 'E_TRANSFORM' });
+    expect(e.message).toContain(named);
   });
 });

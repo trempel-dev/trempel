@@ -1,16 +1,29 @@
-// errors.ts — the shared hard-error type for the merge/contract pipeline.
-// Merge and contract failures are collected as a list and thrown together, so a designer
-// or CI sees every problem at once instead of fixing them one reload at a time.
+// errors.ts — the shared hard-error type. Merge, contract, prefab and expression failures are
+// collected as a list and thrown together, so a designer or CI sees every problem at once instead
+// of fixing them one reload at a time. Every message starts with its code (codes.ts).
+
+import { CODES, codeOf, coded, type Code } from './codes.js';
 
 export class TrempelError extends Error {
-  /** All problems found, human-readable, in discovery order. */
+  /** All problems found, human-readable (`E_CODE: message`), in discovery order. */
   readonly errors: string[];
+  /** The code of each message, in the same order (`undefined` for a message without one). */
+  readonly codes: (Code | undefined)[];
+  /** The code of the first message. */
+  readonly code: Code | undefined;
 
   constructor(errors: string[]) {
     super(errors.join('\n'));
     this.name = 'TrempelError';
     this.errors = errors;
+    this.codes = errors.map(codeOf);
+    this.code = this.codes[0];
   }
+}
+
+/** A `TrempelError` with one coded message. */
+export function trempelError(code: Code, text: string): TrempelError {
+  return new TrempelError([coded(code, text)]);
 }
 
 /** Where a runtime expression failure happened (v0.6.1): passed to `mount({ onError })`. */
@@ -30,6 +43,8 @@ export interface ExpressionErrorInfo {
  * on-click handlers when the host gave neither `onError` nor `lenient: true`.
  */
 export class ExpressionRuntimeError extends Error implements ExpressionErrorInfo {
+  /** The code of the failure (`E_EXPR_UNDEF`, `E_EXPR_FIELD`…; `E_EXPR_RUNTIME` for a context function's own error). */
+  readonly code: Code;
   readonly node: string;
   readonly attr: string;
   readonly expr: string;
@@ -38,8 +53,12 @@ export class ExpressionRuntimeError extends Error implements ExpressionErrorInfo
   constructor(info: ExpressionErrorInfo) {
     const e = info.error as { reason?: unknown; message?: unknown } | null;
     const why = typeof e?.reason === 'string' ? e.reason : typeof e?.message === 'string' ? e.message : String(info.error);
-    super(`${info.node} ${info.attr}="${info.expr}": ${why}`, { cause: info.error });
+    const own = (info.error as { code?: unknown } | null)?.code;
+    const code: Code = typeof own === 'string' && own in CODES ? (own as Code) : (codeOf(why) ?? 'E_EXPR_RUNTIME');
+    const text = codeOf(why) ? why.replace(/^[EW]_[A-Z0-9_]+: /, '') : why;
+    super(coded(code, `${info.node} ${info.attr}="${info.expr}": ${text}`), { cause: info.error });
     this.name = 'ExpressionRuntimeError';
+    this.code = code;
     this.node = info.node;
     this.attr = info.attr;
     this.expr = info.expr;

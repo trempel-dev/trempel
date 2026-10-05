@@ -47,12 +47,12 @@ export function mountClipsPanel(clips: Clips, onShot: () => void): void {
     name.replaceChildren();
     const none = document.createElement('option');
     none.value = '';
-    none.textContent = clips.list.length ? '— клип —' : 'клипов нет';
+    none.textContent = clips.list.length ? '— clip —' : 'no clips';
     name.append(none);
     for (const c of clips.list) {
       const o = document.createElement('option');
       o.value = c.name;
-      o.textContent = `${c.name} · ${c.duration.toFixed(2)} с`;
+      o.textContent = `${c.name} · ${c.duration.toFixed(2)} s`;
       o.title = c.file;
       name.append(o);
     }
@@ -66,7 +66,7 @@ export function mountClipsPanel(clips: Clips, onShot: () => void): void {
     slider.max = String(d || 1);
     slider.disabled = !c;
     num.disabled = !c;
-    dur.textContent = c ? `/ ${d.toFixed(2)} с` : '';
+    dur.textContent = c ? `/ ${d.toFixed(2)} s` : '';
     loop.checked = clips.loop;
     speed.value = String(clips.speed);
     onion.checked = clips.onion.on;
@@ -74,9 +74,9 @@ export function mountClipsPanel(clips: Clips, onShot: () => void): void {
     $('clip-pause').toggleAttribute('disabled', !clips.playing);
     $('clip-stop').toggleAttribute('disabled', !clips.active);
     info.textContent = c
-      ? `${c.file}${clips.errors.length ? ` · ошибок клипов: ${clips.errors.length}` : ''}`
+      ? `${c.file}${clips.errors.length ? ` · clip errors: ${clips.errors.length}` : ''}`
       : clips.errors.length
-        ? `ошибок клипов: ${clips.errors.length} (панель «Ошибки»)`
+        ? `clip errors: ${clips.errors.length} (see the Errors panel)`
         : '';
   };
   const tick = (): void => {

@@ -13,7 +13,7 @@
 // setTransform parts are taken about the node's pivot (data-pivot, else its bounds' centre), so
 // the written translate means what the inspector shows.
 
-import type { SceneNode } from '../src/core.js';
+import { coded, type SceneNode } from '../src/core.js';
 import {
   apply,
   applyVec,
@@ -254,7 +254,7 @@ function instanceResize(t: OpTarget, Du: Matrix): Call[] | null {
   return out;
 }
 
-export const OP_LABEL: Record<OpKind, string> = { G: 'сдвиг', R: 'поворот', S: 'масштаб' };
+export const OP_LABEL: Record<OpKind, string> = { G: 'move', R: 'rotate', S: 'scale' };
 
 /** Every target's commands (one batch): empty when the operator changes nothing. */
 export function opCommands(targets: OpTarget[], p: OpParams): Call[] {
@@ -342,20 +342,20 @@ export function stepped(p: OpParams, axis: Axis | null, axes: [Pt, Pt]): OpParam
 /** The status line's value part: «Сдвиг X: 120 px», «Поворот: −45°», «Масштаб Y: 1.5». */
 export function opStatus(r: OpRequest, p: OpParams, typed: string | null, axes: [Pt, Pt] = [{ x: 1, y: 0 }, { x: 0, y: 1 }]): string {
   const axis = activeAxis(r);
-  const ax = axis ? ` ${axis.toUpperCase()} ${r.space === 'local' ? '(лок.)' : '(мир.)'}` : '';
+  const ax = axis ? ` ${axis.toUpperCase()} ${r.space === 'local' ? '(local)' : '(global)'}` : '';
   const n = (v: number): string => String(Math.round(v * 100) / 100).replace('-', '−');
   const shown = (v: number): string => (typed != null ? `${typed.replace('-', '−') || '…'}` : n(v));
   if (p.kind === 'G') {
     const d = p.delta ?? { x: 0, y: 0 };
     if (axis || typed != null) {
       const dir = axis === 'y' ? axes[1] : axes[0];
-      return `Сдвиг${ax || ' X'}: ${shown(d.x * dir.x + d.y * dir.y)} px`;
+      return `Move${ax || ' X'}: ${shown(d.x * dir.x + d.y * dir.y)} px`;
     }
-    return `Сдвиг: ${n(d.x)}, ${n(d.y)} px`;
+    return `Move: ${n(d.x)}, ${n(d.y)} px`;
   }
-  if (p.kind === 'R') return `Поворот: ${shown(p.angle ?? 0)}°`;
+  if (p.kind === 'R') return `Rotate: ${shown(p.angle ?? 0)}°`;
   const f = p.factor ?? [1, 1];
-  return `Масштаб${ax}: ${shown(axis === 'y' ? f[1] : f[0])}`;
+  return `Scale${ax}: ${shown(axis === 'y' ? f[1] : f[0])}`;
 }
 
 /** Numeric input of an operator (Blender): digits, «.», «-» flips the sign, Backspace. */
@@ -426,7 +426,7 @@ export function opPaths(host: OpHost, nodes: string[] | undefined): string[] {
   if (!nodes) return [...host.selection];
   return nodes.map((n) => {
     const p = /^\d+(\/\d+)*$/.test(n) ? n : host.pathOfId(n.replace(/^#/, ''));
-    if (p == null) throw new Error(`tml.op: узла «${n}» нет`);
+    if (p == null) throw new Error(coded('E_EDIT_NODE', `tml.op: no node "${n}"`));
     return p;
   });
 }
@@ -437,15 +437,15 @@ export function opPaths(host: OpHost, nodes: string[] | undefined): string[] {
  */
 export function applyOp(host: OpHost, name: OpName, opts: OpOptions = {}): ReturnType<OpHost['batch']> {
   const doc = host.doc;
-  if (!doc) throw new Error('tml.op: сцена не открыта');
+  if (!doc) throw new Error(coded('E_EDIT_NO_SCENE', 'tml.op: no scene is open'));
   const targets = opTargets(doc.scene, opPaths(host, opts.nodes), host.bounds, (p) => host.ref(p), host.instance?.bind(host));
-  if (!targets.length) throw new Error('tml.op: нечего трансформировать — выделите узел или передайте nodes');
+  if (!targets.length) throw new Error(coded('E_EDIT_SELECTION', 'tml.op: nothing to transform — select a node or pass nodes'));
   if (name === '.' || name === 'ctrl+.') {
-    if (name === '.' && (!Number.isFinite(opts.x) || !Number.isFinite(opts.y))) throw new Error("tml.op('.'): нужна точка { x, y } в единицах сцены");
-    return host.batch('пивот', pivotCommands(targets, name === '.' ? { x: opts.x!, y: opts.y! } : 'centre'));
+    if (name === '.' && (!Number.isFinite(opts.x) || !Number.isFinite(opts.y))) throw new Error(coded('E_EDIT_ARGS', "tml.op('.'): needs a point { x, y } in scene units"));
+    return host.batch('pivot', pivotCommands(targets, name === '.' ? { x: opts.x!, y: opts.y! } : 'centre'));
   }
-  if (name !== 'G' && name !== 'R' && name !== 'S') throw new Error(`tml.op: оператора «${String(name)}» нет (G, R, S, ., ctrl+.)`);
-  if (!Number.isFinite(opts.value)) throw new Error(`tml.op('${name}'): нужно число value`);
+  if (name !== 'G' && name !== 'R' && name !== 'S') throw new Error(coded('E_EDIT_ARGS', `tml.op: no operator "${String(name)}" (G, R, S, ., ctrl+.)`));
+  if (!Number.isFinite(opts.value)) throw new Error(coded('E_EDIT_ARGS', `tml.op('${name}'): value must be a number`));
   const req = { kind: name, axis: opts.axis ?? null, exclude: opts.exclude, space: opts.space ?? defaultSpace(targets), value: opts.value! } as const;
   const calls = opCommands(targets, paramsForValue(req, targets));
   return calls.length ? host.batch(OP_LABEL[name], calls) : null;

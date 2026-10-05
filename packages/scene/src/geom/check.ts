@@ -10,8 +10,12 @@
 //   - nothing inside <defs> is bound (service geometry is not a view).
 //
 // Used by mount() and the CLI checker; wording names the node (#id or <tag>).
+//
+// @internal — `@trempel/scene/internal/geom/check`, for the kit and the editor: no stability promise.
 
 import type { SceneNode } from '../parser.js';
+import { coded, within } from '../codes.js';
+import { trempelError } from '../errors.js';
 import { walk } from '../tree.js';
 import { GEOMETRY_TAGS, PathDataError, shapeCommands } from './pathdata.js';
 
@@ -31,7 +35,7 @@ export function parseClipRef(value: unknown): string | null {
   const v = String(value).trim();
   if (v === '' || v === 'none') return null;
   const m = /^url\(\s*['"]?#([^'")\s]+)['"]?\s*\)$/.exec(v);
-  if (!m) throw new Error(`clip-path="${v}" — ожидается url(#id) или none.`);
+  if (!m) throw trempelError('E_CLIP_PATH', `clip-path="${v}" — expected url(#id) or none.`);
   return m[1];
 }
 
@@ -56,62 +60,62 @@ export function geometryErrors(tree: SceneNode): string[] {
     const w = where(n);
 
     if (n.tag === 'defs') {
-      if (parent !== tree) errors.push(`${w}: <defs> — только прямой ребёнок корня <svg>.`);
+      if (parent !== tree) errors.push(coded('E_DEFS_PLACE', `${w}: <defs> is only a direct child of the root <svg>.`));
     }
     if (n.tag === 'clipPath') {
-      if (!parent || parent.tag !== 'defs') errors.push(`${w}: <clipPath> живёт только внутри <defs>.`);
-      if (!n.attrs.id) errors.push(`<clipPath> без id — на неё нельзя сослаться из clip-path.`);
+      if (!parent || parent.tag !== 'defs') errors.push(coded('E_DEFS_PLACE', `${w}: <clipPath> lives only inside <defs>.`));
+      if (!n.attrs.id) errors.push(coded('E_CLIP_NO_ID', '<clipPath> without an id — clip-path cannot reference it.'));
       const units = n.attrs.clipPathUnits;
       if (units != null && units !== 'userSpaceOnUse') {
-        errors.push(`${w}: clipPathUnits="${units}" не поддерживается — только userSpaceOnUse (единицы маскируемого узла).`);
+        errors.push(coded('E_CLIP_UNITS', `${w}: clipPathUnits="${units}" is not supported — only userSpaceOnUse (the masked node's units).`));
       }
     }
     if (parent?.tag === 'defs' && !DEFS_CHILDREN.has(n.tag)) {
-      errors.push(`${w}: <${n.tag}> в <defs> не бывает (есть: ${[...DEFS_CHILDREN].join(', ')}).`);
+      errors.push(coded('E_DEFS_PLACE', `${w}: <defs> cannot hold <${n.tag}> (it holds: ${[...DEFS_CHILDREN].join(', ')}).`));
     } else if (inDefs && parent?.tag === 'g' && !inClip && !DEFS_CHILDREN.has(n.tag)) {
-      errors.push(`${w}: <${n.tag}> в <defs> не бывает (есть: ${[...DEFS_CHILDREN].join(', ')}).`);
+      errors.push(coded('E_DEFS_PLACE', `${w}: <defs> cannot hold <${n.tag}> (it holds: ${[...DEFS_CHILDREN].join(', ')}).`));
     }
     if (inClip && n.tag !== 'clipPath' && !CLIP_CHILDREN.has(n.tag)) {
-      errors.push(`${w}: <${n.tag}> внутри <clipPath> не бывает (есть: ${[...CLIP_CHILDREN].join(', ')}).`);
+      errors.push(coded('E_DEFS_PLACE', `${w}: <clipPath> cannot hold <${n.tag}> (it holds: ${[...CLIP_CHILDREN].join(', ')}).`));
     }
 
     if (GEOMETRY_TAGS.has(n.tag)) {
       try {
         shapeCommands(n.tag, n.attrs);
       } catch (e) {
-        const msg = e instanceof PathDataError && n.tag === 'path' && e.src ? `d: ${e.message}` : (e as Error).message;
-        errors.push(`${w}: ${msg}.`);
+        const msg = e instanceof PathDataError && n.tag === 'path' && e.src ? within('d', e.message) : (e as Error).message;
+        errors.push(`${within(w, msg)}.`);
       }
     }
 
     if (inDefs) {
       const keys = Object.keys(n.tml);
       if (keys.length) {
-        errors.push(`${w}: служебная геометрия (<defs>) не биндится — ${keys.map((k) => `tml:${k}`).join(', ')} здесь не действует.`);
+        errors.push(coded('E_REF_DEFS', `${w}: service geometry (<defs>) is not bound — ${keys.map((k) => `tml:${k}`).join(', ')} has no effect here.`));
       }
     }
 
     const cp = n.attrs['clip-path'];
     if (cp != null) {
       if (!CLIP_HOSTS.has(n.tag)) {
-        errors.push(`${w}: clip-path на <${n.tag}> не поддерживается — только на <g> и <image>.`);
+        errors.push(coded('E_CLIP_PATH', `${w}: clip-path on <${n.tag}> is not supported — only on <g> and <image>.`));
       } else if (inDefs) {
-        errors.push(`${w}: clip-path внутри <defs> ничего не маскирует.`);
+        errors.push(coded('E_CLIP_PATH', `${w}: clip-path inside <defs> masks nothing.`));
       } else {
         try {
           const id = parseClipRef(cp);
           if (id != null) {
             const target = ids.get(id);
-            if (!target) errors.push(`${w}: clip-path="${cp}" — узла #${id} нет.`);
-            else if (target.tag !== 'clipPath') errors.push(`${w}: clip-path="${cp}" — #${id} это <${target.tag}>, а не <clipPath>.`);
+            if (!target) errors.push(coded('E_CLIP_PATH', `${w}: clip-path="${cp}" — no node #${id}.`));
+            else if (target.tag !== 'clipPath') errors.push(coded('E_CLIP_PATH', `${w}: clip-path="${cp}" — #${id} is <${target.tag}>, not a <clipPath>.`));
           }
         } catch (e) {
-          errors.push(`${w}: ${(e as Error).message}`);
+          errors.push(within(w, (e as Error).message));
         }
       }
     }
     if (n.tml['bind-clip-path'] !== undefined && !CLIP_HOSTS.has(n.tag)) {
-      errors.push(`${w}: tml:bind-clip-path на <${n.tag}> не поддерживается — только на <g> и <image>.`);
+      errors.push(coded('E_CLIP_PATH', `${w}: tml:bind-clip-path on <${n.tag}> is not supported — only on <g> and <image>.`));
     }
 
     for (const child of n.children) visit(child, n, inDefs || n.tag === 'defs', inClip || n.tag === 'clipPath');

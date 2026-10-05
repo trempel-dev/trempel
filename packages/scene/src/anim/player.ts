@@ -19,6 +19,7 @@
 // an image (a 9-slice panel's size) through the backend.
 
 import type { ScenePath } from '../geom/path.js';
+import { trempelError } from '../errors.js';
 import { setBoxProp } from '../layout.js';
 import type { NodeHandle, RendererBackend } from '../render/backend.js';
 import { resolveEase } from './easing.js';
@@ -251,9 +252,9 @@ export class Animator {
   private resolveTrack(tr: Track, targets?: Record<string, NodeHandle | NodeHandle[]>): ResolvedTrack {
     const nodes = this.resolveTargets(tr.target, targets);
     if (tr.property === 'motion') {
-      if (!tr.path) throw new Error(`Trempel anim error: motion-трек #${tr.target} без path.`);
+      if (!tr.path) throw trempelError('E_ANIM_PLAY', `the motion track #${tr.target} has no path.`);
       if (!this.options.path) {
-        throw new Error(`Trempel anim error: motion-трек #${tr.target} — Animator создан без path (new Animator(…, { path: (id) => scene.path(id) })).`);
+        throw trempelError('E_ANIM_PLAY', `the motion track #${tr.target} — the Animator was created without path (new Animator(…, { path: (id) => scene.path(id) })).`);
       }
       return { nodes, property: tr.property, keys: tr.keys, kind: 'motion', path: this.options.path(tr.path), src: tr };
     }
@@ -262,7 +263,7 @@ export class Animator {
     if (tr.relative && kind === 'number') {
       const combine = ADD.has(tr.property) ? 'add' : MUL.has(tr.property) ? 'mul' : null;
       if (!combine) {
-        throw new Error(`Trempel anim error: #${tr.target}.${tr.property} — относительным бывает только x, y, rotation, skew.x, skew.y, scale.x, scale.y.`);
+        throw trempelError('E_ANIM_PLAY', `#${tr.target}.${tr.property} — only x, y, rotation, skew.x, skew.y, scale.x, scale.y can be relative.`);
       }
       out.combine = combine;
       out.rest = nodes.map((n) => this.restOf(n, tr.property, tr.target));
@@ -276,10 +277,10 @@ export class Animator {
     const hit = m.get(property);
     if (hit !== undefined) return hit;
     if (!this.backend.getProp) {
-      throw new Error(`Trempel anim error: относительный трек #${target}.${property} — бэкенд не умеет getProp, позу покоя не прочитать.`);
+      throw trempelError('E_BACKEND', `the relative track #${target}.${property} — the backend has no getProp, the rest pose cannot be read.`);
     }
     const v = Number(this.backend.getProp(node, property));
-    if (!Number.isFinite(v)) throw new Error(`Trempel anim error: #${target}.${property} — поза покоя не число.`);
+    if (!Number.isFinite(v)) throw trempelError('E_ANIM_PLAY', `#${target}.${property} — the rest pose is not a number.`);
     m.set(property, v);
     return v;
   }

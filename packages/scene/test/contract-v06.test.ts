@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '../src/parser';
 import { parseContract, checkContract } from '../src/contract';
+import { codesOf, thrown } from './helpers/codes';
 
 const svg = (body: string, viewBox: string | null = '0 0 816 1456'): string =>
   `<svg xmlns="http://www.w3.org/2000/svg"${viewBox == null ? '' : ` viewBox="${viewBox}"`}>${body}</svg>`;
@@ -13,17 +14,16 @@ describe('contract v0.6 — viewBox rules', () => {
 
   it('any: present and well-formed, value free', () => {
     expect(check(svg('', '0 0 1 2'), '<contract viewBox="any"/>')).toEqual([]);
-    expect(check(svg('', null), '<contract viewBox="any"/>')).toEqual([
-      'У базы нет корректного viewBox ("(нет)"), а контракт его требует.',
-    ]);
+    expect(codesOf(check(svg('', null), '<contract viewBox="any"/>'))).toEqual(['E_CONTRACT_VIEWBOX']);
   });
 
   it('a list of allowed values', () => {
     const c = '<contract viewBox="0 0 816 1456 | 0 0 960 1664 | 0 0 541 937"/>';
     expect(check(svg('', '0 0 960 1664'), c)).toEqual([]);
-    expect(check(svg('', '0 0 1024 2048'), c)).toEqual([
-      'viewBox базы "0 0 1024 2048" не из разрешённых: "0 0 816 1456", "0 0 960 1664", "0 0 541 937".',
-    ]);
+    const errs = check(svg('', '0 0 1024 2048'), c);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_VIEWBOX']);
+    expect(errs[0]).toContain('"0 0 1024 2048"');
+    expect(errs[0]).toContain('"0 0 816 1456", "0 0 960 1664", "0 0 541 937"');
   });
 
   it('aspect only, with a tolerance (game canvases)', () => {
@@ -31,10 +31,9 @@ describe('contract v0.6 — viewBox rules', () => {
     for (const vb of ['0 0 816 1456', '0 0 960 1664', '0 0 864 1536', '0 0 541 937']) {
       expect(check(svg('', vb), c)).toEqual([]);
     }
-    const [err] = check(svg('', '0 0 1280 800'), c);
-    expect(err).toBe(
-      'viewBox базы "0 0 1280 800" — пропорция 1280:800 ≈ 1.6000, а контракт ждёт 9:16 ≈ 0.5625 (допуск 3%).',
-    );
+    const errs = check(svg('', '0 0 1280 800'), c);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_VIEWBOX']);
+    for (const part of ['"0 0 1280 800"', '1280:800 ≈ 1.6000', '9:16 ≈ 0.5625', '3%']) expect(errs[0]).toContain(part);
     expect(check(svg('', '0 0 900 1600'), '<contract aspect="9:16"/>')).toEqual([]); // exact, no tolerance
   });
 
@@ -48,12 +47,14 @@ describe('contract v0.6 — viewBox rules', () => {
   });
 
   it.each([
-    ['<contract viewBox="0 0 10"/>', /ожидается "minX minY ширина высота"/],
-    ['<contract aspect="wide"/>', /aspect="wide" — ожидается "W:H"/],
-    ['<contract aspect="9:16" tolerance="lots"/>', /tolerance="lots"/],
-    ['<contract viewBox="any" aspect="9:16"/>', /либо viewBox, либо aspect/],
-  ])('rejects a malformed rule: %s', (xml, re) => {
-    expect(() => parseContract(xml)).toThrow(re);
+    ['<contract viewBox="0 0 10"/>', 'viewBox="0 0 10"'],
+    ['<contract aspect="wide"/>', 'aspect="wide"'],
+    ['<contract aspect="9:16" tolerance="lots"/>', 'tolerance="lots"'],
+    ['<contract viewBox="any" aspect="9:16"/>', '<contract>'],
+  ])('rejects a malformed rule: %s', (xml, names) => {
+    const e = thrown(() => parseContract(xml));
+    expect(e).toMatchObject({ code: 'E_CONTRACT_SYNTAX' });
+    expect(e.message).toContain(names);
   });
 });
 
@@ -83,7 +84,7 @@ describe('contract v0.6 — pattern nodes', () => {
 
   it('passes a good level (an oN without _oN is fine — the link is one-way)', () => {
     const base = level(
-      '<image id="o1"/><image id="o2"/><image id="d1"/><image id="o4 копия"/>',
+      '<image id="o1"/><image id="o2"/><image id="d1"/><image id="o4 copy"/>',
       '<image id="_o1"/>',
     );
     expect(check(base, LEVEL)).toEqual([]);
@@ -91,24 +92,32 @@ describe('contract v0.6 — pattern nodes', () => {
 
   it('flags the count, tag, place and missing partner — all at once', () => {
     const base = level('<image id="d1"/><g id="d2"/>', '<image id="_o3"/><image id="o9"/>');
-    expect(check(base, LEVEL)).toEqual([
-      '#o9: узлы по шаблону o(\\d+) должны лежать внутри #scene, а этот — снаружи.',
-      'Узлов по шаблону o(\\d+) в #scene — 0, а контракт ждёт от 1 до 60.',
-      '#_o3: к нему нужен парный узел #o3 (requires="o$1") — в базе его нет.',
-      '#d2: по шаблону d\\d+ ожидается <image>, а в базе <g>.',
-    ]);
+    const errs = check(base, LEVEL);
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_PLACE', 'E_CONTRACT_COUNT', 'E_CONTRACT_PARTNER', 'E_CONTRACT_TAG']);
+    expect(errs[0]).toContain('#o9');
+    expect(errs[0]).toContain('#scene');
+    expect(errs[1]).toMatch(/o\(\\d\+\).*#scene.*\b0\b.*\b1\b.*\b60\b/);
+    expect(errs[2]).toContain('#_o3');
+    expect(errs[2]).toContain('#o3');
+    expect(errs[3]).toContain('#d2');
+    expect(errs[3]).toContain('<image>');
+    expect(errs[3]).toContain('<g>');
   });
 
   it('count forms: exact, open-ended, upper bound', () => {
     const base = svg('<image id="a1"/><image id="a2"/>');
     expect(check(base, '<contract><image match="a\\d" count="2"/></contract>')).toEqual([]);
-    expect(check(base, '<contract><image match="a\\d" count="3"/></contract>')).toEqual([
-      'Узлов по шаблону a\\d — 2, а контракт ждёт ровно 3.',
-    ]);
-    expect(check(base, '<contract><image match="a\\d" count="3.."/></contract>')[0]).toMatch(/не меньше 3/);
-    expect(check(base, '<contract><image match="a\\d" count="..1"/></contract>')[0]).toMatch(/не больше 1/);
+    // one E_CONTRACT_COUNT naming how many matched and the bound broken
+    const count = (b: string, c: string): string => {
+      const errs = check(b, c);
+      expect(codesOf(errs)).toEqual(['E_CONTRACT_COUNT']);
+      return errs[0];
+    };
+    expect(count(base, '<contract><image match="a\\d" count="3"/></contract>')).toMatch(/\b2\b.*\b3\b/);
+    expect(count(base, '<contract><image match="a\\d" count="3.."/></contract>')).toMatch(/\b2\b.*\b3\b/);
+    expect(count(base, '<contract><image match="a\\d" count="..1"/></contract>')).toMatch(/\b2\b.*\b1\b/);
     // default count is "at least one"
-    expect(check(svg(''), '<contract><image match="a\\d"/></contract>')[0]).toMatch(/— 0, а контракт ждёт не меньше 1/);
+    expect(count(svg(''), '<contract><image match="a\\d"/></contract>')).toMatch(/\b0\b.*\b1\b/);
   });
 
   it('the regex matches the whole id', () => {
@@ -118,23 +127,25 @@ describe('contract v0.6 — pattern nodes', () => {
 
   it('empty="true" on a pattern', () => {
     const base = svg('<g id="slot1"/><g id="slot2"><rect/><rect/></g>');
-    expect(check(base, '<contract><g match="slot\\d" empty="true"/></contract>')).toEqual([
-      '#slot2 должен быть пустым — в нём 2 дочерних узла.',
-    ]);
+    const errs = check(base, '<contract><g match="slot\\d" empty="true"/></contract>');
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_EMPTY']);
+    expect(errs[0]).toContain('#slot2');
   });
 
   it('a missing "in" container is one clear error', () => {
-    expect(check(svg('<image id="o1"/>'), '<contract><image match="o\\d" in="scene"/></contract>')).toEqual([
-      'Шаблон o\\d: контейнер #scene, в котором должны лежать узлы, в базе не найден.',
-    ]);
+    const errs = check(svg('<image id="o1"/>'), '<contract><image match="o\\d" in="scene"/></contract>');
+    expect(codesOf(errs)).toEqual(['E_CONTRACT_MISSING']);
+    expect(errs[0]).toContain('#scene');
   });
 
   it.each([
-    ['<contract><image match="(" /></contract>', /не регулярное выражение/],
-    ['<contract><image match="a" count="5..2"/></contract>', /минимум больше максимума/],
-    ['<contract><image match="a" count="lots"/></contract>', /count="lots"/],
-    ['<contract><image id="a" match="a"/></contract>', /id и match вместе не бывают/],
-  ])('rejects a malformed pattern: %s', (xml, re) => {
-    expect(() => parseContract(xml)).toThrow(re);
+    ['<contract><image match="(" /></contract>', 'match="("'],
+    ['<contract><image match="a" count="5..2"/></contract>', 'count="5..2"'],
+    ['<contract><image match="a" count="lots"/></contract>', 'count="lots"'],
+    ['<contract><image id="a" match="a"/></contract>', '<image id="a">'],
+  ])('rejects a malformed pattern: %s', (xml, names) => {
+    const e = thrown(() => parseContract(xml));
+    expect(e).toMatchObject({ code: 'E_CONTRACT_SYNTAX' });
+    expect(e.message).toContain(names);
   });
 });

@@ -27,12 +27,12 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const folder = args._[0];
 if (!folder) {
-  console.error('usage: npm run view -- <folder> [--module trempel.view.ts] [--port N] [--open]');
+  console.error('E_CLI: usage: npm run view -- <folder> [--module trempel.view.ts] [--port N] [--open]');
   process.exit(2);
 }
 const dir = resolve(cwd, folder);
 if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-  console.error(`✗ ${folder}: not a folder`);
+  console.error(`E_CLI: ${folder}: not a folder`);
   process.exit(2);
 }
 

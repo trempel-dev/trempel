@@ -14,7 +14,8 @@
 // Subclass it (createGame({ backend: (o) => new MyBackend(o) })) for a game's own attributes.
 
 import { NineSliceSprite, Sprite, Text, Texture, type Container, type FederatedPointerEvent } from 'pixi.js';
-import { PixiBackend, parseColor, type ImageNode, type NodeHandle, type PixiBackendOptions } from '@trempel/scene';
+import { PixiBackend, type ImageNode, type NodeHandle, type PixiBackendOptions } from '@trempel/scene';
+import { parseColor } from '@trempel/scene/internal/render/pixi';
 import { FILL_PREFIX, NONE_HREF, type Skin } from './skin/skin.js';
 
 export type SliceLookup = (url: string) => [number, number, number, number] | null;

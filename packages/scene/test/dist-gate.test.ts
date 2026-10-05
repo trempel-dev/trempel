@@ -27,7 +27,11 @@ beforeAll(() => {
     cfg,
     JSON.stringify({
       extends: join(root, 'editor', 'tsconfig.build.json'),
-      compilerOptions: { outDir: join(out, 'editor'), rootDir: join(root, 'editor'), paths: { '@trempel/scene/core': [join(out, 'core.d.ts')] } },
+      compilerOptions: {
+        outDir: join(out, 'editor'),
+        rootDir: join(root, 'editor'),
+        paths: { '@trempel/scene/core': [join(out, 'core.d.ts')], '@trempel/scene/internal/*': [join(out, '*')] },
+      },
       include: [join(root, 'editor', '*.ts')],
       exclude: [join(root, 'editor', '*.test.ts')],
     }),
@@ -48,11 +52,12 @@ describe('dist gate — no eval', () => {
     expect(files).toContain(join('editor', 'index.js'));
   });
 
-  it('@trempel/scene/editor imports only the core entry, xmldom and its own files — no pixi, no browser DOM', () => {
+  it('@trempel/scene/editor imports only the core entry, internal core modules, xmldom and its own files — no pixi, no browser DOM', () => {
     const bad: string[] = [];
     for (const f of jsFiles(join(out, 'editor'))) {
       for (const m of readFileSync(f, 'utf8').matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) {
-        if (!m[1].startsWith('./') && m[1] !== '@trempel/scene/core' && m[1] !== '@xmldom/xmldom') bad.push(`${f.slice(out.length + 1)} → ${m[1]}`);
+        const ok = m[1].startsWith('./') || m[1] === '@trempel/scene/core' || m[1] === '@xmldom/xmldom' || (m[1].startsWith('@trempel/scene/internal/') && !m[1].includes('render/'));
+        if (!ok) bad.push(`${f.slice(out.length + 1)} → ${m[1]}`);
       }
       if (/\bwindow\.|(?<![\w./])document\.(?!js\b)|\bnew DOMParser\b/.test(readFileSync(f, 'utf8').replace(/\/\/.*$/gm, ''))) bad.push(`${f}: browser DOM`);
     }
@@ -82,7 +87,7 @@ describe('dist gate — no eval', () => {
 
   it('the Pixi-free core entry imports under plain node and does not pull pixi.js', () => {
     const script = `import(${JSON.stringify(join(out, 'core.js'))}).then((m) => {
-      const ok = typeof m.mount === 'function' && typeof m.compile === 'function';
+      const ok = typeof m.mount === 'function' && typeof m.checkScene === 'function' && typeof m.compile === 'undefined';
       const pixi = Object.keys(globalThis).some((k) => k === 'PIXI');
       console.log(JSON.stringify({ ok, pixi }));
     })`;

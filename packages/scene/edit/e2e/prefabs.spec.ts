@@ -19,6 +19,9 @@ const label = (e: EditorPage, id: string): Promise<{ text: string; fill: string 
     return { text: String(h.text), fill: String(h.style?.fill?.color ?? '') };
   }, id);
 
+/** An attribute of the example's own document (its texts are the example's, not the test's). */
+const exampleAttr = (file: string, re: RegExp): string => re.exec(readFileSync(join(root, 'examples/prefabs', file), 'utf8'))![1];
+
 const row = (id: string): string => `#tree li:has(> .name:text-is("#${id}"))`;
 
 describe('editor e2e — v0.9 prefabs (examples/prefabs copy)', () => {
@@ -28,7 +31,7 @@ describe('editor e2e — v0.9 prefabs (examples/prefabs copy)', () => {
     dir = mkdtempSync(join(tmpdir(), 'tml-edit-prefabs-'));
     for (const f of ['menu.svg', 'menu.tml.svg', 'menu.contract.xml', 'menu.state.json', 'ui']) cpSync(join(root, 'examples/prefabs', f), join(dir, f), { recursive: true });
     // the example's module imports the repo by relative path — in tmp, the same texts inline
-    writeFileSync(join(dir, 'trempel.view.ts'), `export default { context: () => ({ t: (k) => ({ menu: 'Меню', play: 'Играть', settings: 'Настройки', exit: 'Выход' })[k] ?? k }) };\n`);
+    writeFileSync(join(dir, 'trempel.view.ts'), `export default { context: () => ({ t: (k) => ({ menu: 'Menu', play: 'Play', settings: 'Settings', exit: 'Exit' })[k] ?? k }) };\n`);
     e = await openEditor(dir, 'menu');
   }, T);
   afterAll(async () => {
@@ -45,8 +48,8 @@ describe('editor e2e — v0.9 prefabs (examples/prefabs copy)', () => {
       // collapsed instance: expand and see the prefab's rows read-only
       await e.page.click(`${row('shopBtn')} .tw`);
       expect(await e.page.getAttribute(row('shopBtn/label'), 'class')).toContain('foreign');
-      expect(await label(e, 'playBtn/label')).toMatchObject({ text: 'Играть · 120' });
-      expect(await label(e, 'shopBtn/label')).toMatchObject({ text: 'Магазин' });
+      expect(await label(e, 'playBtn/label')).toMatchObject({ text: 'Play · 120' });
+      expect(await label(e, 'shopBtn/label')).toMatchObject({ text: exampleAttr('menu.svg', /id="shopBtn"[^>]*data-label="([^"]*)"/) });
     },
     T,
   );
@@ -65,14 +68,14 @@ describe('editor e2e — v0.9 prefabs (examples/prefabs copy)', () => {
       await idle(e.page);
       expect(await e.page.evaluate(() => window.tmlEdit!.selection.map((p) => window.tmlEdit!.ref(p)))).toEqual(['button']);
       // a new instance without its required parameters — the inspector says so
-      await e.page.waitForSelector('#inspector .err:text("не задан data-label")');
-      expect(await label(e, 'button/label')).toMatchObject({ text: 'Кнопка' });
+      await e.page.waitForSelector('#inspector .err:text("data-label is not set")');
+      expect(await label(e, 'button/label')).toMatchObject({ text: exampleAttr('ui/button.svg', /^<svg[^>]*data-label="([^"]*)"/) });
 
-      await e.page.fill('#inspector [data-key="param:data-label"]', 'Новая');
+      await e.page.fill('#inspector [data-key="param:data-label"]', 'Fresh');
       await e.page.press('#inspector [data-key="param:data-label"]', 'Enter');
       await idle(e.page);
-      expect(await e.page.evaluate(() => window.tmlEdit!.doc!.serialize())).toContain('data-label="Новая"');
-      expect(await label(e, 'button/label')).toMatchObject({ text: 'Новая' });
+      expect(await e.page.evaluate(() => window.tmlEdit!.doc!.serialize())).toContain('data-label="Fresh"');
+      expect(await label(e, 'button/label')).toMatchObject({ text: 'Fresh' });
       await e.page.click('#prefabs header button'); // close the palette
       expect(await e.page.isHidden('#prefabs')).toBe(true);
     },

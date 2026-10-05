@@ -8,17 +8,21 @@
 // Files are not written here: a command lists them (CommandResult.files) and the host writes them
 // (SceneIO.write); the document also keeps them so validation sees the new prefab at once.
 
-import { compile, paramName, parseAnchor, parseViews, rebase, run, stretchOf, type InstanceScope, type SceneNode } from '@trempel/scene/core';
+import { type InstanceScope, type SceneNode } from '@trempel/scene/core';
+import { compile, run } from '@trempel/scene/internal/expr';
+import { paramName, rebase } from '@trempel/scene/internal/prefab';
+import { parseAnchor, stretchOf } from '@trempel/scene/internal/layout';
+import { parseViews } from '@trempel/scene/internal/props';
 import type { Element } from '@xmldom/xmldom';
 import { CommandError, type Ctx } from './ctx.js';
 import { fmt } from './num.js';
 import type { JSONSchema7 } from './schema.js';
 import { cloneWithSource, elementChildren, serializeNode } from './xml.js';
 
-const NODE: JSONSchema7 = { type: 'string', description: 'id узла или путь индексов от корня svg ("0/3/1"; "" — корень)' };
-const ID: JSONSchema7 = { type: 'string', pattern: '^[A-Za-z_][\\w.-]*$', description: 'id (буква или _, затем буквы, цифры, _ . -)' };
-const HREF: JSONSchema7 = { type: 'string', pattern: '\\.svg$', description: 'путь базы префаба относительно сцены (ui/button.svg)' };
-const PARAM: JSONSchema7 = { type: 'string', pattern: '^(data-)?[a-z][\\w-]*$', description: 'имя параметра: data-label или label' };
+const NODE: JSONSchema7 = { type: 'string', description: 'node id or index path from the svg root ("0/3/1"; "" — the root)' };
+const ID: JSONSchema7 = { type: 'string', pattern: '^[A-Za-z_][\\w.-]*$', description: 'id (a letter or _, then letters, digits, _ . -)' };
+const HREF: JSONSchema7 = { type: 'string', pattern: '\\.svg$', description: 'path of the prefab base relative to the scene (ui/button.svg)' };
+const PARAM: JSONSchema7 = { type: 'string', pattern: '^(data-)?[a-z][\\w-]*$', description: 'parameter name: data-label or label' };
 const obj = (properties: Record<string, JSONSchema7>, required: string[] = []): JSONSchema7 => ({ type: 'object', properties, required, additionalProperties: false });
 
 /** data-* of a `<use>` that are presentation of the instance, not parameters. */
@@ -35,13 +39,13 @@ const attrsXml = (attrs: Record<string, string>): string =>
 
 function paramKey(name: string): string {
   const k = name.startsWith('data-') ? name : `data-${name}`;
-  if (PRESENTATION.has(k)) throw new CommandError(`${k} — не параметр, а оформление инстанса: node.setAttr`);
+  if (PRESENTATION.has(k)) throw new CommandError('E_EDITOR_PARAM', `${k} is not a parameter but the instance's presentation: node.setAttr`);
   return k;
 }
 
 function useElement(ctx: Ctx, ref: string): Element {
   const el = ctx.node(ref);
-  if (el.nodeName !== 'use') throw new CommandError(`${ref}: <${el.nodeName}> — не инстанс префаба (<use href>)`);
+  if (el.nodeName !== 'use') throw new CommandError('E_EDITOR_NOT_INSTANCE', `${ref}: <${el.nodeName}> is not a prefab instance (<use href>)`);
   return el;
 }
 
@@ -54,7 +58,7 @@ function expandedOf(ctx: Ctx, id: string): SceneNode {
     else n.children.forEach(walk);
   };
   walk(ctx.env.merged());
-  if (!found) throw new CommandError(`#${id}: инстанс не развёрнут (префаб не найден или с ошибками — см. doc.errors)`);
+  if (!found) throw new CommandError('E_EDITOR_NOT_EXPANDED', `#${id}: the instance is not expanded (the prefab is missing or has errors — see doc.errors)`);
   return found;
 }
 
@@ -166,7 +170,7 @@ function relFrom(doc: string, file: string): string {
 
 export const prefabCommands = {
   'prefab.instantiate': {
-    describe: 'Поставить инстанс префаба: <use id href x y data-*> в parent (по умолчанию корень) на место index (по умолчанию последним).',
+    describe: 'Place a prefab instance: <use id href x y data-*> in parent (default the root) at position index (default last).',
     schema: obj(
       {
         parent: NODE,
@@ -174,16 +178,16 @@ export const prefabCommands = {
         id: ID,
         x: { type: 'number' },
         y: { type: 'number' },
-        params: { type: 'object', additionalProperties: { type: 'string' }, description: 'параметры: { label: "OK" } или { "data-label": "OK" }' },
+        params: { type: 'object', additionalProperties: { type: 'string' }, description: 'parameters: { label: "OK" } or { "data-label": "OK" }' },
         index: { type: 'integer', minimum: 0 },
       },
       ['href', 'id'],
     ),
     run(ctx: Ctx, a: { parent?: string; href: string; id: string; x?: number; y?: number; params?: Record<string, string>; index?: number }) {
       const parent = a.parent == null ? ctx.root : ctx.node(a.parent, 'parent');
-      if (parent.nodeName !== 'svg' && parent.nodeName !== 'g') throw new CommandError(`parent: инстанс живёт в <svg> или <g>, а не в <${parent.nodeName}>`);
-      if (ctx.byId(a.id).length) throw new CommandError(`id: id "${a.id}" уже есть в документе`);
-      if (ctx.env.loadScene && !ctx.env.loadScene(a.href)) throw new CommandError(`href: префаба ${a.href} нет`);
+      if (parent.nodeName !== 'svg' && parent.nodeName !== 'g') throw new CommandError('E_EDITOR_TAG', `parent: an instance lives in an <svg> or a <g>, not in a <${parent.nodeName}>`);
+      if (ctx.byId(a.id).length) throw new CommandError('E_EDITOR_ID_TAKEN', `id: id "${a.id}" is already in the document`);
+      if (ctx.env.loadScene && !ctx.env.loadScene(a.href)) throw new CommandError('E_PREFAB_MISSING', `href: no prefab ${a.href}`);
       const el = ctx.doc.createElement('use');
       el.setAttribute('id', a.id);
       el.setAttribute('href', a.href);
@@ -195,7 +199,7 @@ export const prefabCommands = {
   },
 
   'prefab.setParam': {
-    describe: 'Параметр инстанса: data-<name> на <use> (value: null — снять, остаётся значение по умолчанию префаба).',
+    describe: 'An instance parameter: data-<name> on the <use> (value: null — remove it, the prefab default applies).',
     schema: obj({ node: NODE, name: PARAM, value: { anyOf: [{ type: 'string' }, { type: 'null' }] } }, ['node', 'name', 'value']),
     run(ctx: Ctx, a: { node: string; name: string; value: string | null }) {
       ctx.setAttr(useElement(ctx, a.node), paramKey(a.name), a.value);
@@ -203,12 +207,12 @@ export const prefabCommands = {
   },
 
   'prefab.detach': {
-    describe: 'Развернуть инстанс в копию: <g> с содержимым префаба (id с префиксом остаются, вложенные инстансы — <use>); связь с префабом рвётся, обратной операции нет.',
+    describe: 'Turn an instance into a copy: a <g> with the prefab content (prefixed ids stay, nested instances stay <use>); the link to the prefab is broken, there is no way back.',
     schema: obj({ node: NODE }, ['node']),
     run(ctx: Ctx, a: { node: string }) {
       const use = useElement(ctx, a.node);
       const id = use.getAttribute('id');
-      if (!id) throw new CommandError(`${a.node}: инстанс без id`);
+      if (!id) throw new CommandError('E_USE_NO_ID', `${a.node}: the instance has no id`);
       const g = expandedOf(ctx, id);
       const attrs: Record<string, string> = {};
       for (const [k, v] of Object.entries(g.attrs)) attrs[k] = v;
@@ -222,31 +226,31 @@ export const prefabCommands = {
       if (Object.keys(g.tml).length || g.children.some(function has(n: SceneNode): boolean {
         return Object.keys(n.tml).length > 0 || n.children.some(has);
       })) {
-        ctx.warn(`#${id}: логика префаба (tml наследника) в копию не переносится — база стерильна; статические подписи запечены`);
+        ctx.warn('W_EDITOR_DETACH', `#${id}: the prefab's logic (tml of its heir) is not carried into the copy — the base is sterile; static labels are baked in`);
       }
     },
   },
 
   'prefab.extract': {
-    describe: 'Выделенный <g> → новый префаб href (файл базы, при params — и наследник) + <use> на его месте. params: какие href картинок / тексты детей станут параметрами.',
+    describe: 'The selected <g> → a new prefab href (a base file, with params also an heir) + a <use> in its place. params: which image hrefs / texts of the children become parameters.',
     schema: obj(
       {
         node: NODE,
         href: HREF,
         params: {
           type: 'array',
-          items: obj({ node: { type: 'string', description: 'id ребёнка' }, attr: { enum: ['href', 'text'] }, name: PARAM }, ['node', 'attr', 'name']),
+          items: obj({ node: { type: 'string', description: 'child id' }, attr: { enum: ['href', 'text'] }, name: PARAM }, ['node', 'attr', 'name']),
         },
       },
       ['node', 'href'],
     ),
     run(ctx: Ctx, a: { node: string; href: string; params?: { node: string; attr: 'href' | 'text'; name: string }[] }) {
       const g = ctx.node(a.node);
-      if (g.nodeName !== 'g') throw new CommandError(`${a.node}: префабом становится <g>, а это <${g.nodeName}>`);
+      if (g.nodeName !== 'g') throw new CommandError('E_EDITOR_TAG', `${a.node}: a <g> becomes a prefab, this is a <${g.nodeName}>`);
       const id = g.getAttribute('id');
-      if (!id) throw new CommandError(`${a.node}: у группы нет id — инстанс без id не бывает`);
+      if (!id) throw new CommandError('E_EDITOR_NO_ID', `${a.node}: the group has no id — an instance cannot be without one`);
       const file = rebase(a.href, '_');
-      if (ctx.env.loadScene?.(file)) throw new CommandError(`href: ${a.href} уже есть — выберите другое имя`);
+      if (ctx.env.loadScene?.(file)) throw new CommandError('E_EDITOR_FILE_EXISTS', `href: ${a.href} already exists — choose another name`);
       const stem = file.replace(/\.svg$/, '');
       const prefix = `${id}/`;
 
@@ -258,7 +262,7 @@ export const prefabCommands = {
         const cid = el.getAttribute('id');
         if (cid) {
           const local = cid.startsWith(prefix) ? cid.slice(prefix.length) : cid;
-          if (!cid.startsWith(prefix)) ctx.warn(`#${cid} станет #${id}/${cid} — ссылки наследника и контракта сцены на него поправьте`);
+          if (!cid.startsWith(prefix)) ctx.warn('W_EDITOR_EXTRACT', `#${cid} becomes #${id}/${cid} — fix the references to it in the scene's heir and contract`);
           el.setAttribute('id', local);
           inner.add(local);
         }
@@ -284,7 +288,7 @@ export const prefabCommands = {
         if (cp) {
           const local = cp[1].startsWith(prefix) ? cp[1].slice(prefix.length) : cp[1];
           if (inner.has(local)) el.setAttribute('clip-path', `url(#${local})`);
-          else ctx.warn(`clip-path #${cp[1]} — вне группы, в префаб не попал`);
+          else ctx.warn('W_EDITOR_EXTRACT', `clip-path #${cp[1]} is outside the group — it did not go into the prefab`);
         }
       }
 
@@ -296,9 +300,9 @@ export const prefabCommands = {
         const key = paramKey(p.name);
         const local = p.node.startsWith(prefix) ? p.node.slice(prefix.length) : p.node;
         const el = all(copy).find((e) => e.getAttribute('id') === local);
-        if (!el) throw new CommandError(`params: #${p.node} — не ребёнок #${id}`);
-        if (p.attr === 'href' && el.nodeName !== 'image') throw new CommandError(`params: #${p.node} — href берётся у <image>, а это <${el.nodeName}>`);
-        if (p.attr === 'text' && el.nodeName !== 'text') throw new CommandError(`params: #${p.node} — текст берётся у <text>, а это <${el.nodeName}>`);
+        if (!el) throw new CommandError('E_EDITOR_PARAM', `params: #${p.node} is not a child of #${id}`);
+        if (p.attr === 'href' && el.nodeName !== 'image') throw new CommandError('E_EDITOR_PARAM', `params: #${p.node} — href is taken from an <image>, this is a <${el.nodeName}>`);
+        if (p.attr === 'text' && el.nodeName !== 'text') throw new CommandError('E_EDITOR_PARAM', `params: #${p.node} — text is taken from a <text>, this is a <${el.nodeName}>`);
         const value = p.attr === 'href' ? el.getAttribute('href') ?? '' : el.textContent ?? '';
         rootData[key] = value;
         own[key] = p.attr === 'href' ? rebase(value, file) : value;

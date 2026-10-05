@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,41 +13,41 @@
         <div id="folder" class="muted"></div>
       </header>
       <div class="modes">
-        <button id="mode-scene" class="on">Сцена</button>
-        <button id="mode-gallery">Галерея</button>
+        <button id="mode-scene" class="on">Scene</button>
+        <button id="mode-gallery">Gallery</button>
       </div>
       <ul id="scenes"></ul>
     </aside>
 
     <main>
       <div id="toolbar">
-        <label>Вьюпорт
+        <label>Viewport
           <select id="viewport">
-            <option value="scene">сцена (viewBox)</option>
+            <option value="scene">scene (viewBox)</option>
             <option value="9:16">9:16</option>
             <option value="9:19.5">9:19.5</option>
             <option value="3:4">3:4</option>
             <option value="16:9">16:9</option>
-            <option value="custom">свой W×H…</option>
+            <option value="custom">custom W×H…</option>
           </select>
         </label>
         <span id="custom" hidden>
           <input id="cw" type="number" min="16" value="1080" /> × <input id="ch" type="number" min="16" value="1920" />
         </span>
-        <label>Масштаб
+        <label>Zoom
           <select id="zoom">
-            <option value="fit">вписать</option>
+            <option value="fit">fit</option>
             <option value="0.25">25%</option>
             <option value="0.5">50%</option>
             <option value="1">100%</option>
             <option value="2">200%</option>
           </select>
         </label>
-        <label>Фон
+        <label>Background
           <select id="bg">
-            <option value="checker">шахматка</option>
-            <option value="dark">тёмный</option>
-            <option value="light">светлый</option>
+            <option value="checker">checker</option>
+            <option value="dark">dark</option>
+            <option value="light">light</option>
           </select>
         </label>
         <span class="grow"></span>
@@ -63,19 +63,19 @@
 
     <aside id="panel">
       <section>
-        <h3>Ошибки <span id="issue-count" class="badge"></span></h3>
+        <h3>Errors <span id="issue-count" class="badge"></span></h3>
         <ul id="issues"></ul>
       </section>
       <section class="state">
-        <h3>Состояние <span id="state-src" class="muted"></span></h3>
+        <h3>State <span id="state-src" class="muted"></span></h3>
         <textarea id="state" spellcheck="false"></textarea>
         <div class="row">
-          <button id="apply" title="Ctrl/⌘+Enter">Применить</button>
-          <button id="reset">Из файла</button>
+          <button id="apply" title="Ctrl/⌘+Enter">Apply</button>
+          <button id="reset">From file</button>
         </div>
       </section>
       <section>
-        <h3>Лог кликов <button id="clear-log" class="link">очистить</button></h3>
+        <h3>Click log <button id="clear-log" class="link">clear</button></h3>
         <ol id="log"></ol>
       </section>
     </aside>

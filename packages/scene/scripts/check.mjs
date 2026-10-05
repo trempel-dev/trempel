@@ -17,13 +17,15 @@
 // v1.1: `@name/…` hrefs resolve by the project's collections (.trempel/project.mdz in the nearest
 // ancestor of the scene); an unknown collection is an error.
 //
-// Imports the compiled Pixi-free core (dist/core.js — the package's `@trempel/scene/core` entry); the
-// `check` npm script builds first.
+// Imports the compiled Pixi-free core (dist/core.js — the package's `@trempel/scene/core` entry:
+// checkScene is the mount pipeline without rendering); the `check` npm script builds first.
+// Every problem starts with its code (E_…, see src/codes.ts).
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
-import { bindingErrors, collectionErrors, compileClipsResult, composeScene, expandCollection, geometryErrors, heirSuffix, propErrors, readHeir, sceneStem, usedCollections } from '../dist/core.js';
+import { checkScene as check, coded, compileClipsResult, expandCollection, sceneStem, within } from '../dist/core.js';
+import { heirSuffix, readHeir } from '../dist/compat.js';
 import { loadProject } from '../dist/node/project.js';
 
 const cwd = process.env.INIT_CWD ?? process.cwd();
@@ -35,7 +37,7 @@ for (let i = 0; i < args.length; i++) {
   else if (!dir) dir = args[i];
 }
 if (!dir && !anim) {
-  console.error('usage: npm run check -- <scene-dir> [--anim <clips.md>]');
+  console.error(coded('E_CLI', 'usage: npm run check -- <scene-dir> [--anim <clips.md>]'));
   process.exit(2);
 }
 
@@ -43,7 +45,7 @@ let animPath = null;
 if (anim) {
   animPath = [resolve(cwd, anim), dir ? resolve(cwd, dir, anim) : null].find((p) => p && existsSync(p));
   if (!animPath) {
-    console.error(`✗ --anim ${anim}: file not found`);
+    console.error(`✗ ${coded('E_CLI', `--anim ${anim}: file not found`)}`);
     process.exit(2);
   }
 }
@@ -80,25 +82,21 @@ const fileLoader = (url) => {
 function checkScene(stem, label) {
   const src = fileLoader(`${stem}.svg`);
   if (!src) {
-    errors.push(`${label}: нет ни ${label}.svg, ни ${label}.tml.svg`);
+    errors.push(coded('E_EMPTY_SCENE', `${label}: neither ${label}.svg nor ${label}.tml.svg`));
     return null;
   }
   const out = [];
   let t = null;
   try {
     const url = (rel) => resolve(dirname(stem), expandCollection(rel, collections));
-    const c = composeScene({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url });
-    out.push(...c.errors.parse, ...c.errors.contract, ...c.errors.merge, ...c.errors.prefab);
-    t = c.tree;
-    if (t) {
-      // defs / clipPath / clip-path / geometry data (v0.7); v0.8 attributes; expressions — over the expanded tree.
-      out.push(...geometryErrors(t), ...propErrors(t), ...bindingErrors(t), ...collectionErrors(t, collections));
-      for (const name of usedCollections(t)) used.add(name);
-    }
+    const r = check({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url, collections });
+    out.push(...r.errors);
+    t = r.tree;
+    for (const name of r.collections) used.add(name);
   } catch (e) {
-    out.push(e.message);
+    out.push(...(e.errors ?? [e.message]));
   }
-  errors.push(...out.map((e) => (label ? `${label}: ${e}` : e)));
+  errors.push(...out.map((e) => (label ? within(label, e) : e)));
   checked.push(label);
   return t;
 }
@@ -130,12 +128,12 @@ if (dir) {
     // A folder of scenes (v0.9 prefabs): every scene in it, each prefixed with its name.
     const stems = sceneStems(root);
     if (!stems.length) {
-      console.error(`✗ ${dir}: scene.svg not found (и других сцен в папке нет)`);
+      console.error(`✗ ${coded('E_CLI', `${dir}: scene.svg not found (and the folder has no other scenes)`)}`);
       process.exit(2);
     }
     for (const stem of stems) checkScene(stem, relative(root, stem));
   } else {
-    console.error(`✗ ${dir}: not found`);
+    console.error(`✗ ${coded('E_CLI', `${dir}: not found`)}`);
     process.exit(2);
   }
 }
@@ -145,7 +143,7 @@ if (animPath) {
   const name = relative(cwd, animPath);
   const { clips, errors: clipErrors } = compileClipsResult(readFileSync(animPath, 'utf8'), tree ?? undefined);
   clipCount = Object.keys(clips).length;
-  errors.push(...clipErrors.map((e) => `${name}: ${e}`));
+  errors.push(...clipErrors.map((e) => within(name, e)));
 }
 
 const unique = [...new Set(errors)];
@@ -155,7 +153,7 @@ if (unique.length === 0) {
   const scenes = checked.length > 1 ? `${checked.length} scenes: ` : '';
   const parts = [dir && `${scenes}base + prefabs + heir + contract + geometry + v0.8 attributes + expressions`, animPath && `${clipCount} clip(s)`].filter(Boolean);
   console.log(`✓ ${what}: valid (${parts.join('; ')}).`);
-  if (used.size) console.log(`  использует коллекции: ${[...used].sort().map((n) => `@${n}`).join(', ')}`);
+  if (used.size) console.log(`  uses collections: ${[...used].sort().map((n) => `@${n}`).join(', ')}`);
   process.exit(0);
 }
 

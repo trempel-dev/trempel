@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { DOMParser } from '@xmldom/xmldom';
 import type { Browser } from 'playwright';
-import { flattenLeftovers } from '../src/core';
+import { flattenLeftovers } from '../src/flatten';
 import { flattenFile } from '../src/node/flatten';
 
 const root = fileURLToPath(new URL('..', import.meta.url));

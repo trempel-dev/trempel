@@ -1,0 +1,65 @@
+# CI: build, typecheck, unit and e2e tests of every package, and the visual gate — view:shot of
+# example scenes against the goldens in packages/scene/test/golden (mean |Δ| ≤ 1/255; on a failure
+# the shots and diffs are uploaded as the `visual-gate` artifact).
+name: CI
+
+on:
+  push:
+    branches: [main, ci-check]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Playwright browsers (cached)
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Chromium system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # The example scenes draw text in Arial (the runtime's default family): the same font as on
+      # the machines the goldens come from.
+      - name: Fonts
+        run: |
+          echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get install -y --no-install-recommends ttf-mscorefonts-installer fontconfig
+          fc-cache -f
+
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:e2e
+
+      - name: Visual gate
+        run: npm run visual-gate
+
+      - name: Upload the visual gate's shots and diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-gate
+          path: packages/scene/.visual/
+          if-no-files-found: ignore

@@ -3,6 +3,7 @@ import { parse, parseHeir } from '../src/parser';
 import { mergeScene, merge } from '../src/merge';
 import { TrempelError } from '../src/errors';
 import { findById } from '../src/tree';
+import { codesOf, withCode } from './helpers/codes';
 
 // xmlns:tml is declared so "dirty base" fixtures can carry a tml:* attribute and still parse;
 // a namespace *declaration* is not a tml:* attribute (the parser drops all xmlns:*), so the
@@ -29,8 +30,8 @@ describe('merge — refs', () => {
 
   it('errors when a ref targets an id that is not in the base', () => {
     const { errors } = run(base(`<g id="board"/>`), heir(`<tml:ref id="ghost" tml:type="x"/>`));
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/id="ghost".*нет в базе/);
+    expect(codesOf(errors)).toEqual(['E_REF_MISSING']);
+    expect(errors[0]).toContain('id="ghost"');
   });
 
   it('errors when a ref carries a non-tml attribute (geometry stays in the base)', () => {
@@ -38,8 +39,8 @@ describe('merge — refs', () => {
       base(`<g id="board"/>`),
       heir(`<tml:ref id="board" tml:type="x" transform="translate(1,2)" width="9"/>`),
     );
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/не-tml атрибут.*transform.*width/);
+    expect(codesOf(errors)).toEqual(['E_REF_FOREIGN']);
+    expect(errors[0]).toMatch(/transform.*width/);
   });
 
   it('errors on a duplicate ref to the same id', () => {
@@ -47,7 +48,7 @@ describe('merge — refs', () => {
       base(`<g id="board"/>`),
       heir(`<tml:ref id="board" tml:type="a"/><tml:ref id="board" tml:type="b"/>`),
     );
-    expect(errors.some((e) => /встречается более одного раза/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_REF_TWICE')[0]).toContain('id="board"');
   });
 });
 
@@ -66,21 +67,21 @@ describe('merge — inserts', () => {
 
   it('errors when an insert targets a missing id', () => {
     const { errors } = run(base(`<g id="board"/>`), heir(`<g tml:insert="after ghost"/>`));
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/узла "ghost" нет в базе/);
+    expect(codesOf(errors)).toEqual(['E_INSERT_TARGET']);
+    expect(errors[0]).toContain('"ghost"');
   });
 
   it('errors on malformed insert syntax', () => {
     const { errors } = run(base(`<g id="board"/>`), heir(`<g tml:insert="sideways board"/>`));
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/ожидается 'after <id>' или 'into <id>'/);
+    expect(codesOf(errors)).toEqual(['E_INSERT_SYNTAX']);
+    expect(errors[0]).toContain('sideways board');
   });
 });
 
 describe('merge — global invariants', () => {
   it('errors on a duplicate id within the base', () => {
     const { errors } = run(base(`<g id="dup"/><g id="dup"/>`), heir(``));
-    expect(errors.some((e) => /Дублирующийся id "dup"/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_DUP_ID')[0]).toContain('"dup"');
   });
 
   it('errors on an id that collides between base and an heir insert', () => {
@@ -88,17 +89,17 @@ describe('merge — global invariants', () => {
       base(`<g id="board"/>`),
       heir(`<g id="board" tml:insert="after board"/>`),
     );
-    expect(errors.some((e) => /Дублирующийся id "board"/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_DUP_ID')[0]).toContain('"board"');
   });
 
   it('errors when the base is not sterile (carries tml:*)', () => {
     const { errors } = run(base(`<g id="board" tml:type="x"/>`), heir(``));
-    expect(errors.some((e) => /не стерильна.*tml:type/.test(e))).toBe(true);
+    expect(withCode(errors, 'E_STERILE')[0]).toContain('tml:type');
   });
 
   it('errors on an heir child that is neither a ref nor an insert subtree', () => {
     const { errors } = run(base(`<g id="board"/>`), heir(`<g id="loose"/>`));
-    expect(errors.some((e) => /не <tml:ref> и без tml:insert/.test(e))).toBe(true);
+    withCode(errors, 'E_HEIR_STRAY');
   });
 });
 
@@ -112,11 +113,11 @@ describe('merge — error aggregation', () => {
     );
     // sterility + duplicate id + missing ref + foreign attr + missing insert target ⇒ ≥5
     expect(errors.length).toBeGreaterThanOrEqual(5);
-    expect(errors.some((e) => /не стерильна/.test(e))).toBe(true);
-    expect(errors.some((e) => /Дублирующийся id "dup"/.test(e))).toBe(true);
-    expect(errors.some((e) => /id="ghost".*нет в базе/.test(e))).toBe(true);
-    expect(errors.some((e) => /не-tml атрибут/.test(e))).toBe(true);
-    expect(errors.some((e) => /"nowhere" нет в базе/.test(e))).toBe(true);
+    withCode(errors, 'E_STERILE');
+    expect(withCode(errors, 'E_DUP_ID')[0]).toContain('"dup"');
+    expect(withCode(errors, 'E_REF_MISSING')[0]).toContain('id="ghost"');
+    withCode(errors, 'E_REF_FOREIGN');
+    expect(withCode(errors, 'E_INSERT_TARGET')[0]).toContain('"nowhere"');
   });
 
   it('merge() throws a TrempelError carrying the whole list', () => {

@@ -328,3 +328,13 @@ npm run build && node scripts/migrate-collections.mjs <папка потреби
 - **Просмотрщик и редактор** без `trempel.view.ts` монтируют сцену с пустым реестром; компоненты без регистрации редактор по-прежнему рисует заглушками.
 - **Репозиторий — монорепа**: `packages/scene` (`@trempel/scene`), `packages/kit` (`@trempel/kit`), `templates/casual`. Команды из корня те же (`npm run check | view | view:shot | edit | flatten -- …` — прокси в `packages/scene`); пути к примерам — `packages/scene/examples/…`. Версии пакетов синхронны.
 - **Общий скин кита** — коллекция `npm:@trempel/kit/skins/default/ui` (§11): в `.trempel/project.mdz` — `$skin: npm:@trempel/kit/skins/default/ui`, ссылки `@skin/…` в сценах не меняются.
+
+## 13. 2.0 — узкий публичный вход, сообщения с кодами, без DOCTYPE
+
+Формат не менялся (сцены, наследники, контракты, клипы 1.2 работают как есть), кроме одного: `<!DOCTYPE>` / `<!ENTITY>` в документе формата — ошибка `E_DOCTYPE` (уберите строку DOCTYPE, которую иногда пишут SVG-редакторы).
+
+- **Импорты.** `@trempel/scene` и `…/core` отдают только stable-список (спека §15). Остальное — глубоким импортом `@trempel/scene/internal/<модуль>`, без обещаний стабильности: `parseColor` → `…/internal/render/pixi`, `compile`/`run` → `…/internal/expr`, `bindingErrors` → `…/internal/binding`, `resolveHref` → `…/internal/href`, `LEGACY` → `…/internal/compat` и т.д. — полная таблица в `CHANGELOG.md`. Правка — только строки импортов. Проверка сцены целиком без рендера — `checkScene()` (stable) вместо ручной склейки `composeScene` + `geometryErrors` + `propErrors` + `bindingErrors`.
+- **Сообщения** — английские и начинаются с кода (`E_REF_MISSING: …`, `W_COMPAT_GML: …`); у `TrempelError` — `.codes` и `.code`, у `ExpressionError`/`ExpressionRuntimeError`/`PathDataError` — `.code`. Сверяйте коды, а не тексты (каталог — спека §16, `CODES`). Ошибки, которые раньше были `Error` с префиксом «Trempel … error:», теперь `TrempelError`.
+- **`defineView`** — пакетный вход `@trempel/scene/view`.
+- **peer `pixi.js`** — `^8.19.0`.
+- **`view:shot`** — на виртуальных часах: по умолчанию снимок через 2 с виртуального времени после монтирования (`--settle`; `--settle 0` — сразу). Снимки воспроизводимы бит в бит.

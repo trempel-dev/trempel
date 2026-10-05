@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { readHeir, sceneStem } from '../compat.js';
 import { flattenLeftovers, flattenScene } from '../flatten.js';
+import { coded } from '../codes.js';
 import type { SceneSource } from '../prefab.js';
 import { imageSize, mimeOf } from './imagesize.js';
 import { loadProject } from './project.js';
@@ -63,7 +64,7 @@ function clipsOf(stem: string): string[] {
 
 export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {
   const stem = sceneStemOf(opts.scene);
-  if (!stem) return { scene: opts.scene, out: null, errors: [`${opts.scene}: сцены нет (ни X.svg, ни X.tml.svg)`], warnings: [], collections: [] };
+  if (!stem) return { scene: opts.scene, out: null, errors: [coded('E_EMPTY_SCENE', `${opts.scene}: no scene (neither X.svg nor X.tml.svg)`)], warnings: [], collections: [] };
   const src = fileLoader(`${stem}.svg`)!;
   const project = loadProject(dirname(stem));
   const out = resolve(opts.out);
@@ -76,9 +77,9 @@ export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {
     try {
       const v: unknown = JSON.parse(readFileSync(stateFile, 'utf8'));
       if (v && typeof v === 'object' && !Array.isArray(v)) state = v as Record<string, unknown>;
-      else errors.push(`${stateFile}: состояние должно быть JSON-объектом`);
+      else errors.push(coded('E_STATE', `${stateFile}: the state must be a JSON object`));
     } catch (e) {
-      errors.push(`${stateFile}: ${(e as Error).message}`);
+      errors.push(coded('E_STATE', `${stateFile}: ${(e as Error).message}`));
     }
   }
 
@@ -98,7 +99,7 @@ export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {
         try {
           return `data:${mimeOf(href)};base64,${readFileSync(href).toString('base64')}`;
         } catch {
-          errors.push(`${href}: картинки нет — не встроить`);
+          errors.push(coded('E_IMAGE_MISSING', `${href}: no such picture — nothing to embed`));
           return href;
         }
       }
@@ -108,10 +109,10 @@ export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {
   errors.push(...r.errors);
   const warnings = [...r.warnings];
   const clips = clipsOf(stem);
-  if (clips.length) warnings.push(`клипы в ванильный SVG не переносятся (сцена в позе покоя): ${clips.join(', ')}`);
+  if (clips.length) warnings.push(coded('W_FLATTEN', `clips do not carry into vanilla SVG (the scene is in its rest pose): ${clips.join(', ')}`));
   if (!r.svg) return { scene: stem, out: null, errors, warnings, collections: r.collections };
   const left = flattenLeftovers(r.svg);
-  if (left.length) errors.push(`в выходе остались: ${left.join(', ')}`);
+  if (left.length) errors.push(coded('E_FLATTEN_LEFTOVER', `left in the output: ${left.join(', ')}`));
   mkdirSync(outDir, { recursive: true });
   writeFileSync(out, r.svg);
   return { scene: stem, out, errors, warnings, collections: r.collections };

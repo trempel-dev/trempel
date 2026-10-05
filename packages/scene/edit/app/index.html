@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,15 +17,15 @@
 
     <main>
       <div id="toolbar">
-        <span id="stage-title" title="Сцена (● — несохранённые правки)"><span id="scene-name"></span><span id="scene-dirty" hidden> ●</span></span>
+        <span id="stage-title" title="Scene (● — unsaved changes)"><span id="scene-name"></span><span id="scene-dirty" hidden> ●</span></span>
         <span id="readonly" class="readonly" hidden></span>
         <span class="tools">
-          <button id="tool-select" class="on" title="Выделение (V)">V</button>
-          <button id="tool-path" title="Контур (P) — путь или линия">P</button>
+          <button id="tool-select" class="on" title="Select (V)">V</button>
+          <button id="tool-path" title="Contour (P) — a path or a line">P</button>
         </span>
-        <label title="Вьюпорт">
+        <label title="Viewport">
           <select id="viewport">
-            <option value="scene">сцена</option>
+            <option value="scene">scene</option>
             <option value="9:16">9:16</option>
             <option value="9:19.5">9:19.5</option>
             <option value="3:4">3:4</option>
@@ -33,30 +33,30 @@
           </select>
         </label>
         <span class="zoom">
-          <button id="zoom-out" title="Уменьшить (−)">−</button>
-          <button id="zoom-fit" title="Вписать (⌘0)">⤢</button>
+          <button id="zoom-out" title="Zoom out (−)">−</button>
+          <button id="zoom-fit" title="Fit (⌘0)">⤢</button>
           <button id="zoom-100" title="100% (⌘1)">1:1</button>
-          <button id="zoom-in" title="Увеличить (+)">+</button>
+          <button id="zoom-in" title="Zoom in (+)">+</button>
         </span>
         <span id="size" class="muted"></span>
         <span class="grow"></span>
-        <button id="commands" title="Палитра команд (F3)">F3</button>
-        <label title="Раскладка клавиш: blender — G/R/S, Tab, ⇧D, H, A, F3; figma — V/P, стрелки, ⌘D, ⌘⇧P">
+        <button id="commands" title="Command palette (F3)">F3</button>
+        <label title="Keymap: blender — G/R/S, Tab, ⇧D, H, A, F3; figma — V/P, arrows, ⌘D, ⌘⇧P">
           <select id="keymap">
             <option value="blender">blender</option>
             <option value="figma">figma</option>
           </select>
         </label>
-        <button id="undo" title="Отменить (⌘Z)">⟲</button>
-        <button id="redo" title="Повторить (⇧⌘Z)">⟳</button>
-        <span id="ref-ctl" title="Эталон: картинка под сценой по её viewBox (в файл не пишется)">
-          <button id="ref-pick">эталон…</button>
-          <input id="ref-opacity" type="range" min="0" max="100" value="50" title="Прозрачность эталона" hidden />
-          <label id="ref-over-label" title="Эталон поверх сцены (иначе — под ней)" hidden><input id="ref-over" type="checkbox" />⤒</label>
-          <button id="ref-off" class="link" title="Убрать эталон" hidden>✕</button>
+        <button id="undo" title="Undo (⌘Z)">⟲</button>
+        <button id="redo" title="Redo (⇧⌘Z)">⟳</button>
+        <span id="ref-ctl" title="Reference: a picture under the scene, fitted to its viewBox (not written to the file)">
+          <button id="ref-pick">reference…</button>
+          <input id="ref-opacity" type="range" min="0" max="100" value="50" title="Reference opacity" hidden />
+          <label id="ref-over-label" title="Reference over the scene (otherwise under it)" hidden><input id="ref-over" type="checkbox" />⤒</label>
+          <button id="ref-off" class="link" title="Remove the reference" hidden>✕</button>
         </span>
-        <label title="Служебное: содержимое defs и маски — пунктиром"><input id="service" type="checkbox" checked /> defs</label>
-        <button id="save" title="Сохранить базу (⌘S)">сохранить<span id="dirty" hidden> ●</span></button>
+        <label title="Service geometry: defs content and masks, dashed"><input id="service" type="checkbox" checked /> defs</label>
+        <button id="save" title="Save the base (⌘S)">save<span id="dirty" hidden> ●</span></button>
       </div>
       <div id="stage-wrap" class="checker">
         <div id="stage-box">
@@ -73,28 +73,28 @@
 
     <aside id="right">
       <section id="tree-pane">
-        <h3>Дерево <span class="muted" id="tree-hint">⇧ — добавить, двойной клик — имя</span></h3>
+        <h3>Tree <span class="muted" id="tree-hint">⇧ — add, double-click — rename</span></h3>
         <ul id="tree" tabindex="0"></ul>
       </section>
       <section id="inspector-pane">
-        <h3>Инспектор <span id="insp-what" class="muted"></span></h3>
+        <h3>Inspector <span id="insp-what" class="muted"></span></h3>
         <div id="inspector"></div>
       </section>
     </aside>
 
     <footer id="bottom">
       <section>
-        <h3>Ошибки <span id="issue-count" class="badge"></span></h3>
+        <h3>Errors <span id="issue-count" class="badge"></span></h3>
         <ul id="issues"></ul>
       </section>
       <section id="bottom-tabs">
         <h3>
-          <button class="tab on" data-tab="log">Лог</button>
-          <button class="tab" data-tab="console" title="Скрипты над tml (⌘Enter), макросы — ⌘K">Консоль</button>
-          <button class="tab" data-tab="clips" title="Клипы сцены (anim/*.md, *.anim.md): проигрывание, кадр, onion, снимок для видео">Клипы</button>
+          <button class="tab on" data-tab="log">Log</button>
+          <button class="tab" data-tab="console" title="Scripts over tml (⌘Enter), macros — ⌘K">Console</button>
+          <button class="tab" data-tab="clips" title="Scene clips (anim/*.md, *.anim.md): playback, frame, onion, video snapshot">Clips</button>
           <span class="grow"></span>
-          <button id="macros" class="link" title="Макросы папки (.trempel/macros) — ⌘K">макросы ⌘K</button>
-          <button id="clear-log" class="link">очистить</button>
+          <button id="macros" class="link" title="Folder macros (.trempel/macros) — ⌘K">macros ⌘K</button>
+          <button id="clear-log" class="link">clear</button>
         </h3>
         <div id="pane-log" class="pane"><ol id="log"></ol></div>
         <div id="pane-console" class="pane" hidden>
@@ -103,17 +103,17 @@
         </div>
         <div id="pane-clips" class="pane" hidden>
           <div class="row">
-            <select id="clip-name" title="Клип"></select>
-            <button id="clip-play" title="Играть">▶</button>
-            <button id="clip-pause" title="Пауза">⏸</button>
-            <button id="clip-stop" title="Стоп — поза покоя, стадия снова правится">⏹</button>
-            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Время" />
-            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Время, с" />
+            <select id="clip-name" title="Clip"></select>
+            <button id="clip-play" title="Play">▶</button>
+            <button id="clip-pause" title="Pause">⏸</button>
+            <button id="clip-stop" title="Stop — rest pose, the stage is editable again">⏹</button>
+            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Time" />
+            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Time, s" />
             <span id="clip-dur" class="muted"></span>
           </div>
           <div class="row">
-            <label><input id="clip-loop" type="checkbox" checked /> цикл</label>
-            <label>скорость
+            <label><input id="clip-loop" type="checkbox" checked /> loop</label>
+            <label>speed
               <select id="clip-speed">
                 <option value="0.25">×0.25</option>
                 <option value="0.5">×0.5</option>
@@ -123,15 +123,15 @@
                 <option value="2">×2</option>
               </select>
             </label>
-            <label title="На паузе: кадры t−Δ (красный) и t+Δ (зелёный) поверх"><input id="clip-onion" type="checkbox" /> onion</label>
-            <label>Δ <input id="clip-onion-d" type="number" min="0.01" step="0.01" value="0.083" title="Δ, с (по умолчанию 1/12)" /></label>
+            <label title="When paused: frames t−Δ (red) and t+Δ (green) on top"><input id="clip-onion" type="checkbox" /> onion</label>
+            <label>Δ <input id="clip-onion-d" type="number" min="0.01" step="0.01" value="0.083" title="Δ, s (default 1/12)" /></label>
             <span id="clip-info" class="muted"></span>
           </div>
           <div class="row">
-            <span>снимок для видео:</span>
-            <label>фон <input id="shot-bg" type="color" value="#ffffff" /></label>
-            <label><input id="shot-transparent" type="checkbox" /> прозрачный</label>
-            <button id="shot-take" title="PNG стадии в позе покоя, 1:1 по viewBox → renders/">снять</button>
+            <span>video snapshot:</span>
+            <label>background <input id="shot-bg" type="color" value="#ffffff" /></label>
+            <label><input id="shot-transparent" type="checkbox" /> transparent</label>
+            <button id="shot-take" title="PNG of the stage in the rest pose, 1:1 to the viewBox → renders/">take</button>
           </div>
         </div>
       </section>

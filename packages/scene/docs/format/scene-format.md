@@ -1,21 +1,32 @@
 # Trempel scene format — v1.2
 
+> **For agents.** This file is the format: what a scene, an heir, a contract, a prefab and an md clip
+> are, and how they combine. Every message of the runtime and the tools starts with a code
+> (`E_EXPR_UNDEF: …`, `W_COMPAT_GML: …`) — the codes and their meaning are in
+> [§16 Error codes](#16-error-codes) (from `src/codes.ts`); match codes, never the wording. The
+> stable API is in [§15](#15-public-api). The examples of this document (the `svg`, `xml`, `md` and
+> `mdz` blocks) are checked by tests at every build (`test/spec.test.ts`): a block marked
+> `error=E_CODE` must fail with exactly that code, every other block must pass.
+
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 1.2. When this document and the code disagree, the code in `src/` is
-authoritative and this document is the bug.
+npm package `@trempel/scene` 2.0 (the format is the same as in 1.2). The examples of this document
+are checked by tests at every build.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes
 are plain text that an agent (or a person) writes and reviews, and that any SVG tool can open.
 
 | Entry point | What it is |
 |---|---|
-| `@trempel/scene` | everything: the core plus `PixiBackend`; `mountAsync` fetches prefabs by default |
-| `@trempel/scene/core` | the renderer-agnostic core (parse, merge, contract, expressions, layout, clips, player) — no `pixi.js` import; for CLIs, level tools, tests |
+| `@trempel/scene` | the stable API (§15): the core plus `PixiBackend`; `mountAsync` fetches prefabs by default |
+| `@trempel/scene/core` | the same without `pixi.js`: parse, compose, mount over any backend, contract, clips, collections, flatten, check — for CLIs, level tools, tests |
+| `@trempel/scene/node` | Node side (v1.1): the project file and its collections on disk, `flattenFile`; bin `trempel-flatten` |
+| `@trempel/scene/view` | `defineView` — the consumer module `trempel.view.ts` (§11) |
 | `@trempel/scene/editor` | the editor core: a document model with undoable commands |
 | `@trempel/scene/edit` | the editor app (page, style sheet, library entry) |
-| `@trempel/scene/node` | Node side (v1.1): the project file and its collections on disk, `flattenFile`; bin `trempel-flatten` |
+| `@trempel/scene/browser`, `…/browser/core`, `…/browser/editor` | the same as browser bundles |
+| `@trempel/scene/internal/*` | everything else (geometry, hit test, dashes, attribute parsers, expressions…) — for the kit and the editor, **no stability promise** |
 
-Runtime dependencies are `@xmldom/xmldom` and `svg-path-properties`; `pixi.js` (^8.5) is an
+Runtime dependencies are `@xmldom/xmldom` and `svg-path-properties`; `pixi.js` (^8.19) is an
 optional peer. No part of the runtime uses `eval` or `new Function`: scenes run under a strict
 Content Security Policy.
 
@@ -32,10 +43,10 @@ Content Security Policy.
    `stroke-dasharray`, `display`). What SVG lacks is a `data-*` attribute in the base — appearance
    of the rig, which logic does not touch.
 5. **Strict subset.** What the format cannot read is an error, never silently dropped.
-6. **Errors are collected, not thrown one at a time**, and phrased for a person ("`#board` must be
-   an empty group — it has 3 children; the component will overwrite them"), with the node (`#id`
-   or `<tag>`), the file and, for expressions, a position with a caret. (The runtime's messages are
-   currently worded in Russian; the meaning given in this document is what counts.)
+6. **Errors are collected, not thrown one at a time**, and phrased for a person, each with its
+   code ("`E_CONTRACT_EMPTY: #board must be an empty group — it has 3 children; the component will
+   overwrite them`"), with the node (`#id` or `<tag>`), the file and, for expressions, a position
+   with a caret. Tools and tests match the code (§16), never the wording.
 7. At the reference size, a scene looks exactly like the base SVG in a browser. Runtime-only
    features (anchors, stretch, pivots, tint) change nothing at the reference size or in the
    SVG matrix.
@@ -67,7 +78,8 @@ Pipeline of one scene (`composeScene`, `mount`):
 7. build onto the backend: nodes, bindings, events, components, layout.
 
 Steps 2–6 report into one list; `mount()` throws them together as a `TrempelError`
-(`.errors: string[]`, deduplicated). `composeScene()` returns them by stage
+(`.errors: string[]` — `E_CODE: message` each, deduplicated; `.codes`, `.code` — the first).
+`checkScene()` runs the same pipeline without a backend and returns the list. `composeScene()` returns them by stage
 (`{ parse, prefab, contract, merge }`) without throwing — for viewers, checkers and the editor.
 
 ---
@@ -95,6 +107,15 @@ Root: `<svg>` (anything else is a parse error). Allowed elements:
 
 Anything else is a parse error listing what is supported; `<mask>` hints at `<clipPath>`,
 `<polygon>`/`<polyline>` hint at `<path>`.
+
+**No DTD.** A `<!DOCTYPE …>` or an `<!ENTITY …>` in any document of the format (base, heir,
+prefab, contract) is an error before the XML is parsed — `E_DOCTYPE`: a scene never needs one, and
+entity expansion and external entities are refused outright.
+
+```svg error=E_DOCTYPE
+<!DOCTYPE svg [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text>&b;</text></svg>
+```
 
 **Sterility invariant.** The base carries **no `tml:*` attribute** — checked on every mount and by
 the checker, not left to discipline. The only link between base and logic is node `id`s. Ids are
@@ -324,14 +345,15 @@ checker error.
 
 ### 5.3 Errors
 
-- **Syntax** errors and unknown pipes are hard mount errors in the common list (and in the
-  checker), with the node, attribute, position and a caret under the source line.
+- **Syntax** errors (`E_EXPR_SYNTAX`) and unknown pipes (`E_PIPE_UNKNOWN`) are hard mount errors in
+  the common list (and in the checker), with the node, attribute, position and a caret under the
+  source line.
 - **Runtime** errors (field of `undefined`/`null`, unknown name, calling a non-function, a throwing
   context function or pipe) follow the mount options:
 
 | `MountOptions` | Behaviour |
 |---|---|
-| (default) | throws `ExpressionRuntimeError { node, attr, expr, error }` (`cause` = `error`) — from `mount()` on first evaluation, from the state write that re-ran a binding, or from the event handler |
+| (default) | throws `ExpressionRuntimeError { code, node, attr, expr, error }` (`cause` = `error`; `code` — `E_EXPR_UNDEF`, `E_EXPR_FIELD`, `E_EXPR_CALL`, `E_EXPR_FORBIDDEN`, or `E_EXPR_RUNTIME` for a context function's own failure) — from `mount()` on first evaluation, from the state write that re-ran a binding, or from the event handler |
 | `onError(info)` | receives `{ node, attr, expr, error }`; the write is skipped (the node keeps its last value), a failed handler does nothing |
 | `lenient: true` | silent: `undefined` is written (`visible` → `false`), handler errors are swallowed; `onError` is still called if given |
 
@@ -436,7 +458,8 @@ recursively and prefixes add up (`panel/close/label`). The expanded `<g>` carrie
 `instance: { href, rel, params, defaults, own, use, required, scope, min, size, resizable, slotted }`
 for tools.
 
-Errors inside a prefab are prefixed with the instance: `#a (bad.svg): <tml:ref id="nope">: no such id`.
+Errors inside a prefab are prefixed with the instance, the code stays first:
+`E_REF_MISSING: #a (bad.svg): <tml:ref id="nope">: no such id in the base.`
 
 ### 6.4 Paths
 
@@ -457,6 +480,7 @@ expansion the whole tree resolves against the scene document like its own hrefs 
   **result** (base + instances + heir) as its base — e.g. `ui/button-green.tml.svg`:
 
   ```svg
+  <!-- ui/button-green.tml.svg -->
   <svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
        tml:extends="button.svg" data-label="OK">
     <tml:ref id="bg" tml:href="art/green.png"/>
@@ -464,7 +488,7 @@ expansion the whole tree resolves against the scene document like its own hrefs 
   ```
 
 - Chains resolve recursively, any depth, for prefabs and top scenes alike (`mount({ heir })`
-  without `base`). A cycle is an error (`tml:extends cycle: top.svg → a.svg → b.svg → a.svg`).
+  without `base`). A cycle is an error (`E_EXTENDS_CYCLE: tml:extends cycle: top.svg → a.svg → b.svg → a.svg.`).
   An own base **and** `tml:extends` of another scene is an error ("one base").
 - An inherited base is not sterile by construction — sterility is only asked of a document's own
   base. The contract is inherited too: without its own `X.contract.xml` the extending scene uses
@@ -502,6 +526,28 @@ expansion the whole tree resolves against the scene document like its own hrefs 
   children of a `<use>` whose prefab has no slots.
 - A prefab nested inside another prefab: the children of its `<use>` belong to the outer prefab
   (outer prefix, outer `self`).
+
+A panel with two slots (its base and its heir), and a scene filling them:
+
+```svg
+<!-- ui/panel.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" data-resizable="xy" data-title="Panel">
+  <image id="bg" href="art/panel.png" width="400" height="300" data-slices="40"/>
+  <text id="title" x="200" y="56" text-anchor="middle" font-size="36" data-anchor="0.5 0">Panel</text>
+  <g id="content"/>
+  <g id="footer"/>
+</svg>
+```
+
+```svg
+<!-- ui/panel.tml.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
+     tml:extends="panel.svg">
+  <tml:ref id="title" tml:bind="self.title"/>
+  <tml:ref id="content" tml:slot="content default"/>
+  <tml:ref id="footer" tml:slot="footer"/>
+</svg>
+```
 
 ```xml
 <use id="pause" href="ui/panel.svg" width="600" height="800" data-title="Pause">
@@ -757,16 +803,26 @@ the value through the segment, jumps at the next key), plus `quadIn`, `quadOut`,
 ### 9.4 `$tex` — how a `tex` cell becomes an href
 
 ```markdown
-$tex: art/{}.png              ← file template (before the first clip)
+The file template (before the first clip):
+$tex: art/{}.png
+
 # $clip win
-$tex: fx/{}.webp              ← clip template
-## $tex                       ← clip table: names one by one
+The clip template:
+$tex: fx/{}.webp
+
+## $tex
+The clip table — names one by one:
 | name   | href             |
 |--------|------------------|
 | coin_0 | coins/gold-0.png |
+
 ## $track coin
-$tex: coins/{}.png            ← track template
-| t | tex    |
+The track template:
+$tex: coins/{}.png
+| t   | tex    |
+|-----|--------|
+| 0   | coin_0 |
+| 0.5 | spin   |
 ```
 
 - `{}` is replaced by the name (every occurrence); a template without `{}` is an error. The table
@@ -808,7 +864,7 @@ $tex: coins/{}.png            ← track template
   `play(clip, { targets, speed, onMarker }) → { abort(), done }`; `parallel(...)`, `sequence([...])`;
   `speed` may be a getter read every frame; call `tick()` once per frame.
 - Compiling: `compileClips(md, scene?, { tex? })` throws a `TrempelError` with every problem
-  (`$clip bad / $track box, row 3: x="a" — not a number`); `compileClipsResult(...)` returns
+  (`E_ANIM_VALUE: $clip bad / $track box, row 3: x="a" — not a number.`); `compileClipsResult(...)` returns
   `{ clips, errors }`. Repository CLI: `npm run anim:compile -- x.md [--scene dir] [--out x.json] [--tex …]`.
 
 ---
@@ -915,8 +971,8 @@ as **`@name/path`** (the extension as usual: `@skin/panel.svg`, `@skin/art/icons
 - Inside a collection's file its own relative hrefs resolve as always — from that file (they stay
   in the collection: `art/x.png` in `@skin/button.svg` is `@skin/art/x.png`; `..` never climbs out).
   A collection file may point into itself or another collection by `@`.
-- An unknown name is an error — «коллекции `@name` нет в проекте (есть: …)» — at mount, in `check`,
-  in the viewer, never a silent 404.
+- An unknown name is an error — `E_COLLECTION_UNKNOWN: … the project has no collection @name
+  (collections: …)` — at mount, in `check`, in the viewer, never a silent 404.
 - The price, taken on purpose: a scene with `@` hrefs does not open in a browser as is. A scene with
   prefabs does not either (an external `<use>`, 9-slice, slots) — `flatten` (§13) makes the vanilla
   SVG of any scene.
@@ -924,7 +980,7 @@ as **`@name/path`** (the extension as usual: `@skin/panel.svg`, `@skin/art/icons
 **Where they are declared.** `.trempel/project.mdz` in the **project root** — the nearest ancestor of
 the scene holding that file (none — no collections). md blocks, read by the core's md parser:
 
-```
+```mdz
 # Trempel project
 
 ## collections
@@ -988,7 +1044,7 @@ would draw at the scene's own size as plain SVG that any browser and Figma draw:
 - Geometry and style belong to the base; the heir does not override non-`tml` attributes (sole
   exception: `tml:href` on an image).
 - The contract is structure, not appearance.
-- Errors are hard, collected into one list, worded for a person.
+- Errors are hard, collected into one list, worded for a person, each with a stable code (§16).
 - At the reference size, the runtime draws what a browser draws from the base.
 - No `eval`: expressions are interpreted, names come only from the context.
 
@@ -997,7 +1053,285 @@ project folder are still read for one release, with a deprecation warning; see M
 
 ---
 
-## 15. Changelog
+## 15. Public API
+
+The stable entries — `@trempel/scene` (with `PixiBackend`), `@trempel/scene/core` (without it),
+`@trempel/scene/node`, `@trempel/scene/view`, `@trempel/scene/editor`, `@trempel/scene/browser*` —
+export only this; semver covers exactly this list.
+
+| Area | Exports |
+|---|---|
+| Parse and compose | `parse`, `parseHeir`, `merge`, `mergeScene`, `composeScene`, `preloadScenes`, `fetchSceneLoader`, `NS`, `HEIR_EXT`, `heirFile`, `isHeirFile`, `sceneStem`; types `SceneNode`, `HeirDoc`, `HeirRef`, `HeirInsert`, `PrefabInstance`, `InstanceScope`, `MergeOutcome`, `MergeOptions`, `SceneSource`, `SceneLoader`, `AsyncSceneLoader`, `ComposeInput`, `Composed`, `ComposeErrors` |
+| Mount | `mount`, `mountAsync`, `mountScene`, `mountTree`, `reactive`, `effect`, `PIPES`, `Registry`, `createDefaultRegistry`; types `MountOptions`, `MountArgs`, `MountArgsLoose`, `MountedScene`, `ScenePath`, `PathPoint`, `PipeFn`, `ComponentContext`, `ComponentInit`, `ComponentInstance`, `ComponentFactory` |
+| Backend | `PixiBackend` (`@trempel/scene` only); types `RendererBackend`, `NodeHandle`, `Bounds`, `ClipShape`, `PointerKind`, `PixiBackendOptions`, `FontMetricsFn`, `ImageNode` |
+| Contract | `parseContract`, `checkContract`; types `Contract`, `ContractNode`, `ContractPattern`, `ViewBoxRule`, `CheckContractOptions` |
+| Clips | `Animator`, `compileClips`, `compileClipsResult`; types `Clock`, `SpeedSource`, `PlayOptions`, `Handle`, `ClipSpec`, `AnimatorOptions`, `CompileClipsOptions`, `CompileClipsResult`, `AnimClip`, `Track`, `Keyframe`, `Marker`, `Ease`, `EaseName` |
+| Collections | `expandCollection`, `parseProject`, `PROJECT_FILE`; types `ProjectFile`, `CollectionSpec`; node: `loadProject`, `findProjectRoot`, `findPackageDir`, `collectionPath`, `isInside`, type `Project` |
+| Flatten, check | `flattenScene`, `checkScene`; types `FlattenInput`, `FlattenResult`, `CheckInput`, `CheckResult`; node: `flattenFile`, `sceneStemOf`, `imageSize`, `imageSizeOf`, `mimeOf` |
+| The consumer module | `defineView` (`@trempel/scene/view`); types `ViewConfig`, `ViewHookArgs`, `FontSpec` |
+| Errors and codes | `TrempelError`, `ExpressionRuntimeError`, `ExpressionError`, `PathDataError`, `trempelError`, `CODES`, `coded`, `codeOf`, `within`; types `Code`, `ExpressionErrorInfo` |
+
+Everything else — geometry (`pathFromNode`, `shapeCommands`…), the hit test, dashes and outlines,
+the presentation/layout attribute parsers, expressions and bindings (`compile`, `run`,
+`bindingErrors`…), transforms, compatibility helpers, `parseColor` — is internal:
+`@trempel/scene/internal/<module>` (e.g. `@trempel/scene/internal/geom/hit`), for the kit and the
+editor, with no stability promise. CHANGELOG.md of the package lists where each export of 1.2 went.
+
+---
+
+## 16. Error codes
+
+Every message the package shows a person — mount and check errors, contract violations, expression
+errors, clip compile errors, warnings of `flatten` and the compatibility layer, the viewer and the
+editor — starts with its code: `E_CODE: message (place)`, a caret line under expressions as before.
+`E_…` is an error, `W_…` a warning. The code is the stable part (match it, never the wording); the
+catalog is `src/codes.ts`, this section is generated from it (`npm run error-codes`, checked by
+`test/codes.test.ts`).
+
+<!-- BEGIN codes (scripts/error-codes.mjs) -->
+**XML and documents**
+
+| Code | Meaning |
+|---|---|
+| `E_XML` | the document is not well-formed XML |
+| `E_DOCTYPE` | a `<!DOCTYPE>` or an entity in a scene document (never needed; refused for safety) |
+| `E_ROOT` | wrong root element (`<svg>` for a scene or an heir, `<contract>` for a contract) |
+| `E_TAG` | an element outside the format (the message lists what is supported) |
+| `E_TEXT` | text where the format has none (a `<use>`, a group) |
+| `E_EMPTY_SCENE` | nothing to draw: no base and no tml:extends |
+
+**Base, heir, merge**
+
+| Code | Meaning |
+|---|---|
+| `E_STERILE` | the base carries tml:* attributes — logic lives in the heir |
+| `E_DUP_ID` | an id is used more than once in a document |
+| `E_REF_NO_ID` | `<tml:ref>` without an id |
+| `E_REF_FOREIGN` | `<tml:ref>` with non-tml attributes (geometry and style are edited in the base) |
+| `E_REF_TWICE` | the same id referenced by two `<tml:ref>` |
+| `E_REF_MISSING` | `<tml:ref>` to an id the base does not have |
+| `E_REF_DEFS` | `<tml:ref>` or tml:* on service geometry in `<defs>` |
+| `E_REF_HREF` | tml:href on a node that is not an `<image>` |
+| `E_INSERT_SYNTAX` | malformed tml:insert (expected 'after `<id>`' or 'into `<id>`') |
+| `E_INSERT_TARGET` | tml:insert into or after a node the base does not have |
+| `E_INSERT_ROOT` | tml:insert 'after' the root (it has no parent) |
+| `E_HEIR_STRAY` | a child of the heir that is neither `<tml:ref>` nor a tml:insert subtree |
+| `E_EXTENDS_BASE` | an own base and tml:extends of another scene (one base) |
+| `E_EXTENDS_MISSING` | tml:extends names a scene that does not exist |
+| `E_EXTENDS_CYCLE` | a tml:extends cycle |
+
+**Transforms, geometry, masks**
+
+| Code | Meaning |
+|---|---|
+| `E_TRANSFORM` | a transform that cannot be parsed (unknown function, wrong argument count) |
+| `E_PATH_DATA` | path data (d) or a geometry attribute that cannot be parsed |
+| `E_GEOMETRY` | a node that is not geometry where geometry is needed |
+| `E_PATH_SIMILARITY` | a path whose transform stretches or skews it (lengths along it are undefined) |
+| `E_DEFS_PLACE` | `<defs>` or `<clipPath>` outside its place, or a child they do not allow |
+| `E_CLIP_PATH` | a clip-path value, target or host the format does not allow |
+| `E_CLIP_NO_ID` | `<clipPath>` without an id |
+| `E_CLIP_UNITS` | clipPathUnits other than userSpaceOnUse |
+
+**Presentation attributes**
+
+| Code | Meaning |
+|---|---|
+| `E_STYLE` | a style property other than mix-blend-mode |
+| `E_BLEND` | an unknown mix-blend-mode, or one on a tag that does not blend |
+| `E_BIND_STYLE` | tml:bind-style (blend modes do not switch) |
+| `E_TINT` | malformed data-tint, or data-tint on a tag that is not tinted |
+| `E_Z` | malformed data-z, or data-z on a node that is not drawn |
+| `E_PIVOT` | malformed data-pivot, or data-pivot on a node that is not drawn |
+| `E_VIEWS` | malformed data-views, or data-views on a node that is not an `<image>` |
+| `E_NUMBER` | an attribute that must be a number is not |
+| `E_STROKE` | a stroke attribute (dasharray, dashoffset, linecap, linejoin, pathLength) that is malformed or on a tag without a stroke |
+
+**Layout**
+
+| Code | Meaning |
+|---|---|
+| `E_SLICES` | malformed data-slices, or data-slices on a tag that is not an `<image>` |
+| `E_TILE` | data-tile on a tag that is not an `<image>`, or together with data-slices |
+| `E_ANCHOR` | malformed data-anchor |
+| `E_AXES` | an axes value other than x, y or xy (data-stretch, data-tile, data-resizable) |
+| `E_SIZE` | malformed data-size |
+| `E_STRETCH` | data-stretch on a node that cannot stretch, or without a size |
+| `E_NO_BOX` | an anchored or stretched node whose parent is not a box |
+| `E_RESIZABLE` | data-resizable misplaced, without a viewBox or without a stretching background |
+
+**Expressions and bindings**
+
+| Code | Meaning |
+|---|---|
+| `E_EXPR_SYNTAX` | an expression that cannot be parsed (the message has the position and a caret) |
+| `E_EXPR_UNDEF` | a name the expression context does not define |
+| `E_EXPR_FIELD` | reading a field of undefined or null |
+| `E_EXPR_FORBIDDEN` | access to a forbidden member (constructor, prototype, __proto__…) |
+| `E_EXPR_CALL` | calling something that is not a function |
+| `E_EXPR_RUNTIME` | an expression failed at run time (the cause is attached) |
+| `E_PIPE_UNKNOWN` | an unknown pipe |
+| `E_BIND_DEFAULT` | tml:bind on a tag without a default property (use tml:bind-`<attr>`) |
+| `E_SELF_CALL` | self.call() of a function the scene context does not have |
+
+**Prefabs and slots**
+
+| Code | Meaning |
+|---|---|
+| `E_USE_NO_ID` | a `<use>` instance without an id |
+| `E_USE_NO_HREF` | a `<use>` instance without an href |
+| `E_USE_ATTR` | an attribute an instance does not take (instances are configured by data-* parameters and transform) |
+| `E_PARAM_RESERVED` | a parameter named data-id, data-call, data-state or data-set |
+| `E_PARAM_MISSING` | a required parameter (contract params) not set |
+| `E_PREFAB_CYCLE` | a prefab cycle |
+| `E_PREFAB_MISSING` | a prefab that does not exist or failed to load |
+| `E_PREFAB_LOADER` | no scene loader, or an asynchronous one for mount() (use mountAsync) |
+| `E_PREFAB_RESIZE` | width/height on an instance of a prefab that does not resize along that axis |
+| `E_PREFAB_MIN_SIZE` | an instance smaller than its prefab’s viewBox (the minimum size) |
+| `E_SLOT` | a malformed slot (not a `<g>`, a name twice, two defaults) |
+| `E_SLOT_UNKNOWN` | a child of `<use>` for a slot the prefab does not have |
+
+**The contract**
+
+| Code | Meaning |
+|---|---|
+| `E_CONTRACT_SYNTAX` | a contract that cannot be read (attribute values, id and match together, children of a pattern) |
+| `E_CONTRACT_MISSING` | a node the contract requires is missing from the base |
+| `E_CONTRACT_TWICE` | a node the contract requires is in the base more than once |
+| `E_CONTRACT_TAG` | a node of another tag (or not an instance of the prefab) than the contract says |
+| `E_CONTRACT_EMPTY` | a node the contract wants empty has children |
+| `E_CONTRACT_ATTR` | a base attribute the contract requires is missing (attrs, anchor, slices, params, resizable) |
+| `E_CONTRACT_PLACE` | a node outside the node the contract puts it in |
+| `E_CONTRACT_VIEWBOX` | the base viewBox breaks the contract rule (value, list, aspect) |
+| `E_CONTRACT_COUNT` | a pattern matches a number of nodes the contract does not allow |
+| `E_CONTRACT_PARTNER` | a pattern match without its required partner node |
+| `E_CONTRACT_SLOT` | a group the contract wants as a slot is not marked tml:slot |
+
+**Collections and the project**
+
+| Code | Meaning |
+|---|---|
+| `E_COLLECTION_UNKNOWN` | an @name/… href to a collection the project does not declare |
+| `E_PROJECT` | .trempel/project.mdz: a malformed or missing collection |
+
+**Md clips**
+
+| Code | Meaning |
+|---|---|
+| `E_ANIM_SYNTAX` | an md clip file that cannot be read (blocks, attributes, tables) |
+| `E_ANIM_COLUMN` | an unknown or conflicting column in a clip table |
+| `E_ANIM_VALUE` | a cell value of the wrong kind (number, colour, integer, range) |
+| `E_ANIM_TIME` | a key time that is not a number ≥ 0, not ascending, or past $duration |
+| `E_ANIM_EASE` | an unknown ease |
+| `E_ANIM_TARGET` | a clip target that does not exist, is in `<defs>`, or cannot take the column |
+| `E_ANIM_TEX` | a malformed $tex template or table |
+| `E_ANIM_MOTION` | a motion track that is inconsistent ($path, $orient, $offset, x/y, rotation) |
+| `E_ANIM_TWICE` | a property of a target keyed twice in one clip, or a clip name twice |
+| `E_ANIM_UNKNOWN` | a clip name the scene’s clip files do not have |
+| `E_ANIM_PLAY` | a clip that cannot be played (motion without a path, no rest pose) |
+
+**Runtime: mounting, the backend, the scene API**
+
+| Code | Meaning |
+|---|---|
+| `E_NO_REGISTRY` | tml:type without a component registry |
+| `E_COMPONENT` | an unknown component, or a component API used outside a scene |
+| `E_NODE` | a scene API call (path, hitTest, setView, setSize) with an id the scene does not have |
+| `E_VIEW` | an unknown data-views variant, or no `<image>` with data-views |
+| `E_BACKEND` | the backend lacks what the scene needs (setClip, onPointer, getProp) or got a bad value |
+| `E_TEXTURE` | a texture did not load |
+| `E_SLICES_FIT` | data-slices do not fit the texture (the centre needs at least 1 px) |
+| `E_RESIZE` | resize or setSize the scene cannot do |
+| `E_FETCH` | a document could not be fetched |
+
+**Tools: flatten, check, the viewer**
+
+| Code | Meaning |
+|---|---|
+| `E_STATE` | stand-in state that is not a JSON object |
+| `E_IMAGE_MISSING` | an image file that does not exist |
+| `E_FLATTEN_LEFTOVER` | flatten output still has tml:, data-* or @-hrefs |
+| `E_CLI` | a command-line usage error |
+| `W_FLATTEN` | something vanilla SVG cannot show (a component, a clip, a binding, an unknown image size) |
+| `W_CONTEXT_STUB` | names the scene uses that nobody provides — the viewer stubs them |
+
+**The editor**
+
+| Code | Meaning |
+|---|---|
+| `E_EDITOR_COMMAND` | an unknown editor command |
+| `E_EDITOR_ARGS` | command arguments that do not fit its schema (type, required, unknown, range, pattern) |
+| `E_EDITOR_API` | EditorDocument misused (an unknown event, end/abort without begin) |
+| `E_EDITOR_NO_NODE` | a node reference (id or index path) that matches no node |
+| `E_EDITOR_NODE_AMBIGUOUS` | an id used by several nodes — address the node by its index path |
+| `E_EDITOR_INDEX` | a child index out of range |
+| `E_EDITOR_ID_TAKEN` | a new id that is already in the document |
+| `E_EDITOR_ATTR` | an attribute the command does not set (xmlns, id outside node.setId) |
+| `E_EDITOR_TAG` | a command applied to a node of a tag it does not work on |
+| `E_EDITOR_ROOT` | a command the root `<svg>` cannot take (remove, move, copy, transform) |
+| `E_EDITOR_VALUE` | an attribute value the command cannot work with (a list, not a number, a degenerate transform) |
+| `E_EDITOR_TEXT` | replacing the text of an element with element children |
+| `E_EDITOR_FRAGMENT` | an XML fragment that is not exactly one element, or is an `<svg>` |
+| `E_EDITOR_REPARENT` | a node moved into itself |
+| `E_EDITOR_PATH` | an impossible path edit (no such point, segment or subpath; a handle without a segment; the last point) |
+| `E_EDITOR_NOT_INSTANCE` | a prefab command on a node that is not a `<use>` instance |
+| `E_EDITOR_NOT_EXPANDED` | an instance that is not expanded (the prefab is missing or has errors) |
+| `E_EDITOR_PARAM` | a prefab parameter that cannot be one (a presentation attribute, not a child of the group, the wrong tag) |
+| `E_EDITOR_NO_ID` | a group without an id where the command needs one (prefab.extract) |
+| `E_EDITOR_FILE_EXISTS` | a file the command would create already exists |
+| `W_EDITOR_CLIP_REF` | a clip refers to a renamed or removed id |
+| `W_EDITOR_PATH_REWRITTEN` | d rewritten as absolute M L C Z (arcs approximated by cubics) |
+| `W_EDITOR_DETACH` | prefab logic (the tml of its heir) is not carried into a detached copy |
+| `W_EDITOR_EXTRACT` | prefab.extract changed an id or left a clip-path outside the prefab |
+| `E_EDIT_NO_SCENE` | no scene is open or drawn in the editor |
+| `E_EDIT_NO_BASE` | a scene without its base X.svg (the editor edits only the base) |
+| `E_EDIT_NODE` | a node (id or index path) the open scene does not have |
+| `E_EDIT_SELECTION` | nothing selected for an action that needs a selection |
+| `W_EDIT_SELECTION` | an editor action that does not apply to the selected nodes |
+| `E_EDIT_ARGS` | malformed arguments of a tml call, an operator or a command field |
+| `E_EDIT_SINGULAR` | a degenerate transform (scale 0) cannot be inverted |
+| `E_EDIT_SCENE` | a scene the open folder does not have |
+| `E_EDIT_CLIP` | a clip the scene does not have, no clips, or no clip selected |
+| `E_EDIT_HOST` | a feature only the editor page provides (clips, reference, snapshots, prefabs) |
+| `E_EDIT_SCRIPT` | a console script or macro failed (or the page CSP forbids running scripts) |
+| `E_EDIT_MACRO` | a macro the folder does not have |
+| `W_EDIT_MACRO` | a macro file that could not be read |
+| `E_EDIT_WRITE` | a file could not be written to the folder |
+| `E_EDIT_SNAPSHOT` | the video snapshot failed |
+| `W_EDIT_SNAPSHOT` | the video snapshot could not be written to the folder — offered as a download |
+| `E_EDIT_REFERENCE` | the reference picture could not be loaded |
+| `E_EDIT_RENDER` | the stage failed to render the scene |
+| `W_EDIT_PREVIEW` | a prefab preview could not be drawn |
+| `W_EDIT_OUTSIDE` | a prefab outside the open folder (the editor cannot see it) |
+| `W_EDIT_COMPONENT` | components without an implementation — their base is drawn |
+| `W_EDIT_DISK` | a file changed on disk while the editor has unsaved changes |
+| `W_EDIT_READ_ONLY` | the stage is read-only (a clip is posed) |
+
+**The viewer**
+
+| Code | Meaning |
+|---|---|
+| `E_VIEW_ACCESS` | a path outside the scene folder, the project and its collections, or in a service folder |
+| `E_VIEW_WRITE` | a write the dev server refuses (read-only folder, an heir, not a base, not renders/*.png) |
+| `E_VIEW_REQUEST` | a malformed request to the dev server |
+| `E_VIEW_MODULE` | the folder view module (trempel.view.ts) failed: loading, setup(), context(), onMount() |
+| `E_VIEW_VIEWPORT` | a viewport that cannot be parsed (expected scene, W:H or WxH) |
+| `W_VIEW_HEIR` | the heir is not applied — the base is shown without it |
+| `W_VIEW_TEXTURE_TIMEOUT` | textures did not load within the timeout |
+
+**Compatibility (one release)**
+
+| Code | Meaning |
+|---|---|
+| `W_COMPAT_GML` | the previous namespace prefix (gml:) — write tml: |
+| `W_COMPAT_HEIR` | an heir under the previous file suffix |
+| `W_COMPAT_VIEW_MODULE` | a consumer module under the previous name |
+| `W_COMPAT_PROJECT_DIR` | a project folder under the previous name |
+<!-- END codes -->
+
+---
+
+## 17. Changelog
 
 - **0.5** — two-document model: sterile base SVG + heir (`<tml:ref>`, `tml:insert`, `tml:extends`) + contract (exact node lines, `empty`, viewBox, unique ids, sterility); merge errors collected into one list.
 - **0.6** — own expression language without `eval` (grammar, pipes everywhere, `money`), full SVG `transform`, SVG-faithful rendering (opacity, display, baseline text, CSS colours, rect stroke), `MountedScene.ready`, `baseUrl`/`resolveHref`, contract viewBox rules (`any`, lists, `aspect`) and pattern lines (`match`, `count`, `in`, `requires`); 0.6.1: extensible `PixiBackend.createImage`, loud runtime expression errors (`onError`, `lenient`).
@@ -1006,4 +1340,5 @@ project folder are still read for one release, with a deprecation warning; see M
 - **0.9** — prefabs: `<use href>` instances with parameters and `self`, composite ids, multi-level `tml:extends`, `tml:href`, pointer events, `tml:bind-view`, contract `<use>` lines and `params`, scene loaders and `mountAsync`; 0.9.1: stroke dashes/caps/joins and `pathLength`, hidden-but-hittable geometry, geometry hit test, clip columns `dash`/`strokeWidth`/`strokeAlpha`, `$tex` in md clips, nested contract lines.
 - **1.0** — 9-slice (`data-slices`) and tiling (`data-tile`), boxes with `data-anchor`/`data-stretch`/`data-size`, resizable prefabs (`data-resizable`, `<use width height>`), slots (`tml:slot`), clip columns `width`/`height`, `resize`/`setSize`/`sizeOf`; the format is published as Trempel (`tml:` namespace, `*.tml.svg` heirs, `trempel.view.ts`, `.trempel/`).
 - **1.1** — collections: `@name/path` hrefs into named folders (`.trempel/project.mdz`, folders from the project root or `npm:` packages), `collections` in `MountOptions` / `defineView`, resolved before `baseUrl`/`resolveHref`, unknown name — an error, contract `href` compared by the resolved file; the dev server serves the project root and the collections; the editor's palette groups a collection's prefabs and writes `@name/…`; `flatten` — any scene as one vanilla SVG (`--embed`, `--state`; `@trempel/scene/node`, bin `trempel-flatten`); `migrate-collections.mjs`.
+- **2.0** (package; the format stays 1.2) — every message in English with a code (§16); `<!DOCTYPE>` and entities are refused (`E_DOCTYPE`); a narrow stable API (§15), the rest under `@trempel/scene/internal/*`; `checkScene`; `@trempel/scene/view`; the examples of this document are tests.
 - **1.2** — no format changes. The runtime has no built-in components: the demo grid component of 1.1 left `createDefaultRegistry()`, which is now an empty registry — games register their own. The repository is a monorepo: `@trempel/scene` and the game kit `@trempel/kit` (screens, popups, layout, UI components, a default skin as the collection `npm:@trempel/kit/skins/default/ui`), versioned together.

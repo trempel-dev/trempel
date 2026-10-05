@@ -13,7 +13,8 @@
 // in parent space; anything else — node.setTransform from the new local matrix
 // P⁻¹ · D · P · M (pivot at the gesture's centre), or the matrix itself when it has a skew.
 
-import { IDENTITY, multiply, parseTransform, type Matrix, type SceneNode } from '../src/core.js';
+import { coded, type SceneNode } from '../src/core.js';
+import { IDENTITY, multiply, parseTransform, type Matrix } from '../src/transform.js';
 import type { StageFit } from '../view/viewport';
 
 export type { Matrix };
@@ -40,7 +41,7 @@ export interface Call {
 export function invert(m: Matrix): Matrix {
   const [a, b, c, d, e, f] = m;
   const det = a * d - b * c;
-  if (Math.abs(det) < 1e-12) throw new Error('вырожденная матрица (масштаб 0)');
+  if (Math.abs(det) < 1e-12) throw new Error(coded('E_EDIT_SINGULAR', 'a degenerate matrix (scale 0)'));
   return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
 }
 
@@ -102,7 +103,7 @@ export function chainAt(root: SceneNode, path: string): SceneNode[] {
   let n = root;
   for (const part of path.split('/')) {
     n = n.children[Number(part)];
-    if (!n) throw new Error(`пути "${path}" в сцене нет`);
+    if (!n) throw new Error(coded('E_EDIT_NODE', `the scene has no path "${path}"`));
     out.push(n);
   }
   return out;

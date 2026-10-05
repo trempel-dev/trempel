@@ -39,8 +39,8 @@ import {
 import type { Editor } from './editor';
 
 const PROPS = ['x', 'y', 'rotation', 'scale.x', 'scale.y', 'skew.x', 'skew.y'] as const;
-const HELP = 'X/Y ось · Shift точно · Ctrl шаг · Enter/Esc';
-const NAME: Record<OpKind, string> = { G: 'Сдвиг', R: 'Поворот', S: 'Масштаб' };
+const HELP = 'X/Y axis · Shift fine · Ctrl snap · Enter/Esc';
+const NAME: Record<OpKind, string> = { G: 'Move', R: 'Rotate', S: 'Scale' };
 
 /** Pixi's local matrix from its transform props and pivot. */
 export function pixiLocal(p: Record<string, number>, pv: Pt = { x: 0, y: 0 }): Matrix {
@@ -202,7 +202,7 @@ export class Operators {
     this.pick = { targets, drag: !!opts.drag, at: opts.at ? this.scene(opts.at) : null };
     this.ed.operating = true;
     this.listen();
-    this.showStatus(opts.drag ? 'Пивот: отпустите в новой точке  [Esc — отмена]' : 'Пивот: кликните точку на сцене  [Esc — отмена]');
+    this.showStatus(opts.drag ? 'Pivot: release at the new point  [Esc — cancel]' : 'Pivot: click a point on the scene  [Esc — cancel]');
     this.ed.emit('op');
     return true;
   }
@@ -210,7 +210,7 @@ export class Operators {
   /** Ctrl+.: the pivot of every selected node at its bounds' centre. */
   pivotToCentre(): void {
     const targets = this.targets();
-    if (targets) this.ed.batch('пивот в центр', pivotCommands(targets, 'centre'));
+    if (targets) this.ed.batch('pivot to centre', pivotCommands(targets, 'centre'));
   }
 
   // ---- the running operator ------------------------------------------------------------------
@@ -239,7 +239,7 @@ export class Operators {
       const props = pixiProps(multiply(Dp, t.local0), t.pixiPivot);
       for (const k of PROPS) be.setProp(t.handle, k, props[k]);
     }
-    const typing = r.typed != null ? ' · ввод' : '';
+    const typing = r.typed != null ? ' · typed' : '';
     this.showStatus(`${opStatus(r.req, p, r.typed, axes).replace(/^[^\s:]+/, NAME[r.kind])}${typing}  [${HELP}]`);
     this.ed.emit('op');
   }
@@ -471,7 +471,7 @@ export class Operators {
     const pk = this.pick;
     if (!pk) return;
     this.end();
-    this.ed.batch('пивот', pivotCommands(pk.targets, at));
+    this.ed.batch('pivot', pivotCommands(pk.targets, at));
   }
 
   /** The pointer moved (the window's listener; the page calls it for the move that started a drag). */

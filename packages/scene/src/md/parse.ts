@@ -172,7 +172,7 @@ function listItems(s: string, line: number, key: string): string[] {
       depth--;
       buf += c;
     } else if (c === ',') {
-      if (depth > 0) throw new MdParseError(`$${key} (строка ${line}, позиция ${openAt + 3}): вложенный список в $[…] не поддерживается`, line);
+      if (depth > 0) throw new MdParseError(`$${key} (line ${line}, col ${openAt + 3}): a nested list in $[…] is not supported`, line);
       out.push(buf);
       buf = '';
     } else buf += c;
@@ -202,9 +202,9 @@ function attrValue(raw: string, line: number, key: string): AttributeValue {
     try {
       obj = parseJson5(t);
     } catch (e) {
-      throw new MdParseError(`$${key} (строка ${line}): ${(e as Error).message}`, line);
+      throw new MdParseError(`$${key} (line ${line}): ${(e as Error).message}`, line);
     }
-    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new MdParseError(`$${key} (строка ${line}): ожидается объект`, line);
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new MdParseError(`$${key} (line ${line}): expected an object`, line);
     return obj as Json5Object;
   }
   return coerce(unescape(v));

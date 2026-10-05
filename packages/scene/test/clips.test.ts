@@ -9,6 +9,7 @@ import { compileClips, compileClipsResult } from '../src/anim/compile';
 import { Animator } from '../src/anim/player';
 import type { AnimClip } from '../src/anim/types';
 import { TrempelError } from '../src/errors';
+import { codesOf, thrown } from './helpers/codes';
 import { parse } from '../src/parser';
 import { PixiBackend } from '../src/render/pixi';
 import { mount, type MountedScene } from '../src/scene';
@@ -147,17 +148,32 @@ $path: world
 `,
       parse(SCENE),
     );
-    expect(errors).toEqual([
-      '$clip bad: неизвестный атрибут $speed (есть: $duration, $loop, $tex).',
-      '$clip bad / $track ghost: узла #ghost в сцене нет.',
-      '$clip bad / $track bird, строка 4: t=0 — времена должны идти по возрастанию.',
-      '$clip bad / $track box: неизвестные колонки foo (есть: t, x, y, rotation, scale, scaleX, scaleY, skewX, skewY, alpha, tint, z, tex, view, motion, dash, strokeWidth, strokeAlpha, width, height, ease).',
-      '$clip bad / $track box, строка 4: t=2 позже $duration 1.',
-      '$clip bad / $track box, строка 3: x="a" — не число.',
-      '$clip bad / $track bird: $path world — это <g>, путём может быть path, line, circle, ellipse, rect.',
-      '$clip bad / $track two: tex — у #two 2 <image> внутри; подменить можно, только когда картинка одна.',
-      '$clip bad / $track fly1: #fly1 в <defs> — служебная геометрия не анимируется.',
+    expect(codesOf(errors)).toEqual([
+      'E_ANIM_SYNTAX',
+      'E_ANIM_TARGET',
+      'E_ANIM_TIME',
+      'E_ANIM_COLUMN',
+      'E_ANIM_TIME',
+      'E_ANIM_VALUE',
+      'E_ANIM_MOTION',
+      'E_ANIM_TARGET',
+      'E_ANIM_TARGET',
     ]);
+    // each names its clip / track and the offending value
+    const named: string[][] = [
+      ['$clip bad:', '$speed'],
+      ['$clip bad / $track ghost:', '#ghost'],
+      ['$clip bad / $track bird', 't=0'],
+      ['$clip bad / $track box:', 'foo'],
+      ['$clip bad / $track box', 't=2', '$duration 1'],
+      ['$clip bad / $track box', 'x="a"'],
+      ['$clip bad / $track bird:', '$path world', '<g>'],
+      ['$clip bad / $track two:', '#two'],
+      ['$clip bad / $track fly1:', '#fly1', '<defs>'],
+    ];
+    named.forEach((parts, k) => {
+      for (const part of parts) expect(errors[k]).toContain(part);
+    });
     expect(() => compileClips('# $clip x\n## $track a\n| t | x |\n|---|---|\n| 0 | z |\n')).toThrow(TrempelError);
   });
 
@@ -177,11 +193,11 @@ $path: fly1
 |---|---|
 | 0 | 0 |
 `);
-    expect(errors).toEqual([
-      '$clip c / $track a, строка 3: ease «wobbly» неизвестен (есть: linear, quadIn, quadOut, quadInOut, cubicInOut, backOut, elasticOut, in, out, inOut, outBack, inBack, outBounce, step или [x1,y1,x2,y2]).',
-      '$clip c / $track b: колонка motion без $path.',
-      '$clip c / $track c: $path без колонки motion — движению нечем управлять.',
-    ]);
+    expect(codesOf(errors)).toEqual(['E_ANIM_EASE', 'E_ANIM_MOTION', 'E_ANIM_MOTION']);
+    expect(errors[0]).toContain('$clip c / $track a');
+    expect(errors[0]).toContain('wobbly');
+    expect(errors[1]).toContain('$clip c / $track b:');
+    expect(errors[2]).toContain('$clip c / $track c:');
   });
 });
 
@@ -245,7 +261,10 @@ describe('player — relative tracks from the scene rest pose', () => {
     delete (backend as { getProp?: unknown }).getProp;
     const anim = new Animator(backend, createMockClock());
     const clip: AnimClip = { tracks: [{ target: '$n', property: 'x', relative: true, keys: [{ t: 0, v: 1 }] }] };
-    expect(() => anim.play(clip, { targets: { n: backend.createNode('g', {}) } })).toThrow(/не умеет getProp/);
+    const e = thrown(() => anim.play(clip, { targets: { n: backend.createNode('g', {}) } }));
+    expect(e).toBeInstanceOf(TrempelError);
+    expect(e).toMatchObject({ code: 'E_BACKEND' });
+    expect(e.message).toContain('getProp');
   });
 });
 
@@ -383,10 +402,12 @@ $offset: 0, -6
 
   it('an unknown path is a load error, not a playback one', () => {
     const { anim } = rig();
-    expect(() => anim.play({ tracks: [{ target: 'bird', property: 'motion', path: 'nope', keys: [{ t: 0, v: 0 }] }] })).toThrow(
-      /path\("nope"\) — узла с таким id в сцене нет/,
-    );
+    const unknown = thrown(() => anim.play({ tracks: [{ target: 'bird', property: 'motion', path: 'nope', keys: [{ t: 0, v: 0 }] }] }));
+    expect(unknown).toMatchObject({ code: 'E_NODE' });
+    expect(unknown.message).toContain('path("nope")');
     const bare = new Animator(createMockBackend(), createMockClock());
-    expect(() => bare.play({ tracks: [{ target: '$x', property: 'motion', path: 'p', keys: [{ t: 0, v: 0 }] }] })).toThrow(/Animator создан без path/);
+    const noPath = thrown(() => bare.play({ tracks: [{ target: '$x', property: 'motion', path: 'p', keys: [{ t: 0, v: 0 }] }] }));
+    expect(noPath).toMatchObject({ code: 'E_ANIM_PLAY' });
+    expect(noPath.message).toContain('#$x');
   });
 });

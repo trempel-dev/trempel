@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mount, type SceneSource } from '@trempel/scene/core';
+import { codeOf, mount, type SceneSource } from '@trempel/scene/core';
 import { openDocument, type EditorDocument } from './index.js';
 import { createMockBackend, type MockNode } from '../test/helpers/mockBackend';
 
@@ -17,6 +17,9 @@ const loadScene = (rel: string): SceneSource | null => {
   return src.base != null || src.heir != null ? src : null;
 };
 const MENU = read('menu.svg')!;
+/** The example's own data: the button's default label, the shop button's label. */
+const BUTTON_LABEL = /data-label="([^"]*)"/.exec(read('ui/button.svg')!)![1];
+const SHOP_LABEL = /id="shopBtn"[^>]*data-label="([^"]*)"/.exec(MENU)![1];
 const open = (svg = MENU): EditorDocument => openDocument(svg, { heir: read('menu.tml.svg'), contract: read('menu.contract.xml'), path: 'menu.svg', loadScene });
 
 function roundtrip(doc: EditorDocument, name: string, args: unknown): string {
@@ -54,35 +57,38 @@ describe('prefab commands', () => {
     expect(top).toMatchObject({ tag: 'use', href: 'ui/button-green.svg', children: [] });
     expect(doc.instance('shopBtn')).toMatchObject({ href: 'ui/button-green.svg', expanded: true, missing: [] });
     expect(doc.instance('settingsBtn')!.params).toEqual([
-      { name: 'data-label', value: "=t('settings')", own: true, required: true, default: 'Кнопка' },
+      { name: 'data-label', value: "=t('settings')", own: true, required: true, default: BUTTON_LABEL },
       { name: 'data-action', value: 'openSettings', own: true, required: true, default: '' },
     ]);
   });
 
   it('prefab.instantiate — <use id href x y data-*>, unknown prefab / taken id refused; undo/redo', () => {
     const doc = open();
-    const after = roundtrip(doc, 'prefab.instantiate', { href: 'ui/button.svg', id: 'helpBtn', x: 10, y: 540, params: { label: 'Помощь', 'data-action': 'help' } });
-    expect(after).toContain('<use id="helpBtn" href="ui/button.svg" x="10" y="540" data-label="Помощь" data-action="help"/>');
+    const after = roundtrip(doc, 'prefab.instantiate', { href: 'ui/button.svg', id: 'helpBtn', x: 10, y: 540, params: { label: 'Help', 'data-action': 'help' } });
+    expect(after).toContain('<use id="helpBtn" href="ui/button.svg" x="10" y="540" data-label="Help" data-action="help"/>');
     expect(doc.errors).toEqual([]);
-    expect(doc.exec('prefab.instantiate', { href: 'ui/nope.svg', id: 'x' }).errors![0]).toMatch(/префаба ui\/nope\.svg нет/);
-    expect(doc.exec('prefab.instantiate', { href: 'ui/button.svg', id: 'playBtn' }).errors![0]).toMatch(/уже есть/);
+    expect(doc.exec('prefab.instantiate', { href: 'ui/nope.svg', id: 'x' }).errors![0]).toMatch(/^E_PREFAB_MISSING: .*ui\/nope\.svg/);
+    expect(doc.exec('prefab.instantiate', { href: 'ui/button.svg', id: 'playBtn' }).errors![0]).toMatch(/^E_EDITOR_ID_TAKEN: /);
   });
 
   it('a new instance without required params — doc.errors says which', () => {
     const doc = open();
     doc.exec('prefab.instantiate', { href: 'ui/button.svg', id: 'b5' });
-    expect(doc.errors).toEqual(['#b5: не задан параметр data-label, его требует ui/button.svg.', '#b5: не задан параметр data-action, его требует ui/button.svg.']);
+    expect(doc.errors.map(codeOf)).toEqual(['E_PARAM_MISSING', 'E_PARAM_MISSING']);
+    expect(doc.errors[0]).toContain('data-label');
+    expect(doc.errors[1]).toContain('data-action');
     expect(doc.instance('b5')!.missing).toEqual(['data-label', 'data-action']);
   });
 
   it('prefab.setParam — sets / removes data-*; presentation data-* refused; only on <use>', () => {
     const doc = open();
-    const after = roundtrip(doc, 'prefab.setParam', { node: 'exitBtn', name: 'label', value: 'Пока' });
-    expect(after).toContain('data-label="Пока"');
+    const after = roundtrip(doc, 'prefab.setParam', { node: 'exitBtn', name: 'label', value: 'Bye' });
+    expect(after).toContain('data-label="Bye"');
     roundtrip(doc, 'prefab.setParam', { node: 'exitBtn', name: 'data-label', value: null });
-    expect(doc.errors).toEqual(['#exitBtn: не задан параметр data-label, его требует ui/button.svg.']);
-    expect(doc.exec('prefab.setParam', { node: 'exitBtn', name: 'z', value: '1' }).errors![0]).toMatch(/не параметр/);
-    expect(doc.exec('prefab.setParam', { node: 'title', name: 'label', value: '1' }).errors![0]).toMatch(/не инстанс/);
+    expect(doc.errors.map(codeOf)).toEqual(['E_PARAM_MISSING']);
+    expect(doc.errors[0]).toContain('#exitBtn');
+    expect(doc.exec('prefab.setParam', { node: 'exitBtn', name: 'z', value: '1' }).errors![0]).toMatch(/^E_EDITOR_PARAM: /);
+    expect(doc.exec('prefab.setParam', { node: 'title', name: 'label', value: '1' }).errors![0]).toMatch(/^E_EDITOR_NOT_INSTANCE: /);
   });
 
   it('node.move moves an instance by x/y', () => {
@@ -95,18 +101,19 @@ describe('prefab commands', () => {
     const before = mount({ base: doc.serialize(), backend: backend(), context: ctx, loadScene });
     const res = doc.exec('prefab.detach', { node: 'shopBtn' });
     expect(res.ok).toBe(true);
-    expect(res.warnings?.[0]).toMatch(/логика префаба/);
+    expect(res.warnings?.[0]).toMatch(/^W_EDITOR_DETACH: /);
     const after = doc.serialize();
     // v1.0: the button is resizable with anchors inside — the copy is a box of its size
     expect(after).toContain('<g id="shopBtn" transform="translate(280 360)" data-size="240 72">');
     // static bindings baked: the label parameter, the green backdrop of button-green (tml:href)
-    expect(after).toContain('<text id="shopBtn/label" x="120" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#ffffff" data-anchor="0.5 0">Магазин</text>');
+    expect(after).toContain(`<text id="shopBtn/label" x="120" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#ffffff" data-anchor="0.5 0">${SHOP_LABEL}</text>`);
     expect(after).toContain('<image id="shopBtn/bg" href="ui/art/green.png"');
     const detached = mount({ base: after, backend: backend(), context: ctx, loadScene });
     const pic = (s: ReturnType<typeof mount>, id: string) => picture(s.byId.get(id) as MockNode);
     for (const id of ['shopBtn', 'exitBtn', 'playBtn']) expect(pic(detached, id)).toEqual(pic(before, id));
     // the contract still wants an instance there
-    expect(doc.errors).toEqual(['#shopBtn: контракт ждёт инстанс <use href="ui/button-green.svg">, а в базе <g>.']);
+    expect(doc.errors.map(codeOf)).toEqual(['E_CONTRACT_TAG']);
+    expect(doc.errors[0]).toContain('#shopBtn');
     doc.undo();
     expect(doc.serialize()).toBe(MENU);
     doc.redo();
@@ -145,6 +152,6 @@ describe('prefab commands', () => {
     doc.redo();
     expect(doc.serialize()).toBe(after);
     // an existing prefab name is refused
-    expect(openDocument(SCENE, { loadScene }).exec('prefab.extract', { node: 'badge', href: 'ui/button.svg' }).errors![0]).toMatch(/уже есть/);
+    expect(openDocument(SCENE, { loadScene }).exec('prefab.extract', { node: 'badge', href: 'ui/button.svg' }).errors![0]).toMatch(/^E_EDITOR_FILE_EXISTS: /);
   });
 });

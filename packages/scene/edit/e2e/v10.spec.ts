@@ -23,7 +23,7 @@ describe('editor e2e — v1.0: slices, resizable panel, palette (examples/prefab
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'tml-edit-v10-'));
     for (const f of ['popup-pause.svg', 'popup-pause.tml.svg', 'popup-pause.contract.xml', 'anim', 'ui']) cpSync(join(root, 'examples/prefabs', f), join(dir, f), { recursive: true });
-    writeFileSync(join(dir, 'trempel.view.ts'), `export default { context: () => ({ t: (k) => ({ settings: 'Настройки', exit: 'Выход', paused: 'Пауза' })[k] ?? k }) };\n`);
+    writeFileSync(join(dir, 'trempel.view.ts'), `export default { context: () => ({ t: (k) => ({ settings: 'Settings', exit: 'Exit', paused: 'Paused' })[k] ?? k }) };\n`);
     e = await openEditor(dir, 'popup-pause');
   }, T);
   afterAll(async () => {
@@ -51,7 +51,7 @@ describe('editor e2e — v1.0: slices, resizable panel, palette (examples/prefab
       await e.page.mouse.move(at.x, at.y);
       await e.page.mouse.down();
       await e.page.mouse.move(at.x - 15, at.y, { steps: 3 });
-      expect(await e.page.textContent('#opstatus')).toMatch(/^Масштаб/);
+      expect(await e.page.textContent('#opstatus')).toMatch(/^Scale/);
       await e.page.keyboard.type('0.8'); // typed mid-drag: the factor
       await e.page.mouse.up();
       await idle(e.page);
@@ -81,7 +81,7 @@ describe('editor e2e — v1.0: slices, resizable panel, palette (examples/prefab
       await idle(e.page);
       expect(await e.page.inputValue('#inspector input[data-key="size:width"]')).toBe('320');
       expect(await e.page.inputValue('#inspector input[data-key="size:height"]')).toBe('240');
-      expect(await e.page.textContent('#inspector .row.size .muted')).toBe('мин. 320×240 · xy');
+      expect(await e.page.textContent('#inspector .row.size .muted')).toBe('min 320×240 · xy');
       // the size field writes width
       await e.page.fill('#inspector input[data-key="size:width"]', '400');
       await e.page.press('#inspector input[data-key="size:width"]', 'Enter');
