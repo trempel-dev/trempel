@@ -2,7 +2,8 @@
 // collected as a list and thrown together, so a designer or CI sees every problem at once instead
 // of fixing them one reload at a time. Every message starts with its code (codes.ts).
 
-import { CODES, codeOf, coded, type Code } from './codes.js';
+import { CODE_NAMES } from './code-names.js';
+import { codeOf, coded, type Code } from './codes.js';
 
 export class TrempelError extends Error {
   /** All problems found, human-readable (`E_CODE: message`), in discovery order. */
@@ -54,7 +55,7 @@ export class ExpressionRuntimeError extends Error implements ExpressionErrorInfo
     const e = info.error as { reason?: unknown; message?: unknown } | null;
     const why = typeof e?.reason === 'string' ? e.reason : typeof e?.message === 'string' ? e.message : String(info.error);
     const own = (info.error as { code?: unknown } | null)?.code;
-    const code: Code = typeof own === 'string' && own in CODES ? (own as Code) : (codeOf(why) ?? 'E_EXPR_RUNTIME');
+    const code: Code = typeof own === 'string' && CODE_NAMES.has(own) ? (own as Code) : (codeOf(why) ?? 'E_EXPR_RUNTIME');
     const text = codeOf(why) ? why.replace(/^[EW]_[A-Z0-9_]+: /, '') : why;
     super(coded(code, `${info.node} ${info.attr}="${info.expr}": ${text}`), { cause: info.error });
     this.name = 'ExpressionRuntimeError';

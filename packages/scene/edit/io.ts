@@ -20,6 +20,8 @@ export interface FolderListing {
    * files are listed by `list('@name')` as `@name/…`; read / url take such paths too.
    */
   collections?: Record<string, string>;
+  /** 2.0: project heirs — collection document (`@ui/ui/card.svg`) → absolute URL of the project's heir scene. */
+  heirs?: Record<string, string>;
 }
 
 export interface FileChange {

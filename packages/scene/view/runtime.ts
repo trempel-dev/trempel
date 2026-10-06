@@ -43,6 +43,8 @@ export interface OpenIntoInput {
    * The module's `collections` override single names.
    */
   collections?: Record<string, string>;
+  /** 2.0: project heirs — collection document → the heir scene's absolute URL (the dev server's). */
+  heirs?: Record<string, string>;
 }
 
 /**
@@ -116,10 +118,17 @@ function boundsBox(c: Container): ViewBox {
  */
 export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | null, folderUrl: string, mapUrl?: (url: string) => string): StageRuntime {
   let setupDone: Promise<void> | null = null;
-  const setup = (): Promise<void> => {
+  const setup = (collections?: Record<string, string>): Promise<void> => {
     setupDone ??= (async () => {
       for (const f of config.fonts ?? []) {
-        const url = new URL(f.url, folderUrl).href;
+        // 2.0: a font of a collection (`@ui/fonts/x.ttf`) — from the collection's folder.
+        let own = f.url;
+        try {
+          own = expandCollection(f.url, collections);
+        } catch {
+          // an unknown collection: the scene reports it
+        }
+        const url = new URL(own, folderUrl).href;
         const face = new FontFace(f.family, `url(${mapUrl ? mapUrl(url) : url})`, { weight: f.weight, style: f.style });
         document.fonts.add(await face.load());
       }
@@ -149,7 +158,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
     async openInto(target, input) {
       const extra: ViewIssue[] = moduleIssue ? [moduleIssue] : [];
       try {
-        await setup();
+        await setup(collectionUrls(input.collections, config.collections, folderUrl));
       } catch (e) {
         extra.push({ level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `view module setup(): ${msg(e)}`) });
       }
@@ -176,7 +185,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
             return rel; // an unknown collection — the session reports it
           }
         };
-        loadScene = await preloadScenes({ ...input.sources, path, url }, input.loadScene);
+        loadScene = await preloadScenes({ ...input.sources, path, url, heirs: input.heirs }, input.loadScene);
       }
       const s = openScene({
         sources: input.sources,
@@ -184,6 +193,7 @@ export function createStageRuntime(config: ViewConfig, moduleIssue: ViewIssue | 
         sceneUrl,
         path,
         collections,
+        heirs: input.heirs,
         state: input.state,
         backend: input.wrapBackend ? input.wrapBackend(backend) : backend,
         registry: input.wrapRegistry ? input.wrapRegistry(registry) : registry,

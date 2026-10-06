@@ -2,9 +2,9 @@
 // and resolve its collections to folders on disk. For the Node tools (view, view:shot, edit, check,
 // flatten, migrate-collections); the browser runtime gets collections from its host.
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { PROJECT_FILE, parseProject } from '../project.js';
+import { PROJECT_FILE, parseProject, projectHeirs } from '../project.js';
 import { coded, within } from '../codes.js';
 
 export interface Project {
@@ -12,6 +12,8 @@ export interface Project {
   root: string | null;
   /** Collection name → absolute folder. */
   collections: Record<string, string>;
+  /** 2.0: project heirs — collection document (`@ui/ui/card.svg`) → the heir's scene, absolute (`…/scenes/ui/card.svg`). */
+  heirs: Record<string, string>;
   /** Problems of the project file and of resolving it (a missing folder, a package not found). */
   errors: string[];
 }
@@ -42,10 +44,10 @@ export function findPackageDir(root: string, pkg: string): string | null {
 /** Read the project of a scene file / folder: its root and collections as absolute folders. */
 export function loadProject(start: string): Project {
   const root = findProjectRoot(start);
-  if (!root) return { root: null, collections: {}, errors: [] };
+  if (!root) return { root: null, collections: {}, heirs: {}, errors: [] };
   const file = join(root, PROJECT_FILE);
   const parsed = parseProject(readFileSync(file, 'utf8'));
-  const out: Project = { root, collections: {}, errors: parsed.errors.map((e) => within(file, e.replace(`${PROJECT_FILE}: `, ''))) };
+  const out: Project = { root, collections: {}, heirs: {}, errors: parsed.errors.map((e) => within(file, e.replace(`${PROJECT_FILE}: `, ''))) };
   for (const c of parsed.collections) {
     let dir: string | null;
     if (c.npm) {
@@ -62,6 +64,36 @@ export function loadProject(start: string): Project {
     }
     out.collections[c.name] = dir;
   }
+  const found = projectHeirs(heirFiles(root, Object.values(out.collections)));
+  out.errors.push(...found.errors);
+  for (const [doc, scene] of Object.entries(found.heirs)) out.heirs[doc] = join(root, ...scene.split('/'));
+  return out;
+}
+
+/** Folders a project scan skips: dependencies, builds, tool caches. */
+const SKIP = /^(?:node_modules|dist|dist-.*|build|coverage|test-results|playwright-report)$/;
+
+/** Every `*.tml.svg` of the project (outside its collections and dot-folders): path from the root → text. */
+function heirFiles(root: string, collections: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (d: string): void => {
+    for (const ent of readdirSync(d, { withFileTypes: true })) {
+      if (ent.name.startsWith('.')) continue;
+      const p = join(d, ent.name);
+      if (ent.isDirectory()) {
+        if (!SKIP.test(ent.name) && !collections.some((c) => isInside(c, p))) walk(p);
+      } else if (ent.name.endsWith('.tml.svg')) out[relative(root, p).split(sep).join('/')] = readFileSync(p, 'utf8');
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/** 2.0: the project heirs as one scene's `heirs` option — hrefs from the scene's folder (`file` — the scene, absolute). */
+export function heirsOf(project: Project, file: string): Record<string, string> {
+  const dir = dirname(resolve(file));
+  const out: Record<string, string> = {};
+  for (const [doc, scene] of Object.entries(project.heirs)) out[doc] = relative(dir, scene).split(sep).join('/');
   return out;
 }
 

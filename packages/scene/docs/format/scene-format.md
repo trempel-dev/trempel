@@ -1,4 +1,4 @@
-# Trempel scene format — v1.2
+# Trempel scene format — v1.3
 
 > **For agents.** This file is the format: what a scene, an heir, a contract, a prefab and an md clip
 > are, and how they combine. Every message of the runtime and the tools starts with a code
@@ -9,7 +9,7 @@
 > `error=E_CODE` must fail with exactly that code, every other block must pass.
 
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 2.0 (the format is the same as in 1.2). The examples of this document
+npm package `@trempel/scene` 2.0 (format 1.3). The examples of this document
 are checked by tests at every build.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes
@@ -148,11 +148,33 @@ transform: local matrix = `transform · translate(x, y)`.
 | `dominant-baseline` | text | default: `y` is the **baseline**; `middle`/`central` → centre; `hanging`/`text-before-edge` → top |
 | `clip-path` | `g`, `image` | `url(#id)` of a `<clipPath>`, or `none` (§3.7) |
 | `style` | `g`, `image`, shapes | **only** `mix-blend-mode: normal \| plus-lighter \| multiply \| screen`; any other property is an error ("styles are attributes") |
+| `preserveAspectRatio` | `image` with `width` and `height` | 1.3: how the picture fits its box — `<align> slice` covers it (the picture is cut), `<align> meet` contains it (whole, aligned in the box); `<align>` is `xMinYMin` … `xMaxYMax`, `meet` by default; `none` — fills the box (as without the attribute) |
 
 "Shapes" = `path`, `circle`, `ellipse`, `line`, `rect`. Stroke dash/cap/join/`pathLength` on any
-other tag is an error; units and percentages are errors. Not supported: `preserveAspectRatio`
-(images stretch to their box), `tspan`, non-px font sizes, `vector-effect`, `stroke-miterlimit`,
-CSS `filter`, soft masks.
+other tag is an error; units and percentages are errors. Not supported: `tspan`, non-px font sizes,
+`vector-effect`, `stroke-miterlimit`, CSS `filter`, soft masks.
+
+An image fills its box (`width` × `height`) — without `preserveAspectRatio` it is stretched, unlike
+SVG's default (`xMidYMid meet`). With it the box keeps its size and the picture keeps its
+proportions: a background stretched over any screen (`data-stretch`, §8.1) covers it without
+distortion. A malformed value, or one on an `<image data-slices>` / `data-tile` (they fill the box by
+their own rules) — `E_ASPECT`; on the root `<svg>` it is the document's own and is ignored.
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920">
+  <image id="bg" href="art/bg.png" width="1080" height="1920" data-stretch="xy"
+         preserveAspectRatio="xMidYMid slice"/>
+  <image id="logo" href="art/logo.png" x="140" y="200" width="800" height="400"
+         preserveAspectRatio="xMidYMin meet"/>
+</svg>
+```
+
+```svg error=E_ASPECT
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <image id="panel" href="art/panel.png" width="400" height="200" data-slices="24"
+         preserveAspectRatio="xMidYMid slice"/>
+</svg>
+```
 
 `mix-blend-mode` on a group applies to every built node of its subtree; a node's own mode wins
 (including `normal` under `plus-lighter`). Not on `text`. Not bindable (`tml:bind-style` is an error).
@@ -362,14 +384,18 @@ checker error.
 ### 5.4 Context and reactivity
 
 `mount({ context })` is the expression context; values made with `reactive()` (typically
-`context.state`) re-run the bindings that read them (`effect()`). In the viewer and editor the
+`context.state`) re-run the bindings that read them (`effect()`). Names are looked up at evaluation
+time: a function the host adds to the context after the mount (a game's actions) is callable from
+then on, in the scene and inside its prefabs. In the viewer and editor the
 context is `{ state }` from `X.state.json`, plus what the consumer module adds (§11); names the
 scene uses that nobody provides become logging stubs.
 
 ### 5.5 `self` — expressions inside a prefab
 
 A node that comes from a prefab evaluates in the **scene's** context (the prefab is not isolated)
-plus `self`:
+plus `self`. 1.3: the instance's context **inherits** the level above (not a copy taken at mount):
+names the host adds or changes later are seen inside prefabs too — `tml:on-click="tap(self.action)"`
+in a prefab's heir calls the game's `tap`, and a binding may call the game's functions.
 
 | Member | Meaning |
 |---|---|
@@ -758,6 +784,24 @@ $offset: 0, -12
   `## $tex` (a `name`/`href` table). Unknown blocks or attributes are errors listing what exists.
 - Track attributes: `$path`, `$orient`, `$orient-offset`, `$offset` (motion only), `$tex`.
 - A target `$name` is late-bound at play time (`play(clip, { targets: { name: handle } })`).
+- 1.3: a numeric cell `$name` is a **clip parameter**, given at play time in the column's units
+  (`play(clip, { params: { toX: 120, toY: -40 } })`): one clip flies to a different place each
+  play, without copying it. Allowed in the number columns (`x`, `y`, `rotation`, `scale…`, `skew…`,
+  `alpha`, `motion`, `dash`, `strokeWidth`, `strokeAlpha`, `width`, `height`); a name is
+  `[A-Za-z_][A-Za-z0-9_]*`. A parameter not given (or not a number) at play — `E_ANIM_PARAM`, before
+  anything moves. Compiled: the key has `param` and `v` = the column's unit (`params[param] × v`).
+
+  ```markdown
+  # $clip collect
+  $duration: 1.35
+
+  ## $track flyingPostcard
+  | t    | x    | y    | scale | alpha | ease  |
+  |------|------|------|-------|-------|-------|
+  | 0    | 0    | 0    | 1     | 1     | inOut |
+  | 1.15 | $toX | $toY | 0.53  | 1     |       |
+  | 1.35 | $toX | $toY | 0.53  | 0     |       |
+  ```
 - One target may have any number of tables (different eases for different properties); the same
   property of a target twice in one clip is an error.
 - A table needs a header, a `|---|` separator row and a `t` column. Times are numbers ≥ 0, strictly
@@ -861,7 +905,7 @@ $tex: coins/{}.png
 - `width`/`height` on an instance go to its box (contents re-layout; the container is not scaled),
   on an image to the backend.
 - API: `new Animator(backend, clock, (id) => scene.byId.get(id), { path: (id) => scene.path(id) })`;
-  `play(clip, { targets, speed, onMarker }) → { abort(), done }`; `parallel(...)`, `sequence([...])`;
+  `play(clip, { targets, params, speed, onMarker }) → { abort(), done }`; `parallel(...)`, `sequence([...])`;
   `speed` may be a getter read every frame; call `tick()` once per frame.
 - Compiling: `compileClips(md, scene?, { tex? })` throws a `TrempelError` with every problem
   (`E_ANIM_VALUE: $clip bad / $track box, row 3: x="a" — not a number.`); `compileClipsResult(...)` returns
@@ -895,7 +939,7 @@ await scene.ready;
 | `composeScene(input)` | parse + expand + contract + merge, errors by stage, no throw |
 
 `MountOptions`: `backend`, `context`, `registry?`, `container?`, `baseUrl?`, `resolveHref?`,
-`loadScene?`, `sceneUrl?`, `collections?` (§12), `onError?`, `lenient?`; mount args add `base?`,
+`loadScene?`, `sceneUrl?`, `collections?` (§12), `heirs?` (project heirs, §12), `onError?`, `lenient?`; mount args add `base?`,
 `heir?`, `contract?`, `path?`.
 
 **Hrefs.** With `baseUrl` (the scene document's URL or path) relative image hrefs — attributes of
@@ -1001,9 +1045,80 @@ or relative to the scene document) to `mount*`; the viewer / editor take it from
 **Contract.** A `<use>` line's `href` is compared by the resolved file: `@skin/panel.svg` and the
 same file by its relative path are one prefab.
 
+**Extending a collection document.** An heir of the project may extend a document of a collection
+(`tml:extends="@ui/level.svg"`): the base — with its instances, its own heir and its contract — comes
+from the collection, the project's heir binds, inserts and overrides over it as over any base. The
+collection stays as delivered; the game keeps only its heirs.
+
+**Project heirs (1.3).** A collection is a library, the project configures it: **any heir of the
+project whose `tml:extends` names a collection document is that document's heir in the project**.
+Every instance of the document — in the project's scenes and inside the collection's own documents
+(`<use href="ui/card.svg">` in `@ui/album.svg` is `@ui/ui/card.svg`) — is built as that heir: the
+collection's base, its heir, then the project's heir, layered like a multi-level `tml:extends`
+(§6.5) — the collection heir's slots and bindings stay, the project adds clicks, variants, data; a
+`<tml:ref>` of the project heir overrides the collection heir's by the usual rules. The link is the
+`tml:extends` target, not the file's name or folder. A top scene that extends the document is that
+heir itself (merged once). Two heirs of the project extending one document — `E_PROJECT_HEIR` (a
+variant extends the project heir instead). The Node tools (`check`, `view`, `view:shot`, `edit`,
+`flatten`) find the project heirs themselves — every `*.tml.svg` below the project root, outside
+the collections, `node_modules`, dot-folders and builds; a browser host passes them to `mount*` as
+`heirs` (collection document → the heir scene's href from the scene document; the kit's Vite plugin
+does it for a game).
+
+A UI kit delivered as a collection — a card prefab with its heir, and an album of cards:
+
+```svg
+<!-- @ui/ui/card.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" data-title="Place" data-action="">
+  <image id="photo" href="art/photo.png" x="20" y="20" width="280" height="280"/>
+  <text id="title" x="160" y="350" text-anchor="middle" font-size="32">Place</text>
+  <rect id="hit" width="320" height="400" opacity="0"/>
+</svg>
+```
+
+```svg
+<!-- @ui/ui/card.tml.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
+     tml:extends="card.svg">
+  <tml:ref id="title" tml:bind="self.title"/>
+</svg>
+```
+
+```svg
+<!-- @ui/album.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920">
+  <text id="worldTitle" x="540" y="160" text-anchor="middle" font-size="64">Istanbul</text>
+  <use id="card1" href="ui/card.svg" x="60" y="300" data-title="Tea Room" data-action="openCard"/>
+  <use id="card2" href="ui/card.svg" x="700" y="300" data-title="Rooftops" data-action="openCard"/>
+</svg>
+```
+
+The game: the card's project heir (every card of every scene gets the photo and the click) and the
+album's heir (extends the collection's album, adds a third card):
+
+```svg
+<!-- scenes/ui/card.tml.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
+     tml:extends="@ui/ui/card.svg">
+  <tml:ref id="photo" tml:bind="state.cards[self.id].photo"/>
+  <tml:ref id="hit" tml:on-click="openCard(self.id)"/>
+</svg>
+```
+
+```svg
+<!-- scenes/album.tml.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
+     tml:extends="@ui/album.svg">
+  <tml:ref id="worldTitle" tml:bind="state.album.name"/>
+  <use id="card3" tml:insert="after card2" href="@ui/ui/card.svg" x="60" y="800" data-title="Bazaar"/>
+</svg>
+```
+
 **Core API:** `expandCollection(href, collections)`, `collectionOf(href)`, `parseProject(text)`,
-`collectionErrors(tree, collections)`, `usedCollections(tree)`; Node (`@trempel/scene/node`):
-`loadProject(dir)` → `{ root, collections: name → absolute folder, errors }`, `collectionPath(file, collections)`.
+`collectionErrors(tree, collections)`, `usedCollections(tree)`, 1.3: `projectHeirs(files)`,
+`heirsFor(heirs, scenePath)`; Node (`@trempel/scene/node`): `loadProject(dir)` → `{ root,
+collections: name → absolute folder, heirs: document → absolute heir scene, errors }`,
+`heirsOf(project, sceneFile)`, `collectionPath(file, collections)`.
 
 ---
 
@@ -1066,7 +1181,7 @@ export only this; semver covers exactly this list.
 | Backend | `PixiBackend` (`@trempel/scene` only); types `RendererBackend`, `NodeHandle`, `Bounds`, `ClipShape`, `PointerKind`, `PixiBackendOptions`, `FontMetricsFn`, `ImageNode` |
 | Contract | `parseContract`, `checkContract`; types `Contract`, `ContractNode`, `ContractPattern`, `ViewBoxRule`, `CheckContractOptions` |
 | Clips | `Animator`, `compileClips`, `compileClipsResult`; types `Clock`, `SpeedSource`, `PlayOptions`, `Handle`, `ClipSpec`, `AnimatorOptions`, `CompileClipsOptions`, `CompileClipsResult`, `AnimClip`, `Track`, `Keyframe`, `Marker`, `Ease`, `EaseName` |
-| Collections | `expandCollection`, `parseProject`, `PROJECT_FILE`; types `ProjectFile`, `CollectionSpec`; node: `loadProject`, `findProjectRoot`, `findPackageDir`, `collectionPath`, `isInside`, type `Project` |
+| Collections | `expandCollection`, `parseProject`, `PROJECT_FILE`; types `ProjectFile`, `CollectionSpec`; node: `loadProject`, `heirsOf`, `findProjectRoot`, `findPackageDir`, `collectionPath`, `isInside`, type `Project` |
 | Flatten, check | `flattenScene`, `checkScene`; types `FlattenInput`, `FlattenResult`, `CheckInput`, `CheckResult`; node: `flattenFile`, `sceneStemOf`, `imageSize`, `imageSizeOf`, `mimeOf` |
 | The consumer module | `defineView` (`@trempel/scene/view`); types `ViewConfig`, `ViewHookArgs`, `FontSpec` |
 | Errors and codes | `TrempelError`, `ExpressionRuntimeError`, `ExpressionError`, `PathDataError`, `trempelError`, `CODES`, `coded`, `codeOf`, `within`; types `Code`, `ExpressionErrorInfo` |
@@ -1156,6 +1271,7 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 | `E_ANCHOR` | malformed data-anchor |
 | `E_AXES` | an axes value other than x, y or xy (data-stretch, data-tile, data-resizable) |
 | `E_SIZE` | malformed data-size |
+| `E_ASPECT` | a malformed preserveAspectRatio on an `<image>`, or one with data-slices / data-tile |
 | `E_STRETCH` | data-stretch on a node that cannot stretch, or without a size |
 | `E_NO_BOX` | an anchored or stretched node whose parent is not a box |
 | `E_RESIZABLE` | data-resizable misplaced, without a viewBox or without a stretching background |
@@ -1185,6 +1301,7 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 | `E_PARAM_MISSING` | a required parameter (contract params) not set |
 | `E_PREFAB_CYCLE` | a prefab cycle |
 | `E_PREFAB_MISSING` | a prefab that does not exist or failed to load |
+| `E_PROJECT_HEIR` | a project heir that is not an heir of its collection document, or two heirs of one document |
 | `E_PREFAB_LOADER` | no scene loader, or an asynchronous one for mount() (use mountAsync) |
 | `E_PREFAB_RESIZE` | width/height on an instance of a prefab that does not resize along that axis |
 | `E_PREFAB_MIN_SIZE` | an instance smaller than its prefab’s viewBox (the minimum size) |
@@ -1229,6 +1346,7 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 | `E_ANIM_TWICE` | a property of a target keyed twice in one clip, or a clip name twice |
 | `E_ANIM_UNKNOWN` | a clip name the scene’s clip files do not have |
 | `E_ANIM_PLAY` | a clip that cannot be played (motion without a path, no rest pose) |
+| `E_ANIM_PARAM` | a clip parameter ($name cell) not given at play time, or not a number |
 
 **Runtime: mounting, the backend, the scene API**
 
@@ -1340,5 +1458,6 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 - **0.9** — prefabs: `<use href>` instances with parameters and `self`, composite ids, multi-level `tml:extends`, `tml:href`, pointer events, `tml:bind-view`, contract `<use>` lines and `params`, scene loaders and `mountAsync`; 0.9.1: stroke dashes/caps/joins and `pathLength`, hidden-but-hittable geometry, geometry hit test, clip columns `dash`/`strokeWidth`/`strokeAlpha`, `$tex` in md clips, nested contract lines.
 - **1.0** — 9-slice (`data-slices`) and tiling (`data-tile`), boxes with `data-anchor`/`data-stretch`/`data-size`, resizable prefabs (`data-resizable`, `<use width height>`), slots (`tml:slot`), clip columns `width`/`height`, `resize`/`setSize`/`sizeOf`; the format is published as Trempel (`tml:` namespace, `*.tml.svg` heirs, `trempel.view.ts`, `.trempel/`).
 - **1.1** — collections: `@name/path` hrefs into named folders (`.trempel/project.mdz`, folders from the project root or `npm:` packages), `collections` in `MountOptions` / `defineView`, resolved before `baseUrl`/`resolveHref`, unknown name — an error, contract `href` compared by the resolved file; the dev server serves the project root and the collections; the editor's palette groups a collection's prefabs and writes `@name/…`; `flatten` — any scene as one vanilla SVG (`--embed`, `--state`; `@trempel/scene/node`, bin `trempel-flatten`); `migrate-collections.mjs`.
+- **1.3** (package 2.0) — what a real game needed: an instance's context inherits the scene's (names added after the mount — a game's actions — are seen inside prefabs); clip parameters (`$name` number cells, `play(clip, { params })`, `E_ANIM_PARAM`); `preserveAspectRatio` of an `<image>` (meet / slice, `E_ASPECT`); an heir of the project extending a collection document, and project heirs — every instance of a collection document is built with the project's heir over the collection's (`heirs` in `MountOptions`, found by the Node tools, `E_PROJECT_HEIR`).
 - **2.0** (package; the format stays 1.2) — every message in English with a code (§16); `<!DOCTYPE>` and entities are refused (`E_DOCTYPE`); a narrow stable API (§15), the rest under `@trempel/scene/internal/*`; `checkScene`; `@trempel/scene/view`; the examples of this document are tests.
 - **1.2** — no format changes. The runtime has no built-in components: the demo grid component of 1.1 left `createDefaultRegistry()`, which is now an empty registry — games register their own. The repository is a monorepo: `@trempel/scene` and the game kit `@trempel/kit` (screens, popups, layout, UI components, a default skin as the collection `npm:@trempel/kit/skins/default/ui`), versioned together.

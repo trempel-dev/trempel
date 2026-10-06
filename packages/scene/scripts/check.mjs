@@ -26,7 +26,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import { checkScene as check, coded, compileClipsResult, expandCollection, sceneStem, within } from '../dist/core.js';
 import { heirSuffix, readHeir } from '../dist/compat.js';
-import { loadProject } from '../dist/node/project.js';
+import { heirsOf, loadProject } from '../dist/node/project.js';
 
 const cwd = process.env.INIT_CWD ?? process.cwd();
 const args = process.argv.slice(2);
@@ -89,7 +89,7 @@ function checkScene(stem, label) {
   let t = null;
   try {
     const url = (rel) => resolve(dirname(stem), expandCollection(rel, collections));
-    const r = check({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url, collections });
+    const r = check({ ...src, path: `${stem}.svg`, loadScene: fileLoader, url, collections, heirs: heirsOf(project, `${stem}.svg`) });
     out.push(...r.errors);
     t = r.tree;
     for (const name of r.collections) used.add(name);

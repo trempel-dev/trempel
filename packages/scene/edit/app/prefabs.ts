@@ -166,6 +166,7 @@ export class PrefabPalette {
         viewport: { kind: 'size', w: THUMB.w, h: THUMB.h },
         loadScene: ed.sceneLoaderForRender(),
         collections: ed.listing.collections,
+        heirs: ed.listing.heirs,
       });
       const url = await ed.app.renderer.extract.base64({ target: holder, frame: new Rectangle(0, 0, THUMB.w, THUMB.h) });
       holder.destroy({ children: true });

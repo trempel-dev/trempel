@@ -4,8 +4,9 @@ The scene format has its own changelog at the end of [docs/format/scene-format.m
 
 ## 2.0.0
 
-**The format does not change** (scenes, heirs, contracts, prefabs and md clips of 1.2 work as they
-are). The major version is for the API: the stable entry is narrow now.
+The major version is for the API: the stable entry is narrow now. The format is **1.3**: additions
+only — scenes, heirs, contracts, prefabs and md clips of 1.2 work as they are (one behaviour change
+below: a prefab instance's context inherits the scene's instead of copying it).
 
 ### Breaking
 
@@ -53,6 +54,29 @@ are). The major version is for the API: the stable entry is narrow now.
 
 ### Added
 
+- **Format 1.3** — what a real game needed (TRM-8b):
+  - a prefab instance's expression context **inherits** the scene's (a prototype, not a copy taken
+    at mount): a function the host adds after the mount — a game's actions — is callable inside
+    prefabs (`tml:on-click="tap(self.action)"`, bindings); `self.call` finds it too. Names are
+    looked up through the chain, never in `Object.prototype`;
+  - **clip parameters**: a number cell `$name` in an md clip, given at play time —
+    `play(clip, { params: { toX, toY } })` (`PlayOptions.params`, `Keyframe.param`), in the
+    column's units; missing / not a number — `E_ANIM_PARAM` before anything moves; the clip is not
+    copied or changed;
+  - **`preserveAspectRatio`** of an `<image>` with a box: `<align> slice` covers it (the texture is
+    cut — no mask), `<align> meet` contains it (aligned), `none` / absent — stretched as before;
+    with a stretched box (`data-stretch`, `setSize`) it refits; `flatten` writes it; malformed or
+    with `data-slices` / `data-tile` — `E_ASPECT`;
+  - **project heirs** of collection documents: any heir of the project whose `tml:extends` names a
+    collection document (`@ui/ui/card.svg`) is that document's heir in the project — every
+    instance of it, in the project's scenes and inside the collection's own documents, is built as
+    the collection's base + heir + the project's heir. `MountOptions.heirs` / `ComposeInput.heirs`
+    (document → the heir's href from the scene), `projectHeirs`, `heirsFor`, `relativePath`
+    (`@trempel/scene/internal/project`), Node: `Project.heirs`, `heirsOf(project, file)`; the
+    viewer, `view:shot`, `check`, `flatten` and the editor find them in the project themselves;
+    two heirs of one document, or a "project heir" that is not an heir of it — `E_PROJECT_HEIR`.
+    An heir in the project extending a collection document (`tml:extends="@ui/level.svg"`) is a
+    spec example and a test.
 - `checkScene(input)` — the mount pipeline without a backend: `{ tree, errors, collections }`
   (`npm run check` uses it).
 - `@trempel/scene/view` — `defineView` and `ViewConfig` for a consumer's `trempel.view.ts` as a

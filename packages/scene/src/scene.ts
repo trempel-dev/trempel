@@ -26,7 +26,7 @@
 // in its parent (order among siblings); `MountedScene.setView(id, name)` swaps to a data-views variant.
 //
 // v0.9 (prefab.ts): `<use href>` instances are expanded (loadScene) before the contract and the heir;
-// a node from a prefab evaluates its expressions in `{ ...scene context, self }` of its instance;
+// a node from a prefab evaluates its expressions in its instance context (2.0: inherits the scene's, + self);
 // tml:bind-view="expr" picks a data-views variant by name; tml:on-over / on-out / on-down / on-up —
 // pointer handlers (backend.onPointer). mountAsync() loads the prefabs with an asynchronous loader.
 //
@@ -46,7 +46,7 @@ import { compile } from './expr.js';
 import { clipPaths, geometryErrors, parseClipRef } from './geom/check.js';
 import { hitTestTree, nodeMatrix, pointInNode } from './geom/hit.js';
 import { pathFromNode, type ScenePath } from './geom/path.js';
-import { applyPipes, run } from './expr.js';
+import { applyPipes, inContext, run } from './expr.js';
 import { composeScene, expandInstances, hasInstances, paramName, preloadScenes, type AsyncSceneLoader, type SceneLoader } from './prefab.js';
 import { parse, parseHeir, type InstanceScope, type SceneNode } from './parser.js';
 import { reactive } from './reactive.js';
@@ -93,6 +93,12 @@ export interface MountOptions extends ExpressionErrorOptions {
    * read them from `.trempel/project.mdz`; in the browser the host passes them.
    */
   collections?: Record<string, string>;
+  /**
+   * 2.0: project heirs — a collection document (`@ui/ui/card.svg`) → the href (from the scene
+   * document) of the project's heir over it: its instances are built as that heir (§12). The Node
+   * tools find them in the project themselves; a browser host passes them (the kit's Vite plugin does).
+   */
+  heirs?: Record<string, string>;
 }
 
 /** What the prefab loader gets for a path relative to the scene's folder. */
@@ -130,6 +136,8 @@ export type MountArgsLoose = Omit<MountArgs, 'base'> & { base?: string };
 
 export interface MountedScene {
   root: NodeHandle;
+  /** 2.0: the composed scene that was built (instances expanded, heirs merged) — hosts read attributes from it. */
+  readonly tree: SceneNode;
   /** All nodes that carried an `id`. */
   byId: Map<string, NodeHandle>;
   /** Custom-component instances, keyed by node id. */
@@ -222,7 +230,7 @@ function makeSelf(scope: InstanceScope, parent: Record<string, unknown>): Record
     const fn =
       typeof name === 'function'
         ? name
-        : typeof name === 'string' && Object.prototype.hasOwnProperty.call(parent, name)
+        : typeof name === 'string' && inContext(parent, name)
           ? parent[name]
           : undefined;
     if (typeof fn !== 'function') throw trempelError('E_SELF_CALL', `self.call(${JSON.stringify(name ?? null)}): the scene context has no such function`);
@@ -263,7 +271,9 @@ function scopeContexts(root: Record<string, unknown>): SceneIndex['contextOf'] {
     let c = memo.get(s);
     if (!c) {
       const parent = of(s.parent);
-      c = { ...parent, self: makeSelf(s, parent) };
+      // Inherits the level above (2.0): names the host adds or changes after the mount are seen.
+      c = Object.create(parent) as Record<string, unknown>;
+      Object.defineProperty(c, 'self', { value: makeSelf(s, parent), enumerable: true, writable: true, configurable: true });
       memo.set(s, c);
     }
     return c;
@@ -528,6 +538,7 @@ function buildScene(tree: SceneNode, options: MountOptions): MountedScene {
   ready.catch(() => {}); // the host may not await it; awaiting still sees the rejection
   return {
     root,
+    tree,
     byId,
     components,
     ready,
@@ -591,7 +602,7 @@ function viewTarget(byId: Map<string, NodeHandle>, id: string): NodeHandle {
 export function mountScene(svg: string, opts: MountOptions): MountedScene {
   const tree = parse(svg);
   const errors: string[] = [];
-  if (hasInstances(tree)) errors.push(...expandInstances(tree, { loadScene: opts.loadScene as SceneLoader | undefined, url: sceneUrlOf(opts) }));
+  if (hasInstances(tree)) errors.push(...expandInstances(tree, { loadScene: opts.loadScene as SceneLoader | undefined, url: sceneUrlOf(opts), heirs: opts.heirs }));
   errors.push(...geometryErrors(tree), ...propErrors(tree), ...bindingErrors(tree), ...collectionErrors(tree, opts.collections));
   if (errors.length) throw new TrempelError(errors);
   return buildScene(tree, opts);
@@ -609,7 +620,7 @@ export function mount(args: MountArgsLoose): MountedScene {
   if (heir != null) parseHeir(heir);
   if (contract != null) parseContract(contract);
 
-  const c = composeScene({ base, heir, contract, path, loadScene: opts.loadScene as SceneLoader | undefined, url: sceneUrlOf(opts) });
+  const c = composeScene({ base, heir, contract, path, loadScene: opts.loadScene as SceneLoader | undefined, url: sceneUrlOf(opts), heirs: opts.heirs });
   const errors: string[] = [...c.errors.contract, ...c.errors.merge, ...c.errors.prefab, ...c.errors.parse];
   if (c.tree) {
     errors.push(...geometryErrors(c.tree));
@@ -630,6 +641,6 @@ export function mount(args: MountArgsLoose): MountedScene {
 export async function mountAsync(args: MountArgsLoose): Promise<MountedScene> {
   const { loadScene } = args;
   if (!loadScene) return mount(args);
-  const sync = await preloadScenes({ base: args.base, heir: args.heir, contract: args.contract, path: args.path, url: sceneUrlOf(args) }, loadScene);
+  const sync = await preloadScenes({ base: args.base, heir: args.heir, contract: args.contract, path: args.path, url: sceneUrlOf(args), heirs: args.heirs }, loadScene);
   return mount({ ...args, loadScene: sync });
 }

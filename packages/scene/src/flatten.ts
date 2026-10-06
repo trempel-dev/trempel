@@ -12,7 +12,8 @@
 //     base's value (its layout copy);
 //   - <image data-slices> → 9 nested `<svg viewBox>` pieces of the one picture (the raster is not cut,
 //     borders scale down like Pixi's NineSliceSprite when the box is too small); data-tile → <pattern>;
-//     an image's box is stretched like the runtime does it (preserveAspectRatio="none");
+//     an image's box is stretched like the runtime does it (preserveAspectRatio="none", or — 2.0 — the
+//     image's own meet / slice);
 //   - data-tint → an feColorMatrix filter (multiply, as Pixi's tint); data-z → sibling order;
 //     clip-path → a <clipPath> per use;
 //   - what vanilla SVG cannot do (components with code, clips, bound transforms) stays as in the
@@ -52,6 +53,8 @@ export interface FlattenInput {
   baseUrl?: string;
   /** Collections: name → folder URL / absolute path. */
   collections?: Record<string, string>;
+  /** 2.0: project heirs of collection documents (MountOptions.heirs). */
+  heirs?: Record<string, string>;
   /**
    * The stand-in state (X.state.json / --state). Undefined — no state: only expressions of instance
    * parameters run, everything else keeps the base's values.
@@ -350,7 +353,7 @@ class Writer {
       width: w !== undefined ? fmt(w) : undefined,
       height: h !== undefined ? fmt(h) : undefined,
       href,
-      preserveAspectRatio: w !== undefined && h !== undefined ? 'none' : undefined,
+      preserveAspectRatio: w !== undefined && h !== undefined ? (a.preserveAspectRatio ?? 'none') : undefined,
       opacity: a.opacity,
       style: a.style,
       ...this.common(rec, tint),
@@ -380,7 +383,7 @@ export function flattenScene(input: FlattenInput): FlattenResult {
     const own = expandCollection(rel, input.collections);
     return input.baseUrl ? resolveHref(own, input.baseUrl) : own;
   };
-  const c = composeScene({ base: input.base, heir: input.heir, contract: input.contract, path: input.path, loadScene: input.loadScene, url });
+  const c = composeScene({ base: input.base, heir: input.heir, contract: input.contract, path: input.path, loadScene: input.loadScene, url, heirs: input.heirs });
   errors.push(...c.errors.parse, ...c.errors.prefab, ...c.errors.contract, ...c.errors.merge);
   const tree = c.tree;
   if (!tree) return { svg: null, errors: errors.length ? errors : [coded('E_EMPTY_SCENE', 'the scene is empty')], warnings, collections: [] };

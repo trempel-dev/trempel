@@ -14,7 +14,8 @@
 // Stable (re-exported by @trempel/scene): parseProject, PROJECT_FILE, ProjectFile, CollectionSpec.
 
 import { parse as parseMd } from './md/parse.js';
-import { COLLECTION_NAME, collectionOf, unknownCollection } from './href.js';
+import { COLLECTION_NAME, collectionOf, resolveHref, unknownCollection } from './href.js';
+import { parseHeir } from './parser.js';
 import { coded } from './codes.js';
 import { parseViews } from './props.js';
 import type { SceneNode } from './parser.js';
@@ -142,4 +143,57 @@ export function usedCollections(tree: SceneNode): string[] {
     if (name) names.add(name);
   });
   return [...names].sort();
+}
+
+/** 2.0: the project heirs of collection documents (see projectHeirs). */
+export interface ProjectHeirs {
+  /** Collection document (`@ui/ui/card.svg`) → the heir's scene path from the project root (`scenes/ui/card.svg`). */
+  heirs: Record<string, string>;
+  errors: string[];
+}
+
+/**
+ * 2.0: project heirs. Every heir of the project (outside its collections) whose tml:extends names a
+ * collection document is that document's heir in the project: its instances anywhere — the project's
+ * scenes and the collection's own documents — are built as the heir, layered over the collection's
+ * heir (§12). Two heirs of one document — E_PROJECT_HEIR. `files`: heir path from the project root
+ * (`scenes/ui/card.tml.svg`) → its text; unreadable heirs are skipped (reported where they are used).
+ */
+export function projectHeirs(files: Record<string, string>): ProjectHeirs {
+  const heirs: Record<string, string> = {};
+  const errors: string[] = [];
+  for (const file of Object.keys(files).sort()) {
+    let ext: string | undefined;
+    try {
+      ext = parseHeir(files[file]).extends ?? undefined;
+    } catch {
+      continue;
+    }
+    if (!ext) continue;
+    const doc = resolveHref(ext, file);
+    if (!collectionOf(doc)) continue;
+    const scene = file.replace(/\.tml\.svg$/, '.svg');
+    if (Object.prototype.hasOwnProperty.call(heirs, doc)) {
+      errors.push(coded('E_PROJECT_HEIR', `${doc} has two project heirs: ${heirs[doc].replace(/\.svg$/, '.tml.svg')} and ${file} — a collection document has one heir in a project (a variant extends that heir).`));
+      continue;
+    }
+    heirs[doc] = scene;
+  }
+  return { heirs, errors };
+}
+
+/** 2.0: project heirs as `MountOptions.heirs` of one scene: hrefs from that scene's folder (`scenePath` — from the project root). */
+export function heirsFor(heirs: Record<string, string>, scenePath: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [doc, path] of Object.entries(heirs)) out[doc] = relativePath(scenePath, path);
+  return out;
+}
+
+/** A path from the folder of `from` to `to` (both from one root, `/`-separated). */
+export function relativePath(from: string, to: string): string {
+  const a = from.split('/').slice(0, -1);
+  const b = to.split('/');
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++;
+  return [...a.slice(i).map(() => '..'), ...b.slice(i)].join('/');
 }

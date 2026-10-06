@@ -550,6 +550,7 @@ export class Editor {
       hooks: { onIssue: () => this.emit('issues') },
       loadScene: this.renderLoader(),
       collections: this.listing.collections,
+      heirs: this.listing.heirs,
     });
     this.session = opened.session;
     this.fit = opened.fit;

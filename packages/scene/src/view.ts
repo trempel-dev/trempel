@@ -15,7 +15,7 @@ import type { MountedScene } from './scene.js';
 
 export interface FontSpec {
   family: string;
-  /** Font file URL (absolute, or relative to the scene folder: `fonts/x.woff2`). */
+  /** Font file URL (absolute, relative to the scene folder: `fonts/x.woff2`, or — 2.0 — in a collection: `@ui/fonts/x.ttf`). */
   url: string;
   weight?: string;
   style?: string;

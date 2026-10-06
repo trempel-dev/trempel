@@ -189,6 +189,25 @@ export function singleImage(n: SceneNode): SceneNode | null {
 }
 
 /** All v0.8 attribute problems of a (merged) tree, phrased for a human (v1.0: + layout — layout.ts). */
+/** 2.0: `preserveAspectRatio` of an <image> — null for `none` (fill the box, as without it). */
+export interface AspectFit {
+  /** Alignment in the box, 0 / 0.5 / 1 per axis (xMin / xMid / xMax, yMin / yMid / yMax). */
+  ax: number;
+  ay: number;
+  /** slice — cover the box (the picture is cut), meet — contain (whole, letterboxed). */
+  slice: boolean;
+}
+
+const ALIGN: Record<string, number> = { Min: 0, Mid: 0.5, Max: 1 };
+
+/** Parse `preserveAspectRatio`: `none` | `<align> [meet | slice]` (SVG's `defer` is accepted and ignored). @throws coded E_ASPECT. */
+export function parseAspect(v: string): AspectFit | null {
+  const m = /^\s*(?:defer\s+)?(?:(none)|x(Min|Mid|Max)Y(Min|Mid|Max))(?:\s+(meet|slice))?\s*$/.exec(v);
+  if (!m) throw new Error(coded('E_ASPECT', `preserveAspectRatio="${v}" — expected none, or xMinYMin … xMaxYMax with meet / slice (e.g. "xMidYMid slice").`));
+  if (m[1]) return null;
+  return { ax: ALIGN[m[2]], ay: ALIGN[m[3]], slice: m[4] === 'slice' };
+}
+
 export function propErrors(tree: SceneNode): string[] {
   const errors: string[] = layoutErrors(tree);
   walk(tree, (n) => {
@@ -241,6 +260,18 @@ export function propErrors(tree: SceneNode): string[] {
       }
     }
     for (const e of strokeErrors(n.tag, n.attrs)) errors.push(within(w, e));
+    const aspect = n.attrs.preserveAspectRatio;
+    // The root's (an exported SVG's) is the document's own business; on an image it fits the picture.
+    if (aspect != null && n.tag === 'image') {
+      try {
+        parseAspect(aspect);
+      } catch (e) {
+        errors.push(within(w, (e as Error).message));
+      }
+      if (n.attrs['data-slices'] != null || n.attrs['data-tile'] != null) {
+        errors.push(coded('E_ASPECT', `${w}: preserveAspectRatio with data-slices / data-tile — a 9-slice or tiled image fills its box by its own rules.`));
+      }
+    }
     const views = n.attrs['data-views'];
     if (views != null) {
       if (n.tag !== 'image') errors.push(coded('E_VIEWS', `${w}: data-views on <${n.tag}> is not supported — only on <image>.`));

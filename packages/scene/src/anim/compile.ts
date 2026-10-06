@@ -75,6 +75,13 @@ const CLIP_ATTRS = new Set(['duration', 'loop', 'tex']);
 /** v0.9.1 stroke columns → the setProp path (an SVG attribute name). */
 const STROKE_COLUMNS: Record<string, string> = { dash: 'stroke-dashoffset', strokeWidth: 'stroke-width', strokeAlpha: 'stroke-opacity' };
 const RAD = Math.PI / 180;
+/** 2.0: a numeric cell `$name` — a clip parameter (play options `params`). */
+const PARAM = /^\$[A-Za-z_][A-Za-z0-9_]*$/;
+interface Param {
+  param: string;
+  /** The column's unit the parameter is multiplied by (π/180 for degrees). */
+  unit: number;
+}
 
 interface Table {
   columns: string[];
@@ -338,7 +345,7 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
        * Keys of one column: ease of a key moves to the next key of the same column (`only` — this ease
        * whatever the row says, e.g. step for z: an order is never in between).
        */
-      const keysOf = (col: string, value: (raw: string, line: number) => number | string | null, only?: Ease): Keyframe[] => {
+      const keysOf = (col: string, value: (raw: string, line: number) => number | string | Param | null, only?: Ease): Keyframe[] => {
         const keys: Keyframe[] = [];
         let pending: Ease | undefined;
         table.rows.forEach((row, i) => {
@@ -346,14 +353,20 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
           if (raw === '') return;
           const v = value(raw, row.line);
           if (v === null) return;
-          const k: Keyframe = { t: times[i], v };
+          const k: Keyframe = typeof v === 'object' ? { t: times[i], v: v.unit, param: v.param } : { t: times[i], v };
           if (pending !== undefined) k.ease = pending;
           keys.push(k);
           pending = only ?? eases[i];
         });
         return keys;
       };
-      const numeric = (col: string, scale = 1) => (raw: string, line: number): number | null => {
+      /** A number, or (2.0) `$name` — a clip parameter given at play time, in the column's units. */
+      const numeric = (col: string, scale = 1) => (raw: string, line: number): number | Param | null => {
+        if (raw.startsWith('$')) {
+          if (PARAM.test(raw)) return { param: raw.slice(1), unit: scale };
+          errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: ${col}="${raw}" — a clip parameter is $name (letters, digits, _).`));
+          return null;
+        }
         const v = Number(raw);
         if (!Number.isFinite(v)) {
           errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: ${col}="${raw}" — not a number.`));
@@ -424,9 +437,9 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
           case 'dash':
           case 'strokeWidth':
           case 'strokeAlpha': {
-            const value = (raw: string, line: number): number | null => {
+            const value = (raw: string, line: number): number | Param | null => {
               const v = numeric(col)(raw, line);
-              if (v === null) return null;
+              if (v === null || typeof v === 'object') return v;
               if (col === 'strokeWidth' && v < 0) {
                 errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: strokeWidth="${raw}" — a width cannot be negative.`));
                 return null;
@@ -463,9 +476,9 @@ export function compileClipsResult(md: string, scene?: SceneNode, opts: CompileC
                 errors.push(coded('E_ANIM_TARGET', `${tw}: ${col} — width/height animate only on data-slices (and instances of resizable prefabs), #${target} is <${n.tag}>${n.tag === 'image' ? ' without data-slices' : ''}.`));
               }
             }
-            const size = (raw: string, line: number): number | null => {
+            const size = (raw: string, line: number): number | Param | null => {
               const v = numeric(col)(raw, line);
-              if (v !== null && v < 0) {
+              if (typeof v === 'number' && v < 0) {
                 errors.push(coded('E_ANIM_VALUE', `${tw}, row ${line}: ${col}="${raw}" — a size cannot be negative.`));
                 return null;
               }

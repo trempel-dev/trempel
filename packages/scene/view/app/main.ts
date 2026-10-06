@@ -101,7 +101,8 @@ async function openInto(target: Container, entry: SceneEntry, state: string | un
   const rootUrl = abs(project?.rootUrl ?? FILES);
   const fetched = fetchSceneLoader();
   const loadScene = async (url: string) => (await listed(url)) ?? (url.startsWith(rootUrl) && !url.startsWith(folderUrl()) ? fetched(url) : null);
-  return runtime.openInto(target, { id: entry.id, sources: { base, heir, contract }, docUrl: fileUrl(entry.base ?? entry.heir ?? entry.id), state, viewport: vp, hooks, loadScene, collections });
+  const heirs = project && Object.keys(project.heirs ?? {}).length ? Object.fromEntries(Object.entries(project.heirs).map(([k, v]) => [k, abs(v)])) : undefined;
+  return runtime.openInto(target, { id: entry.id, sources: { base, heir, contract }, docUrl: fileUrl(entry.base ?? entry.heir ?? entry.id), state, viewport: vp, hooks, loadScene, collections, heirs });
 }
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));

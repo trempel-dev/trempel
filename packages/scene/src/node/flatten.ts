@@ -9,7 +9,7 @@ import { flattenLeftovers, flattenScene } from '../flatten.js';
 import { coded } from '../codes.js';
 import type { SceneSource } from '../prefab.js';
 import { imageSize, mimeOf } from './imagesize.js';
-import { loadProject } from './project.js';
+import { heirsOf, loadProject } from './project.js';
 
 export interface FlattenFileOptions {
   /** The scene: X.svg, X.tml.svg, its stem, or a folder holding scene.svg / scene.tml.svg. */
@@ -90,6 +90,7 @@ export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {
     loadScene: fileLoader,
     baseUrl: posix(`${stem}.svg`),
     collections: Object.fromEntries(Object.entries(project.collections).map(([k, v]) => [k, posix(v)])),
+    heirs: heirsOf(project, `${stem}.svg`),
     state,
     fontFamily: opts.fontFamily ?? 'Arial',
     imageSize: (href) => (local(href) ? imageSize(href) : null),

@@ -96,6 +96,8 @@ export interface ProjectInfo {
   rootUrl: string;
   /** Collection name → its folder URL (/__tml/c/<name>/). */
   collections: Record<string, string>;
+  /** 2.0: project heirs — collection document (`@ui/ui/card.svg`) → the heir scene's URL under the root. */
+  heirs: Record<string, string>;
   /** Problems of .trempel/project.mdz. */
   errors: string[];
 }
@@ -113,11 +115,14 @@ export function serverProject(dir: string, project?: Project): { root: string; d
 }
 
 export function projectInfo(dir: string, project?: Project): ProjectInfo {
-  const { dirRel, project: p } = serverProject(dir, project);
+  const { root, dirRel, project: p } = serverProject(dir, project);
+  const heirs: Record<string, string> = {};
+  for (const [doc, file] of Object.entries(p.heirs)) if (isInside(root, file)) heirs[doc] = ROOT + enc(relative(root, file).split(sep).join('/'));
   return {
     folderUrl: ROOT + enc(dirRel),
     rootUrl: ROOT,
     collections: Object.fromEntries(Object.keys(p.collections).map((name) => [name, `${COLL}${name}/`])),
+    heirs,
     errors: p.errors,
   };
 }

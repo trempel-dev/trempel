@@ -13,6 +13,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { checkScene, codeOf, compileClipsResult, parseContract, parseHeir, parseProject, TrempelError, type SceneLoader } from '../src/core';
+import { resolveHref } from '../src/href';
+import { heirsFor, projectHeirs } from '../src/project';
 
 const DOC = readFileSync(new URL('../docs/format/scene-format.md', import.meta.url), 'utf8');
 const LANGS = new Set(['svg', 'xml', 'md', 'markdown', 'mdz']);
@@ -61,8 +63,14 @@ const loadScene: SceneLoader = (url) => {
   return src.base != null || src.heir != null ? src : null;
 };
 
-/** Hrefs of a document at `path` → paths of the project. */
-const urlFor = (path: string) => (rel: string) => posix.normalize(posix.join(posix.dirname(path), rel));
+/** Hrefs of a document at `path` → paths of the project (`@name/…` — a collection's files, as written). */
+const urlFor = (path: string) => (rel: string) => (rel.startsWith('@') ? resolveHref(rel, undefined) : posix.normalize(posix.join(posix.dirname(path), rel)));
+
+/** Collections of the virtual project: every `@name/…` file — the host resolves them itself (identity). */
+const collections = Object.fromEntries([...files.keys()].filter((f) => f.startsWith('@')).map((f) => [f.slice(1, f.indexOf('/')), `@${f.slice(1, f.indexOf('/'))}`]));
+/** Project heirs (1.3): the project's heirs (outside the collections) that extend a collection document. */
+const project = projectHeirs(Object.fromEntries([...files].filter(([f]) => f.endsWith('.tml.svg') && !f.startsWith('@'))));
+const heirsAt = (path: string): Record<string, string> => heirsFor(project.heirs, path);
 
 const errorsOf = (fn: () => unknown): string[] => {
   try {
@@ -83,21 +91,39 @@ function problems(b: Block): string[] {
   if (root !== 'svg') {
     // A fragment of a scene (an instance, a slot child): checked inside a root <svg>.
     const base = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene">\n${b.text}\n</svg>`;
-    return checkScene({ base, path: 'example.svg', loadScene, url: urlFor('example.svg') }).errors;
+    return checkScene({ base, path: 'example.svg', loadScene, url: urlFor('example.svg'), collections, heirs: heirsAt('example.svg') }).errors;
   }
   const extendsOf = /\btml:extends="([^"]+)"/.exec(body)?.[1];
   if (extendsOf) {
     const path = b.file ? b.file.replace(/\.tml\.svg$/, '.svg') : 'example.svg';
     const target = urlFor(path)(extendsOf);
     if (!files.has(target) && !b.file) return errorsOf(() => parseHeir(b.text));
-    return checkScene({ base: files.get(path), heir: b.text, contract: files.get(path.replace(/\.svg$/, '.contract.xml')), path, loadScene, url: urlFor(path) }).errors;
+    return checkScene({ base: files.get(path), heir: b.text, contract: files.get(path.replace(/\.svg$/, '.contract.xml')), path, loadScene, url: urlFor(path), collections, heirs: heirsAt(path) }).errors;
   }
   const path = b.file ?? 'example.svg';
   const stem = path.replace(/\.svg$/, '');
-  return checkScene({ base: b.text, heir: files.get(`${stem}.tml.svg`), contract: files.get(`${stem}.contract.xml`), path, loadScene, url: urlFor(path) }).errors;
+  return checkScene({ base: b.text, heir: files.get(`${stem}.tml.svg`), contract: files.get(`${stem}.contract.xml`), path, loadScene, url: urlFor(path), collections, heirs: heirsAt(path) }).errors;
 }
 
 describe('scene-format.md — every example is checked', () => {
+  it('project heirs of the examples (§12): the card of the UI kit has the game\'s heir', () => {
+    expect(project.errors).toEqual([]);
+    expect(project.heirs['@ui/ui/card.svg']).toBe('scenes/ui/card.svg');
+    const album = checkScene({ heir: files.get('scenes/album.tml.svg'), path: 'scenes/album.svg', loadScene, url: urlFor('scenes/album.svg'), collections, heirs: heirsAt('scenes/album.svg') });
+    expect(album.errors).toEqual([]);
+    const ids = new Map<string, Record<string, string>>();
+    const walk = (n: { attrs: Record<string, string>; tml: Record<string, string>; children: unknown[] }): void => {
+      if (n.attrs.id) ids.set(n.attrs.id, n.tml);
+      (n.children as (typeof n)[]).forEach(walk);
+    };
+    walk(album.tree as never);
+    // In the collection's album and in the game's inserted card alike: the game's click, the kit's title.
+    for (const c of ['card1', 'card3']) {
+      expect(ids.get(`${c}/hit`)?.['on-click']).toBe('openCard(self.id)');
+      expect(ids.get(`${c}/title`)?.bind).toBe('self.title');
+    }
+  });
+
   it('the document has examples of every kind', () => {
     const kinds = new Set(all.map((b) => b.lang));
     for (const k of ['svg', 'xml', 'markdown', 'mdz']) expect(kinds, k).toContain(k);

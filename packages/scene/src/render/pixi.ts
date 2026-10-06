@@ -35,6 +35,9 @@
 //     the texture (no centre left) are a load error (whenReady). setProp('width' | 'height') on an
 //     image resizes its SVG box (9-slice / tiling: the view itself, a sprite: its fit), on a rect —
 //     redraws it (layout: data-stretch, MountedScene.setSize, clip columns width / height).
+//   - (2.0) preserveAspectRatio on a plain <image> with width and height: `<align> slice` covers the
+//     box (the texture is cut to the box's aspect — no mask), `<align> meet` contains it (letterboxed,
+//     aligned); `none` or no attribute — the picture fills the box, as before.
 //
 // Extension (v0.6.1): a subclass makes its own <image> view with `createImage(attrs)` (e.g. a
 // NineSliceSprite) and keeps cache / stale-href guard / sizing / readiness from the base;
@@ -55,6 +58,7 @@ import {
   GraphicsPath,
   Matrix as PixiMatrix,
   NineSliceSprite,
+  Rectangle,
   Sprite,
   Text,
   Texture,
@@ -69,7 +73,7 @@ import { coded, within } from '../codes.js';
 import { dashes, flatten, outlineLength, type Polyline } from '../geom/outline.js';
 import { shapeCommands, type PathCmd } from '../geom/pathdata.js';
 import { parseAxes, parseSlices } from '../layout.js';
-import { parseDashArray, parseLineStyle, parseNumberAttr, parsePathLength, parsePivot } from '../props.js';
+import { parseAspect, parseDashArray, parseLineStyle, parseNumberAttr, parsePathLength, parsePivot, type AspectFit } from '../props.js';
 import { localMatrix, multiply, parseTransform, type Matrix } from '../transform.js';
 import type { Bounds, ClipShape, NodeHandle, PointerKind, RendererBackend } from './backend.js';
 
@@ -137,6 +141,14 @@ interface ImageState {
   where?: string;
   /** v1.0: data-tile axes — along the others the texture is stretched to the box. */
   tile?: 'x' | 'y' | 'xy';
+  /** 2.0: preserveAspectRatio (meet / slice and the alignment); absent — the picture fills the box. */
+  aspect?: AspectFit;
+  /** 2.0: the texture as loaded (a slice shows a cut of it — `cut`, destroyed on the next fit). */
+  src?: Texture;
+  cut?: Texture;
+  /** 2.0: where the fitted picture's top-left sits in the box (meet), SVG units. */
+  ox?: number;
+  oy?: number;
 }
 
 /** A drawn geometry node (path / circle / ellipse / line / rect): what a redraw needs. */
@@ -164,6 +176,19 @@ const STROKE_PROPS: Record<string, 'opacity' | 'width' | 'offset'> = {
   'stroke-width': 'width',
   'stroke-dashoffset': 'offset',
 };
+
+/**
+ * 2.0: the part of `tex` a slice shows — `w × h` texture pixels at the alignment; null when the
+ * texture cannot be cut by frame (a trimmed or rotated atlas frame — then the picture is stretched).
+ */
+function cutTexture(tex: Texture, a: AspectFit, w: number, h: number): Texture | null {
+  if (tex.trim || tex.rotate) return null;
+  const tw = tex.orig.width;
+  const th = tex.orig.height;
+  const x = (tw - w) * a.ax;
+  const y = (th - h) * a.ay;
+  return new Texture({ source: tex.source, frame: new Rectangle(tex.frame.x + x, tex.frame.y + y, w, h) });
+}
 
 /** Views whose width/height resize the view itself instead of scaling it. */
 const ownSize = (n: ImageNode): n is NineSliceSprite | TilingSprite =>
@@ -483,6 +508,13 @@ export class PixiBackend implements RendererBackend {
         /* reported by mount */
       }
     }
+    if (attrs.preserveAspectRatio != null && !ownSize(node)) {
+      try {
+        state.aspect = parseAspect(attrs.preserveAspectRatio) ?? undefined;
+      } catch {
+        /* reported by mount */
+      }
+    }
     this.images.set(node, state);
     this.place(node, localMatrix(attrs, true), pivot);
     if (ownSize(node) && state.w !== undefined && state.h !== undefined) node.setSize(state.w, state.h);
@@ -559,19 +591,63 @@ export class PixiBackend implements RendererBackend {
       this.fitTile(node, state);
       return;
     }
+    state.src = tex;
+    this.fit(node, state, before);
+  }
+
+  /**
+   * The texture fit of a plain image for its box (state.w / h) and its current texture (state.src):
+   * stretched, or (2.0) meet / slice by preserveAspectRatio. `before` — the scale before a texture
+   * swap (an axis Pixi itself re-derived is left alone); null — a resize, the fit is always swapped.
+   */
+  private fit(node: ImageNode, state: ImageState, before: { x: number; y: number } | null): void {
     if (state.w === undefined && state.h === undefined) return;
-    const fx = state.w !== undefined ? state.w / tw : (state.h as number) / th;
-    const fy = state.h !== undefined ? state.h / th : fx;
+    const src = state.src ?? node.texture;
+    const tw = src.orig.width || 1;
+    const th = src.orig.height || 1;
+    let fx = state.w !== undefined ? state.w / tw : (state.h as number) / th;
+    let fy = state.h !== undefined ? state.h / th : fx;
+    let ox = 0;
+    let oy = 0;
+    let shown = src;
+    const a = state.aspect;
+    if (a && state.w !== undefined && state.h !== undefined && src !== Texture.EMPTY && fx > 0 && fy > 0) {
+      const sc = a.slice ? Math.max(fx, fy) : Math.min(fx, fy);
+      if (a.slice) shown = cutTexture(src, a, state.w / sc, state.h / sc) ?? src;
+      if (shown !== src || !a.slice) {
+        ox = a.slice ? 0 : (state.w - tw * sc) * a.ax;
+        oy = a.slice ? 0 : (state.h - th * sc) * a.ay;
+        fx = fy = sc;
+      }
+    }
+    if (node.texture !== shown) {
+      const b = { x: node.scale.x, y: node.scale.y };
+      node.texture = shown;
+      // Swapping the shown texture must not let Pixi re-derive the scale of a fitted sprite.
+      node.scale.set(b.x, b.y);
+    }
+    if (state.cut && state.cut !== shown) state.cut.destroy(false);
+    state.cut = shown !== src ? shown : undefined;
     // Pixi's local matrix is T·R·Skew·diag(scale): the fit is the rightmost factor, so swapping it
     // is a per-axis ratio on scale. An axis whose scale Pixi itself just re-derived (the host set
     // sprite.width/height — Sprite keeps that size across textures) is left as Pixi made it.
     // A zero fit (width="0") stays zero for any texture.
-    if (state.fx !== 0 && node.scale.x === before.x) node.scale.x *= fx / state.fx;
-    if (state.fy !== 0 && node.scale.y === before.y) node.scale.y *= fy / state.fy;
+    if (state.fx !== 0 && (!before || node.scale.x === before.x)) node.scale.x *= fx / state.fx;
+    else if (!before) node.scale.x = fx;
+    if (state.fy !== 0 && (!before || node.scale.y === before.y)) node.scale.y *= fy / state.fy;
+    else if (!before) node.scale.y = fy;
     state.fx = fx;
     state.fy = fy;
-    // The pivot lives in texture pixels: the same SVG point under the new fit (position unchanged).
-    if (state.pivot) node.pivot.set(fx ? state.pivot.x / fx : 0, fy ? state.pivot.y / fy : 0);
+    // The pivot lives in texture pixels: the same SVG point under the new fit (position unchanged);
+    // a contained picture moves by its alignment offset inside the box.
+    const moved = ox !== 0 || oy !== 0 || (state.ox ?? 0) !== 0 || (state.oy ?? 0) !== 0;
+    state.ox = ox;
+    state.oy = oy;
+    if (state.pivot || moved) {
+      const px = (state.pivot?.x ?? 0) - ox;
+      const py = (state.pivot?.y ?? 0) - oy;
+      node.pivot.set(fx ? px / fx : 0, fy ? py / fy : 0);
+    }
   }
 
   /** data-tile="x" / "y": the texture repeats along that axis and is stretched to the box along the other. */
@@ -597,17 +673,7 @@ export class PixiBackend implements RendererBackend {
         this.fitTile(node, img);
       } else {
         // The fit for the current texture with the new box; the rest of the transform stays.
-        const tw = node.texture.orig.width || 1;
-        const th = node.texture.orig.height || 1;
-        const fx = img.w !== undefined ? img.w / tw : img.h !== undefined ? img.h / th : 1;
-        const fy = img.h !== undefined ? img.h / th : fx;
-        if (img.fx !== 0) node.scale.x *= fx / img.fx;
-        else node.scale.x = fx;
-        if (img.fy !== 0) node.scale.y *= fy / img.fy;
-        else node.scale.y = fy;
-        img.fx = fx;
-        img.fy = fy;
-        if (img.pivot) node.pivot.set(fx ? img.pivot.x / fx : 0, fy ? img.pivot.y / fy : 0);
+        this.fit(node, img, null);
       }
       return true;
     }

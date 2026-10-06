@@ -17,6 +17,9 @@
 //
 // v1.0: width / height (absolute) — on an instance's box (layout.ts: its anchored content follows), on
 // an image (a 9-slice panel's size) through the backend.
+//
+// 2.0: clip parameters — a key with `param` (an md cell `$name`) takes `params[param] × v` given to
+// play(); the clip is not copied or changed, one clip flies to a different place per play.
 
 import type { ScenePath } from '../geom/path.js';
 import { trempelError } from '../errors.js';
@@ -40,6 +43,8 @@ export interface PlayOptions {
   speed?: SpeedSource;
   /** Emitted when a marker's time is crossed. */
   onMarker?: (name: string) => void;
+  /** 2.0: values of the clip's parameters (`$name` cells), in the columns' units. */
+  params?: Record<string, number>;
 }
 
 /** A running (or composed) playback. */
@@ -90,6 +95,20 @@ interface Playback {
   finished: boolean;
   resolve: () => void;
   done: Promise<void>;
+}
+
+/** A track with its parameter keys (2.0) given their values; the clip itself is not changed. */
+function withParams(tr: Track, params: Record<string, number> | undefined): Track {
+  if (!tr.keys.some((k) => k.param !== undefined)) return tr;
+  const keys = tr.keys.map((k) => {
+    if (k.param === undefined) return k;
+    const p = params?.[k.param];
+    if (p === undefined) throw trempelError('E_ANIM_PARAM', `#${tr.target}.${tr.property}: the clip parameter $${k.param} is not given — play(clip, { params: { ${k.param}: … } }).`);
+    if (typeof p !== 'number' || !Number.isFinite(p)) throw trempelError('E_ANIM_PARAM', `#${tr.target}.${tr.property}: the clip parameter $${k.param} = ${String(p)} — not a number.`);
+    const { param: _param, ...rest } = k;
+    return { ...rest, v: p * Number(k.v) };
+  });
+  return { ...tr, keys };
 }
 
 function resolveSpeed(speed: SpeedSource): number {
@@ -155,6 +174,7 @@ export class Animator {
   play(clip: AnimClip, opts: PlayOptions = {}): Handle {
     const tracks: ResolvedTrack[] = clip.tracks
       .filter((tr) => tr.keys.length > 0)
+      .map((tr) => withParams(tr, opts.params))
       .map((tr) => this.resolveTrack(tr, opts.targets));
 
     let duration = 0;

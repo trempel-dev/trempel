@@ -38,7 +38,8 @@ export function devIO(hot?: { on(event: string, cb: (data: FileChange) => void):
       project = data.project ?? null;
       const collections = project && Object.keys(project.collections).length ? Object.fromEntries(Object.entries(project.collections).map(([k, v]) => [k, abs(v)])) : undefined;
       const error = [data.error, ...(project?.errors ?? [])].filter(Boolean).join('; ') || undefined;
-      return { name: data.name, files: data.files ?? [], module: data.module, writable: !!data.writable, error, collections };
+      const heirs = project && Object.keys(project.heirs ?? {}).length ? Object.fromEntries(Object.entries(project.heirs).map(([k, v]) => [k, abs(v)])) : undefined;
+      return { name: data.name, files: data.files ?? [], module: data.module, writable: !!data.writable, error, collections, heirs };
     },
     async read(path) {
       const r = await fetch(url(path), { cache: 'no-store' });

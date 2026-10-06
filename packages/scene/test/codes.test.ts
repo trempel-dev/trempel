@@ -4,7 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { CODES, codeOf, coded, within } from '../src/codes';
-import { BEGIN, END, readCatalog, renderCodes } from '../scripts/error-codes.mjs';
+import { BEGIN, END, readCatalog, renderCodes, renderNames } from '../scripts/error-codes.mjs';
+import { CODE_NAMES } from '../src/code-names';
 
 const read = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
 
@@ -31,6 +32,11 @@ describe('error codes', () => {
     expect(a).toBeGreaterThan(0);
     expect(b).toBeGreaterThan(a);
     expect(doc.slice(a + BEGIN.length, b).trim()).toBe(renderCodes(readCatalog(read('../src/codes.ts'))).trim());
+  });
+
+  it('src/code-names.ts (the runtime\'s names) is the catalog (npm run error-codes)', () => {
+    expect([...CODE_NAMES]).toEqual(Object.keys(CODES));
+    expect(read('../src/code-names.ts')).toBe(renderNames(readCatalog(read('../src/codes.ts'))));
   });
 
   it('coded / codeOf / within keep the code first', () => {

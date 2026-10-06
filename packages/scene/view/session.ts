@@ -73,6 +73,8 @@ export interface OpenInput {
   path?: string;
   /** v1.1: collections — name → folder URL (`@name/x` → `<URL>/x`, before baseUrl / resolveHref). */
   collections?: Record<string, string>;
+  /** 2.0: project heirs of collection documents (MountOptions.heirs). */
+  heirs?: Record<string, string>;
   /** Consumer context next to `state`. */
   context?: (state: Record<string, unknown>) => Record<string, unknown>;
   /** Readiness gives up after this long (a warning, not a hang). Default 15 s. */
@@ -178,6 +180,7 @@ export function openScene(input: OpenInput): ViewSession {
       noHeir,
       path: input.path,
       loadScene: input.loadScene,
+      heirs: input.heirs,
       url: (rel) => {
         const doc = input.sceneUrl ?? input.baseUrl;
         const own = expandCollection(rel, input.collections);

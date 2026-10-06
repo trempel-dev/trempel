@@ -126,6 +126,8 @@ class Resolver {
   constructor(
     private readonly load: SceneLoader | undefined,
     private readonly url: (rel: string) => string,
+    /** 2.0: project heirs — a collection document → the project's heir over it (top scene space). */
+    private readonly heirs?: Record<string, string>,
   ) {}
 
   /** The documents at `rel`; null + an error when missing / unloadable. */
@@ -167,6 +169,9 @@ class Resolver {
     if (src.contract != null) {
       try {
         contract = parseContract(src.contract);
+        // Its `<use href>` lines are written from its own document (2.0: a collection's contract
+        // inherited by a project's heir) — into the top scene's space, like the tree's hrefs.
+        for (const n of contract.nodes) if (n.href != null) n.href = rebase(n.href, rel);
       } catch (e) {
         errs.parse.push(within('contract', (e as Error).message));
       }
@@ -311,10 +316,27 @@ class Resolver {
       errs.push(coded('E_PREFAB_CYCLE', `${where}: prefab cycle: ${[...stack, prel].join(' → ')}.`));
       return g;
     }
+    // 2.0: an instance of a collection document the project has an heir of is built as that heir
+    // (the collection's base + its heir + the project's heir) — unless that heir is being built now.
+    const over = this.heirs && Object.prototype.hasOwnProperty.call(this.heirs, prel) ? rebase(this.heirs[prel], TOP) : null;
+    const drel = over && !stack.includes(over) ? over : prel;
     const sub = { prefab: [] as string[], merge: [] as string[], parse: [] as string[] };
-    const src = this.source(prel, `${where}: prefab ${href}`, errs);
+    const src = this.source(drel, `${where}: prefab ${href}${drel !== prel ? ` (the project heir ${drel})` : ''}`, errs);
     if (!src) return g;
-    const r = this.doc(src, prel, [...stack, prel], sub);
+    if (drel !== prel) {
+      let ext: string | null = null;
+      try {
+        const h = src.heir != null ? parseHeir(src.heir).extends : undefined;
+        ext = h ? rebase(h, drel) : null;
+      } catch {
+        // its parse error is reported by doc()
+      }
+      if (src.base != null || (ext !== null && ext !== prel) || (src.heir != null && ext === null)) {
+        errs.push(coded('E_PROJECT_HEIR', `${where}: ${drel} is given as the project heir of ${prel}, but it ${src.base != null ? 'has its own base' : `extends ${ext ?? 'nothing'}`} — a project heir is an heir only, tml:extends="${prel}".`));
+        return g;
+      }
+    }
+    const r = this.doc(src, drel, [...stack, drel], sub);
     const tag = (e: string): string => within(`${where} (${href})`, e);
     errs.push(...sub.parse.map(tag), ...sub.merge.map(tag), ...sub.prefab.map(tag));
     if (!r) return g;
@@ -447,6 +469,13 @@ export interface ComposeInput {
   path?: string;
   /** Skip the heir (a viewer showing the base alone after a merge failure). */
   noHeir?: boolean;
+  /**
+   * 2.0: project heirs — a collection document (`@ui/ui/card.svg`) → the href of the project's heir
+   * over it (an X.tml.svg whose tml:extends names that document), from the top scene's folder like
+   * any href. Every instance of the document is built as that heir (layered over the collection's
+   * own). `projectHeirs()` makes the map from the project's heirs.
+   */
+  heirs?: Record<string, string>;
 }
 
 export interface Composed {
@@ -464,7 +493,7 @@ export interface Composed {
  */
 export function composeScene(input: ComposeInput): Composed {
   const errors: ComposeErrors = { parse: [], prefab: [], contract: [], merge: [] };
-  const r = new Resolver(input.loadScene, input.url ?? ((rel) => rel));
+  const r = new Resolver(input.loadScene, input.url ?? ((rel) => rel), input.heirs);
   const rel = input.path ? basename(input.path) : TOP;
   const src: SceneSource = { base: input.base, heir: input.noHeir ? undefined : input.heir, contract: input.contract };
   if (input.noHeir && input.base == null) src.heir = input.heir; // an extends-only scene has no base without it
@@ -478,10 +507,10 @@ export function composeScene(input: ComposeInput): Composed {
 }
 
 /** Expand the `<use>` instances of an already parsed tree (single-document mount). Returns the problems. */
-export function expandInstances(tree: SceneNode, opts: { loadScene?: SceneLoader; url?: (rel: string) => string; path?: string } = {}): string[] {
+export function expandInstances(tree: SceneNode, opts: { loadScene?: SceneLoader; url?: (rel: string) => string; path?: string; heirs?: Record<string, string> } = {}): string[] {
   const errs: string[] = [];
   const rel = opts.path ? basename(opts.path) : TOP;
-  new Resolver(opts.loadScene, opts.url ?? ((r) => r)).expand(tree, rel, [rel], errs);
+  new Resolver(opts.loadScene, opts.url ?? ((r) => r), opts.heirs).expand(tree, rel, [rel], errs);
   return errs;
 }
 

@@ -1,7 +1,11 @@
 // codes.ts — the catalog of message codes: every error (E_…) and warning (W_…) a user of the
 // package sees starts with its code — `E_CODE: message (place)`. The code is the stable part:
 // tests and tools match codes, never the wording. The "Error codes" section of
-// docs/format/scene-format.md is generated from this catalog (scripts/error-codes.mjs).
+// docs/format/scene-format.md is generated from this catalog (scripts/error-codes.mjs), and so is
+// code-names.ts — the names alone, which is all the runtime reads (the descriptions stay out of
+// bundles that never show them).
+
+import { CODE_NAMES } from './code-names.js';
 
 export const CODES = {
   // ---- XML and documents ----------------------------------------------------------------------
@@ -56,6 +60,7 @@ export const CODES = {
   E_ANCHOR: 'malformed data-anchor',
   E_AXES: 'an axes value other than x, y or xy (data-stretch, data-tile, data-resizable)',
   E_SIZE: 'malformed data-size',
+  E_ASPECT: 'a malformed preserveAspectRatio on an <image>, or one with data-slices / data-tile',
   E_STRETCH: 'data-stretch on a node that cannot stretch, or without a size',
   E_NO_BOX: 'an anchored or stretched node whose parent is not a box',
   E_RESIZABLE: 'data-resizable misplaced, without a viewBox or without a stretching background',
@@ -79,6 +84,7 @@ export const CODES = {
   E_PARAM_MISSING: 'a required parameter (contract params) not set',
   E_PREFAB_CYCLE: 'a prefab cycle',
   E_PREFAB_MISSING: 'a prefab that does not exist or failed to load',
+  E_PROJECT_HEIR: 'a project heir that is not an heir of its collection document, or two heirs of one document',
   E_PREFAB_LOADER: 'no scene loader, or an asynchronous one for mount() (use mountAsync)',
   E_PREFAB_RESIZE: 'width/height on an instance of a prefab that does not resize along that axis',
   E_PREFAB_MIN_SIZE: 'an instance smaller than its prefab’s viewBox (the minimum size)',
@@ -114,6 +120,7 @@ export const CODES = {
   E_ANIM_TWICE: 'a property of a target keyed twice in one clip, or a clip name twice',
   E_ANIM_UNKNOWN: 'a clip name the scene’s clip files do not have',
   E_ANIM_PLAY: 'a clip that cannot be played (motion without a path, no rest pose)',
+  E_ANIM_PARAM: 'a clip parameter ($name cell) not given at play time, or not a number',
 
   // ---- runtime: mounting, the backend, the scene API ------------------------------------------
   E_NO_REGISTRY: 'tml:type without a component registry',
@@ -212,7 +219,7 @@ export function coded(code: Code, text: string): string {
 /** The code a message starts with, if any. */
 export function codeOf(message: string): Code | undefined {
   const m = CODE_AT.exec(message);
-  return m && m[1] in CODES ? (m[1] as Code) : undefined;
+  return m && CODE_NAMES.has(m[1]) ? (m[1] as Code) : undefined;
 }
 
 /**

@@ -29,6 +29,11 @@ export interface Keyframe {
   v: number | string;
   /** Easing applied to the SEGMENT ending at this key (from the previous key to this one). */
   ease?: Ease;
+  /**
+   * 2.0: a clip parameter (`$name` in an md cell) — the key's value is `params[param] × v` given at
+   * play time (`play(clip, { params })`); `v` is then the column's unit (1, or π/180 for degrees).
+   */
+  param?: string;
 }
 
 export interface Track {

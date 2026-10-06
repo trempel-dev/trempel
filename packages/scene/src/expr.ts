@@ -382,6 +382,15 @@ export function compile(src: string): CompiledExpr {
 
 const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
+/**
+ * A name of the context: its own, or inherited through the context's prototype chain (a prefab
+ * instance's context inherits the scene's — 2.0), never one of Object.prototype's.
+ */
+export function inContext(ctx: object, k: string): boolean {
+  for (let o: object | null = ctx; o && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) if (hasOwn(o, k)) return true;
+  return false;
+}
+
 function member(obj: unknown, prop: unknown, src: string, pos: number): unknown {
   if (obj === null || obj === undefined) {
     throw new ExpressionError(`reading the field "${String(prop)}" of ${String(obj)}`, src, pos, 'E_EXPR_FIELD');
@@ -419,7 +428,7 @@ function evalNode(n: Node, ctx: Record<string, unknown>, src: string): unknown {
     case 'lit':
       return n.v;
     case 'name':
-      if (!hasOwn(ctx, n.name)) throw new ExpressionError(`the name "${n.name}" is not defined in the context`, src, n.pos, 'E_EXPR_UNDEF');
+      if (!inContext(ctx, n.name)) throw new ExpressionError(`the name "${n.name}" is not defined in the context`, src, n.pos, 'E_EXPR_UNDEF');
       return ctx[n.name];
     case 'member':
       return member(
