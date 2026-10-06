@@ -38,6 +38,7 @@ export class Sound {
   private readonly known: Set<string>;
   /** Names played so far (tests, QA probe). */
   readonly log: string[] = [];
+  private destroyed = false;
 
   constructor(private readonly opts: SoundOptions = {}) {
     this.known = new Set([...Object.keys(opts.sounds ?? {}), ...Object.keys(SYNTH_PRESETS)]);
@@ -50,6 +51,7 @@ export class Sound {
 
   /** Call from a user gesture (the kit wires the first pointerdown/keydown). Idempotent. */
   unlock(): void {
+    if (this.destroyed) return;
     if (typeof AudioContext === 'undefined' && typeof (globalThis as { webkitAudioContext?: unknown }).webkitAudioContext === 'undefined') return;
     if (!this.engine) {
       this.engine = createEngine({
@@ -110,6 +112,16 @@ export class Sound {
   resume(): void {
     this.paused = false;
     void this.engine?.unlock().catch(() => {});
+  }
+
+  /** 2.0: stop everything and close the audio context (game.destroy()); unlock() does nothing after. */
+  destroy(): void {
+    this.destroyed = true;
+    this.musicVoice?.stop();
+    this.musicVoice = null;
+    const e = this.engine;
+    this.engine = null;
+    void e?.context.close().catch(() => {});
   }
 
   private apply(): void {

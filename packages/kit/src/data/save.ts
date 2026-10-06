@@ -5,6 +5,9 @@
 
 import type { Platform } from '../platform/types.js';
 
+/** Where a Save reads and writes its string: the platform, or one space of the game's save file (2.0). */
+export type SaveStorage = Pick<Platform, 'load' | 'save'>;
+
 export interface SaveOptions<T extends object> {
   /** Schema version, stored as `v`. */
   version: number;
@@ -56,7 +59,7 @@ export class Save<T extends object> {
   private dirty = false;
 
   constructor(
-    private readonly platform: Platform,
+    private readonly platform: SaveStorage,
     private readonly opts: SaveOptions<T>,
   ) {
     this.value = structuredClone(opts.defaults);

@@ -8,7 +8,10 @@ export interface MockHost {
   readonly calls: string[];
   saved: string | null;
   rewarded: RewardedResult;
+  /** Ads available now (set it directly before boot; setAds() during the game tells the kit). */
   ads: boolean;
+  /** 2.0: the host turns ads on / off during the game (onAdsChange fires). */
+  setAds(on: boolean): void;
   pause(): void;
   resume(): void;
   setAudio(on: boolean): void;
@@ -22,6 +25,7 @@ export function createMockPlatform(opts: { saved?: string | null; language?: str
   const pause: (() => void)[] = [];
   const resume: (() => void)[] = [];
   const audio: ((on: boolean) => void)[] = [];
+  const adsChange: ((on: boolean) => void)[] = [];
   let audioOn = true;
   const host: MockHost = {
     calls: [],
@@ -33,6 +37,10 @@ export function createMockPlatform(opts: { saved?: string | null; language?: str
     setAudio(on) {
       audioOn = on;
       audio.forEach((cb) => cb(on));
+    },
+    setAds(on) {
+      host.ads = on;
+      adsChange.forEach((cb) => cb(on));
     },
   };
   return {
@@ -54,7 +62,9 @@ export function createMockPlatform(opts: { saved?: string | null; language?: str
     onAudioChange: (cb) => void audio.push(cb),
     language: () => opts.language ?? 'en',
     adsAvailable: () => host.ads,
+    onAdsChange: (cb) => void adsChange.push(cb),
     async showInterstitial() {
+      if (!host.ads) return;
       host.calls.push('interstitial');
     },
     async showRewarded() {

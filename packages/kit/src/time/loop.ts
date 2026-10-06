@@ -191,9 +191,11 @@ export class GameLoop {
     this.platformPaused = false;
   }
 
-  /** Drive this loop from a Pixi Application ticker (browser). */
-  attach(pixiTicker: { add(fn: (t: { deltaMS: number }) => void): unknown }): void {
-    pixiTicker.add((t) => this.step(t.deltaMS / 1000));
+  /** Drive this loop from a Pixi Application ticker (browser); returns the detach (2.0). */
+  attach(pixiTicker: { add(fn: (t: { deltaMS: number }) => void): unknown; remove?(fn: (t: { deltaMS: number }) => void): unknown }): () => void {
+    const fn = (t: { deltaMS: number }) => this.step(t.deltaMS / 1000);
+    pixiTicker.add(fn);
+    return () => void pixiTicker.remove?.(fn);
   }
 
   private fireTimers(): void {

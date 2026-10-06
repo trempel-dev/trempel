@@ -9,15 +9,23 @@
 //   data-sound="<name>"   — the sound plays on tap.
 //   data-safe="ignore"    — an anchored node that does NOT keep out of the safe area (by
 //                           default anchored nodes stay inside it: notches, the gesture bar).
-// Nodes with these attributes need an id.
+// Nodes with these attributes need an id. They are read from the composed scene (2.0): a screen
+// whose heir extends another scene (a collection's, `tml:extends="@ui/level.svg"`) has them from
+// that base; prefab internals are the prefab's own layout (not the canvas').
+//
+// 2.0: prefabs. With the scene table of the kit's Vite plugin (./scene-table.ts) a screen whose
+// source is in the table mounts with its path, the table's loader and the project heirs — `<use>`
+// instances, collections and tml:extends chains work like in the Node tools. A stretched image
+// is resized through the backend: its preserveAspectRatio (meet / slice) holds.
 
 import { Container, Graphics, NineSliceSprite, Sprite } from 'pixi.js';
-import { mount, parse, type MountedScene, type Registry, type RendererBackend, type SceneNode } from '@trempel/scene';
-import { NO_INSETS, canvas, canvasRect, insetsOf, policyOf, safeShift, viewBoxOf, type CanvasMode, type FitPolicy, type Insets, type Rect } from './layout.js';
+import { mount, type MountedScene, type Registry, type RendererBackend, type SceneNode } from '@trempel/scene';
+import { NO_INSETS, canvas, canvasRect, insetsOf, policyOf, safeShift, type CanvasMode, type FitPolicy, type Insets, type Rect } from './layout.js';
+import { scenePathOf, tableCollections, tableHeirs, tableLoader, type SceneTable } from './scene-table.js';
 
 export interface SceneSource {
-  /** Sterile base SVG source (import '...svg?raw'). */
-  base: string;
+  /** Sterile base SVG source (import '...svg?raw'); omitted when the heir extends another scene (a collection's). */
+  base?: string;
   /** Heir source (.tml.svg). */
   heir?: string;
   /** Contract source (.contract.xml); validated on mount. */
@@ -49,6 +57,8 @@ export interface ScreenDeps {
   /** Trempel collections (v1.1): name → folder URL; `@name/…` hrefs of the scene resolve into them. */
   collections?: Record<string, string>;
   hooks?: ScreenHooks;
+  /** 2.0: the scene table of the kit's Vite plugin — prefabs, collections, project heirs. */
+  table?: SceneTable | null;
 }
 
 export class Screen {
@@ -70,6 +80,7 @@ export class Screen {
   /** Safe-area insets of the canvas after the last layout(), reference units. */
   safe: Insets = { ...NO_INSETS };
   private readonly anchored: Anchored[] = [];
+  private readonly backend: RendererBackend;
 
   constructor(
     readonly name: string,
@@ -79,10 +90,9 @@ export class Screen {
   ) {
     this.mode = mode;
     this.policy = policyOf(mode);
-    const [, , w, h] = viewBoxOf(src.base);
-    this.refW = this.w = w;
-    this.refH = this.h = h;
     this.root.label = `screen:${name}`;
+    const path = deps.table ? scenePathOf(deps.table, src) : null;
+    const table = path ? deps.table! : null;
     this.scene = mount({
       base: src.base,
       heir: src.heir,
@@ -91,9 +101,15 @@ export class Screen {
       registry: deps.registry,
       context: deps.context,
       resolveHref: deps.resolveHref,
-      collections: deps.collections,
+      // From the table: collections as names (the loader sees `@name/…`, the kit's resolver expands
+      // images), the scene's own path, the project heirs.
+      collections: table ? { ...tableCollections(table), ...namesOf(deps.collections) } : deps.collections,
       container: this.root,
+      ...(table ? { loadScene: tableLoader(table), sceneUrl: path!, path: path!, heirs: tableHeirs(table, path!) } : {}),
     });
+    const [, , w, h] = viewBox(this.scene.tree, name);
+    this.refW = this.w = w;
+    this.refH = this.h = h;
     const walk = (n: SceneNode): void => {
       const a = n.attrs;
       const id = a.id;
@@ -109,9 +125,13 @@ export class Screen {
         if (node && a['data-fx'] === 'press') deps.hooks.press(node);
         if (node && a['data-sound']) deps.hooks.sound(node, a['data-sound']);
       }
-      n.children.forEach(walk);
+      // An instance's insides are laid out by its prefab (its box), not by the canvas — only the
+      // scene's own nodes in its slots are the screen's.
+      if (n.instance) (n.instance.slotted ?? []).forEach(walk);
+      else n.children.forEach(walk);
     };
-    walk(parse(src.base));
+    walk(this.scene.tree);
+    this.backend = deps.backend;
   }
 
   /** Node by id (fail loud when missing). */
@@ -150,7 +170,7 @@ export class Screen {
       const sy = a.stretch?.includes('y');
       const [dx, dy] = a.safe ? safeShift(a.ax, a.ay, s) : [0, 0];
       a.node.position.set(sx ? 0 : a.x + ex * a.ax + dx, sy ? 0 : a.y + ey * a.ay + dy);
-      if (sx || sy) resize(a.node, sx ? fit.w : a.w, sy ? fit.h : a.h);
+      if (sx || sy) resize(this.backend, a.node, sx ? fit.w : a.w, sy ? fit.h : a.h);
     }
   }
 
@@ -166,15 +186,26 @@ export class Screen {
   }
 }
 
-function resize(node: Container, w: number, h: number): void {
-  if (node instanceof NineSliceSprite) {
-    node.width = w;
-    node.height = h;
-  } else if (node instanceof Sprite) {
-    if (node.texture.width > 1) {
-      node.width = w;
-      node.height = h;
-    }
+/** The viewBox of the composed scene (a screen needs its reference size). */
+function viewBox(tree: SceneNode, name: string): [number, number, number, number] {
+  const v = (tree.attrs.viewBox ?? '').trim().split(/[\s,]+/).map(Number);
+  if (v.length !== 4 || v.some((n) => !Number.isFinite(n)) || !(v[2] > 0 && v[3] > 0)) throw new Error(`screen "${name}": the scene has no viewBox="0 0 W H" (the reference size of the canvas)`);
+  return v as [number, number, number, number];
+}
+
+/** Collection names as names (`{ ui: '@ui' }`): with the table the kit's resolver expands the URLs. */
+function namesOf(collections: Record<string, string> | undefined): Record<string, string> {
+  return Object.fromEntries(Object.keys(collections ?? {}).map((n) => [n, `@${n}`]));
+}
+
+/**
+ * Stretch a node to w × h: an image through the backend (its box — 9-slice, and since 2.0 a picture
+ * keeps its preserveAspectRatio), a graphic by scale.
+ */
+function resize(backend: RendererBackend, node: Container, w: number, h: number): void {
+  if (node instanceof NineSliceSprite || node instanceof Sprite) {
+    backend.setProp(node, 'width', w);
+    backend.setProp(node, 'height', h);
   } else if (node instanceof Graphics) {
     node.scale.set(1);
     const b = node.getLocalBounds();

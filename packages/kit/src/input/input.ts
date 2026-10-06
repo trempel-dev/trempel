@@ -51,22 +51,29 @@ export class Input {
     for (const h of [...this.handlers]) h(a);
   }
 
-  /** Wire keyboard (window) and swipes/taps (canvas). Called by createGame. */
+  /** Wire keyboard (window) and swipes/taps (canvas). Called by createGame; detach() undoes it (2.0). */
   attach(canvas: HTMLElement, onGesture?: () => void): void {
-    window.addEventListener('keydown', (e) => {
+    this.detach();
+    const key = (e: KeyboardEvent) => {
       onGesture?.();
       const a = keyAction(e.code);
       if (!a) return;
       e.preventDefault();
       if (!e.repeat || a !== 'pause') this.fire(a);
-    });
-    let start: { x: number; y: number; t: number; id: number } | null = null;
-    canvas.addEventListener('pointerdown', (e) => {
+    };
+    // `on`: the gesture began while input was enabled. One that began on a popup is the popup's —
+    // its pointerup (which may close the popup and give the input back) is not a tap of the game.
+    let start: { x: number; y: number; t: number; id: number; on: boolean } | null = null;
+    const down = (e: PointerEvent) => {
       onGesture?.();
-      start = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
-    });
+      start = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, on: this.enabled };
+    };
     const end = (e: PointerEvent) => {
       if (!start || e.pointerId !== start.id) return;
+      if (!start.on) {
+        start = null;
+        return;
+      }
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
       const dir = swipeDirection(dx, dy);
@@ -74,7 +81,24 @@ export class Input {
       else if (performance.now() - start.t < 500 && this.enabled) for (const h of [...this.tapHandlers]) h({ x: e.clientX, y: e.clientY });
       start = null;
     };
+    const cancel = () => (start = null);
+    window.addEventListener('keydown', key);
+    canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointerup', end);
-    canvas.addEventListener('pointercancel', () => (start = null));
+    canvas.addEventListener('pointercancel', cancel);
+    this.detachFn = () => {
+      window.removeEventListener('keydown', key);
+      canvas.removeEventListener('pointerdown', down);
+      canvas.removeEventListener('pointerup', end);
+      canvas.removeEventListener('pointercancel', cancel);
+    };
   }
+
+  /** Unwire what attach() wired and drop every handler (game.destroy()). */
+  detach(): void {
+    this.detachFn?.();
+    this.detachFn = null;
+  }
+
+  private detachFn: (() => void) | null = null;
 }

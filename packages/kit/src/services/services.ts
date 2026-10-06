@@ -519,6 +519,16 @@ export function adoptServices(): Services {
 }
 
 /**
+ * game.destroy(): the registry of a game that is gone stops being current — the next createGame
+ * (and provide() before it) gets a fresh one. Its subscriptions on the bus are dropped by the game.
+ */
+export function releaseServices(s: Services): void {
+  if (current !== s) return;
+  current = new Services();
+  adopted = false;
+}
+
+/**
  * The current registry as an object (`services.get(Wallet)`, `services.mock('wallet', …)`): every
  * member goes to the registry of the running game at the time of the call.
  */

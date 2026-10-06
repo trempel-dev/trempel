@@ -39,7 +39,8 @@ test('boots under CSP without unsafe-eval, SDK lifecycle, saves via saveData, no
   const sfx = refToScreen(vp, ref, 360 + 210, 640 - 230, [0.5, 0.5]);
   await page.mouse.click(sfx.x, sfx.y);
   await page.waitForFunction(() => (window as any).__yt.saved !== '');
-  expect(JSON.parse(await page.evaluate(() => (window as any).__yt.saved))).toMatchObject({ v: 1, sfx: 0, best: 0 });
+  // Kit 2.0: the sound setting is the kit's space of the save file (the game's data is in `game`).
+  expect(JSON.parse(await page.evaluate(() => (window as any).__yt.saved))).toMatchObject({ trempel: 2, sfx: 0 });
 
   // Platform pause/resume/audio callbacks don't throw.
   await page.evaluate(() => {

@@ -26,7 +26,8 @@ const game = await createGame({
   // Reactive state: scenes bind to it (`state.score`), code writes to it. The kit's result screen
   // reads won / stars / score / best.
   state: { score: 0, time: round.time, best: 0, won: false, stars: 0 },
-  // Saved through the platform (localStorage on web, ytgame saveData on YouTube). The kit adds sfx/music.
+  // Saved through the platform (localStorage on web, ytgame saveData on YouTube). The kit keeps its own
+  // sfx / music apart in the same save file.
   save: { version: 1, defaults: { best: 0 } },
   i18n: TEXTS,
   screens: {

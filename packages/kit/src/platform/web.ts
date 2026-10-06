@@ -43,13 +43,19 @@ export function createWebPlatform(opts: WebPlatformOptions = {}): Platform {
   const key = opts.saveKey ?? 'trempel.save';
   const pause: (() => void)[] = [];
   const resume: (() => void)[] = [];
+  const visibility = () => {
+    for (const cb of document.hidden ? pause : resume) cb();
+  };
 
   return {
     name: 'web',
     async init() {
-      document.addEventListener('visibilitychange', () => {
-        for (const cb of document.hidden ? pause : resume) cb();
-      });
+      document.addEventListener('visibilitychange', visibility);
+    },
+    dispose() {
+      document.removeEventListener('visibilitychange', visibility);
+      pause.length = 0;
+      resume.length = 0;
     },
     firstFrameReady() {},
     gameReady() {},

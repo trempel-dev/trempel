@@ -31,6 +31,8 @@ export class Ads {
     const now = this.hooks.now?.() ?? 0;
     if (this.showing || !this.available || now - this.lastInterstitial < (this.hooks.cooldown ?? 60)) return false;
     await this.run(() => this.platform.showInterstitial());
+    // Ads went away while it was asked for (the host said so): not shown, no cooldown.
+    if (!this.available) return false;
     this.lastInterstitial = this.hooks.now?.() ?? 0;
     return true;
   }

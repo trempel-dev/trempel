@@ -62,7 +62,9 @@ test('menu → game → taps score → pause/resume → win → best and coins s
   await waitGame(page);
   expect((await state(page)).best).toBe(10);
   expect(await probe(page, 'coins')).toBe('10');
-  expect(await probe(page, 'save')).toMatchObject({ svc: { wallet: { balance: 10 } } });
+  // The wallet keeps its balance in the kit's space of the save file (kit 2.0: not in game.save.data).
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('trempel.save') ?? '{}'));
+  expect(stored).toMatchObject({ trempel: 2, svc: { wallet: { balance: 10 } }, game: { best: 10 } });
   expect(errors).toEqual([]);
 });
 

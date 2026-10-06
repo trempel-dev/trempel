@@ -19,8 +19,20 @@ export class Screens {
   readonly layer = new Container();
   private readonly entries = new Map<string, ScreenEntry>();
   private currentName: string | null = null;
+  private switching = false;
+  private isBlocked = false;
   /** Called after a switch (state.screen, probes). */
   onChange: (name: string) => void = () => {};
+
+  /** 2.0: the screens take no input (an open popup over them); a switch blocks it too. */
+  get blocked(): boolean {
+    return this.isBlocked;
+  }
+
+  set blocked(v: boolean) {
+    this.isBlocked = v;
+    this.layer.interactiveChildren = !v && !this.switching;
+  }
 
   constructor(
     private readonly tweens: Tweens,
@@ -52,6 +64,7 @@ export class Screens {
     const next = this.entries.get(name);
     if (!next) throw new Error(`screen "${name}" not found (known: ${[...this.entries.keys()].join(', ')})`);
     if (this.currentName === name) return;
+    this.switching = true;
     this.layer.interactiveChildren = false;
     try {
       if (next.bundle) await this.loadBundle(next.bundle);
@@ -76,7 +89,8 @@ export class Screens {
       }
       root.alpha = 1;
     } finally {
-      this.layer.interactiveChildren = true;
+      this.switching = false;
+      this.layer.interactiveChildren = !this.isBlocked;
     }
   }
 }

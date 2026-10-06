@@ -13,13 +13,19 @@
 //     metadata (ComfyUI workflows / prompts in PNG text chunks, EXIF / XMP, C2PA — ./metadata.ts),
 //     then the metadata gate: anything left, or a generation sidecar (*.png.json…) — E_ASSET_METADATA,
 //     the build fails. The dev server cleans nothing;
-//   - dev server: __TREMPEL_DEV__ is true — a contract re-declared by HMR replaces the old one.
+//   - dev server: __TREMPEL_DEV__ is true — a contract re-declared by HMR replaces the old one;
+//   - 2.0, every target (./scenes.ts): the game's scene documents for the kit's screens — prefabs,
+//     collections of .trempel/project.mdz, project heirs — as a table injected before the game's
+//     code (the game configures nothing; the collections' folders join the dev server's fs.allow,
+//     pixi.js is pre-bundled); `import clips from './anim/x.md?clips=<scene>'` — md clips compiled at
+//     build time and checked against the scene, a bad clip fails the build with its codes.
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Plugin, UserConfig } from 'vite';
 import { runGates, SDK_URL } from './gates.js';
 import { cleanAssets, metadataError, scanMetadata, type CleanResult } from './metadata.js';
+import { scenesPlugin } from './scenes.js';
 
 export interface TrempelKitPluginOptions {
   /** Globs (relative to the youtube dist) loaded after gameReady — excluded from the initial bundle. */
@@ -125,10 +131,12 @@ export function trempelKit(opts: TrempelKitPluginOptions = {}): Plugin[] {
     },
   };
 
-  return [config, sdk, sterile, gates];
+  return [config, sdk, sterile, ...scenesPlugin(), gates];
 }
 
 export { runGates, scanSterility, globRe, oneOfGroup, SDK_URL, LIMITS } from './gates.js';
 export type { GateOptions, GateResult, SterilityHit } from './gates.js';
 export { cleanAssets, scanMetadata, metadataError, stripPng, stripJpeg, stripWebp, stripImage, METADATA_CODE } from './metadata.js';
+export { collectScenes, tableModule, composeOnDisk } from './scenes.js';
+export type { SceneFiles } from './scenes.js';
 export type { CleanResult, CleanedFile, MetadataHit, Stripped } from './metadata.js';

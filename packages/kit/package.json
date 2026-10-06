@@ -1,6 +1,6 @@
 {
   "name": "@trempel/kit",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "Trempel kit: a game kit on top of Trempel scenes — services (contracts with a mandatory mock: wallet, iap, leaderboard, your own), platform adapters (web, YouTube Playables, mock), game loop, tweens and clips, event player, state machine, event bus, screens and popups, layout (fit policies, safe area), UI components and skins, a default skin, bundle loader, sound, particles, save, i18n, ads, QA helpers, build gates.",
   "type": "module",
   "license": "MIT",
@@ -39,7 +39,11 @@
       "types": "./dist/cli/skin.d.ts",
       "import": "./dist/cli/skin.js"
     },
-    "./skins/*": "./skins/*"
+    "./skins/*": "./skins/*",
+    "./internal/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
   },
   "bin": {
     "trempel-skin": "dist/cli/skin.js"

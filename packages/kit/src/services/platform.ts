@@ -93,8 +93,13 @@ export function platformProviders(p: Platform): Provision[] {
         (ctx) => {
           ads = ctx as never;
           ctx.state.available = p.adsAvailable();
+          // 2.0: the host changes availability during the game — the sticky state follows at once.
+          p.onAdsChange?.(() => syncAds());
           return {
             async interstitial() {
+              // A host that turned ads off without telling: never show after it (TRM-8a).
+              syncAds();
+              if (!p.adsAvailable()) return;
               try {
                 await p.showInterstitial();
               } finally {

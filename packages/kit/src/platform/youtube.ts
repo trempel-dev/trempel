@@ -54,8 +54,15 @@ export function createYoutubePlatform(opts: YoutubePlatformOptions = {}): Platfo
   const rewardId = opts.rewardId ?? 'reward';
   let lang = 'en';
   let memorySave: string | null = null;
-  // Ads stay "available" until the SDK tells us otherwise.
+  // Ads stay "available" until the SDK tells us otherwise (it has no availability event: an
+  // API_UNAVAILABLE error is the signal — the kit hears it at once through onAdsChange).
   let adsOk = typeof yt?.ads?.requestRewardedAd === 'function';
+  const adsChange: ((on: boolean) => void)[] = [];
+  const noAds = () => {
+    if (!adsOk) return;
+    adsOk = false;
+    adsChange.forEach((cb) => cb(false));
+  };
 
   return {
     name: 'youtube',
@@ -105,12 +112,13 @@ export function createYoutubePlatform(opts: YoutubePlatformOptions = {}): Platfo
     },
     language: () => lang,
     adsAvailable: () => adsOk,
+    onAdsChange: (cb) => void adsChange.push(cb),
     async showInterstitial() {
       if (!adsOk || !yt?.ads) return;
       try {
         await yt.ads.requestInterstitialAd();
       } catch (e) {
-        if (unavailable(e)) adsOk = false;
+        if (unavailable(e)) noAds();
       }
     },
     async showRewarded(): Promise<RewardedResult> {
@@ -118,7 +126,7 @@ export function createYoutubePlatform(opts: YoutubePlatformOptions = {}): Platfo
       try {
         return (await yt.ads.requestRewardedAd(rewardId)) ? 'rewarded' : 'closed';
       } catch (e) {
-        if (unavailable(e)) adsOk = false;
+        if (unavailable(e)) noAds();
         return 'failed';
       }
     },

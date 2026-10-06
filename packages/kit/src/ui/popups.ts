@@ -4,6 +4,10 @@
 // request waits in the queue and opens after a close. `blocking` is true while any popup is open
 // (the game pauses its timers on it if it wants).
 //
+// 2.0 input: a popup takes the input while it is OPEN — `isOpen()` (not while it closes): the top
+// open popup alone is interactive, the popups under it are not (createGame also blocks the screens
+// under them); a closing popup takes nothing — its fading dim does not eat the next click.
+//
 // Animations (DOTween timings of the donor): `scale` — dim alpha 0 → its own alpha in 0.2 s
 // OutQuad, content 0.01 → 1 in 0.3 s OutBack; hide: content → 0.01 in 0.2 s, dim → 0 in 0.2 s,
 // gone after 0.301 s. `top` — content slides in from above (canvas height + 20) in 0.3 s OutQuad,
@@ -72,6 +76,11 @@ export class Popups {
     return this.open.some((o) => !o.closing && (!name || o.def.name === name));
   }
 
+  /** A show of `name` waits in the queue (asked while it was open or closing). */
+  queued(name: string): boolean {
+    return this.queue.includes(name);
+  }
+
   /** Any popup open. */
   get blocking(): boolean {
     return this.open.length > 0;
@@ -86,7 +95,7 @@ export class Popups {
   show(name: string): void {
     const def = this.def(name);
     if (this.open.some((o) => o.def.name === name)) {
-      this.queue.push(name);
+      if (!this.queue.includes(name)) this.queue.push(name);
       return;
     }
     const { screen } = def;
@@ -96,6 +105,7 @@ export class Popups {
     root.visible = true;
     def.onShow?.();
     this.open.push({ def, closing: false });
+    this.gate();
     this.onShowSound();
     const dim = screen.scene.byId.get('dim') as Container | undefined;
     const content = screen.scene.byId.get('content') as Container | undefined;
@@ -122,6 +132,7 @@ export class Popups {
     const o = this.open.find((x) => x.def.name === name && !x.closing);
     if (!o) return;
     o.closing = true;
+    this.gate();
     this.onChange();
     const { def } = o;
     const { screen } = def;
@@ -149,6 +160,7 @@ export class Popups {
     }
     if (dim) dim.alpha = this.dimAlpha.get(name) ?? 1;
     this.open.splice(this.open.indexOf(o), 1);
+    this.gate();
     def.onHidden?.();
     this.onChange();
     const next = this.queue.findIndex((q) => !this.open.some((x) => x.def.name === q));
@@ -175,6 +187,23 @@ export class Popups {
     }
     this.open.length = 0;
     this.queue.length = 0;
+    this.gate();
     this.onChange();
+  }
+
+  /** Who takes the input: the top open popup only; closing ones and the ones under it — nothing. */
+  private gate(): void {
+    const top = [...this.open].reverse().find((o) => !o.closing) ?? null;
+    for (const o of this.open) {
+      const on = o === top;
+      o.def.screen.root.interactiveChildren = on;
+      o.def.screen.root.eventMode = on ? 'passive' : 'none';
+    }
+    for (const d of this.defs.values()) {
+      if (!this.open.some((o) => o.def === d)) {
+        d.screen.root.interactiveChildren = true;
+        d.screen.root.eventMode = 'passive';
+      }
+    }
   }
 }

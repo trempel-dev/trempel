@@ -28,6 +28,13 @@ export interface Platform {
   /** BCP-47 language, e.g. "en", "ru-RU". */
   language(): string;
   adsAvailable(): boolean;
+  /**
+   * 2.0: availability of ads changed on the host (mock `host.setAds`, the YouTube SDK saying ads are
+   * unavailable here) — the kit's `ads` contract follows at once. Optional for custom adapters.
+   */
+  onAdsChange?(cb: (available: boolean) => void): void;
+  /** 2.0: drop what the adapter hooked into the page (listeners) — game.destroy(). Optional. */
+  dispose?(): void;
   showInterstitial(): Promise<void>;
   /**
    * 'rewarded' — watched, give the reward; 'closed' — shown but not earned; 'failed' — not shown
