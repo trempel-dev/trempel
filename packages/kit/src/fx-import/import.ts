@@ -174,15 +174,11 @@ export function importUnity(opts: ImportOptions): ImportResult {
         configs.push({ key, cls: c.cls, ...c.config });
         if (main?.texture) textures.set(c.config.texture, main.texture);
         if (trail?.texture && c.config.trails?.texture) textures.set(c.config.trails.texture, trail.texture);
-        if (main && !main.texture && main.builtin === null && main.path.startsWith('builtin:')) {
-          c.unsupported.splice(c.unsupported.indexOf('material without _MainTex'), 1);
-          c.approx.push(`${main.shader} → the kit's circle`);
-        }
         systems.push({
           key,
           effect: name,
           asset: project.rel(file),
-          cls: c.unsupported.length ? 'hard' : c.approx.length ? 'manual' : 'auto',
+          cls: c.cls,
           active: activeIn(go),
           space,
           unit,
@@ -191,7 +187,6 @@ export function importUnity(opts: ImportOptions): ImportResult {
           approx: c.approx,
           unsupported: c.unsupported,
         });
-        configs[configs.length - 1].cls = systems[systems.length - 1].cls;
       }
       effects[name] = configs;
     }

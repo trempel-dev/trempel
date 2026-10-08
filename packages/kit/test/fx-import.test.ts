@@ -12,7 +12,7 @@ import { derivedId, setPath, UnityProject } from '../src/fx-import/project.js';
 import { importUnity, writeImport } from '../src/fx-import/import.js';
 import { compareConfigs, compareMd, close } from '../src/fx-import/compare.js';
 import { decodeTga, encodePng, texturePng } from '../src/fx-import/image.js';
-import { readMinMax, readGradient, shaderBlendByName, textureName, materialBlend } from '../src/fx-import/shuriken.js';
+import { convertSystem, readMinMax, readGradient, shaderBlendByName, textureName, materialBlend } from '../src/fx-import/shuriken.js';
 import { main } from '../src/cli/fx-import.js';
 import { isPng, stripPng } from '../src/vite/metadata.js';
 
@@ -91,6 +91,20 @@ describe('fx-import: Shuriken values', () => {
     expect(shaderBlendByName('Hidden/Wobble')).toBe(null);
     expect(textureName('Assets/Tex/CFX_T_Star Add.png')).toBe('cfx_t_star_add');
     expect(materialBlend({ path: 'x', builtin: 200, shader: 'Particles/Additive', texture: null, colors: { _TintColor: [0.5, 0.5, 0.5, 0.25] } })).toEqual({ blend: 'add', tint: [1, 1, 1, 0.5], custom: false });
+  });
+});
+
+describe('fx-import: materials', () => {
+  const ctx = { unit: [100, 100] as [number, number], pos: [0, 0] as [number, number], trailMaterial: null, rendered: true, space: 'world' as const };
+  const ps = { lengthInSec: '1', InitialModule: { enabled: '1', startSize: '1' } };
+  it("Unity's built-in particle material: the kit's circle, approximated (not 'hard'); no material at all — hard", () => {
+    const c = convertSystem(ps, { m_RenderMode: '0' }, { ...ctx, material: { path: 'builtin:10301', builtin: null, shader: 'built-in material 10301', texture: null, colors: {} } });
+    expect(c.config.texture).toBe('circle');
+    expect(c.cls).toBe('manual');
+    expect(convertSystem(ps, null, { ...ctx, material: null }).cls).toBe('hard');
+    // A project shader known by its name; an unknown one is not played.
+    expect(convertSystem(ps, null, { ...ctx, material: { path: 'm.mat', builtin: null, shader: 'UI/Additive', texture: 'Assets/t.png', colors: {} } }).config.blend).toBe('add');
+    expect(convertSystem(ps, null, { ...ctx, material: { path: 'm.mat', builtin: null, shader: 'Hidden/Wobble', texture: 'Assets/t.png', colors: {} } }).unsupported).toContain('shader Hidden/Wobble');
   });
 });
 

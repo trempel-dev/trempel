@@ -395,7 +395,10 @@ export function convertSystem(ps: YamlMap, renderer: YamlMap | null, ctx: System
   let tint: RGBA = [1, 1, 1, 1];
   let texture = 'circle';
   if (!m) notes.unsupported.add('no material — the kit draws a white circle');
-  else {
+  else if (m.path.startsWith('builtin:')) {
+    // Unity's built-in particle material (Default-Particle): a soft white dot, alpha blended.
+    notes.approx.add(`${m.shader} (Unity's default particle) → the kit's circle, blend normal`);
+  } else {
     const b = materialBlend(m);
     if (b.blend === null) notes.unsupported.add(`shader ${m.shader}`);
     else {
