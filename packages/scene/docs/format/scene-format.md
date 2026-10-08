@@ -9,7 +9,7 @@
 > `error=E_CODE` must fail with exactly that code, every other block must pass.
 
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 2.0 (format 1.3). The examples of this document
+npm package `@trempel/scene` 2.1 (format 1.3). The examples of this document
 are checked by tests at every build.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes

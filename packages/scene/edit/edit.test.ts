@@ -320,7 +320,9 @@ describe('edit — in the package only as a library (@trempel/scene/edit)', () =
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as Record<string, Record<string, unknown>>;
     expect(pkg.dependencies.moveable).toBeUndefined();
     expect(pkg.devDependencies.moveable).toBeUndefined();
-    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md', 'CHANGELOG.md']);
+    // 2.1: view/ and src/ ship for the trempel-view bin — the editor page's dev server (edit/) does not.
+    expect(pkg.files).toEqual(['dist', 'view', '!view/**/*.test.*', '!view/tsconfig.json', 'src', 'LICENSE', 'README.md', 'CHANGELOG.md']);
+    expect((pkg.files as unknown as string[]).some((f) => f.startsWith('edit'))).toBe(false);
     expect(JSON.parse(readFileSync(new URL('../editor/tsconfig.build.json', import.meta.url), 'utf8')).include.join()).not.toMatch(/edit\//);
     expect(pkg.exports['./edit']).toEqual({ types: './dist/edit/types/edit/lib.d.ts', import: './dist/edit/index.js' });
     const lib = readFileSync(new URL('./lib.ts', import.meta.url), 'utf8');

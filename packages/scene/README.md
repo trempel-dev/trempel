@@ -75,6 +75,8 @@ npm run check -- packages/scene/examples/motion          # validate scenes and c
 npm run view:shot -- packages/scene/examples/motion --out shot.png   # a deterministic headless PNG
 ```
 
+**A live snapshot without the repository.** `npx -p @trempel/scene -p vite -p playwright trempel-view view:shot scenes/menu.svg --out menu.png [--settle 2] [--clip intro --t 0.5]` — the same deterministic headless PNG + JSON of errors (in a project with `vite` and `playwright` installed: `npx trempel-view view:shot …`; once: `npx playwright install chromium`).
+
 **Open a scene anywhere.** `npm run flatten -- packages/scene/examples/prefabs/menu.svg --out menu.svg --embed` (bin `trempel-flatten` in the package) turns a scene — heir, prefabs, 9-slice, slots, `@skin/…` collection links — into one vanilla SVG that any browser and Figma draw.
 
 ## License

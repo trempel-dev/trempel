@@ -204,14 +204,17 @@ describe('view — session', () => {
   });
 });
 
-describe('view — stays out of the package', () => {
-  it('dist builds from src only; Playwright is a dev dependency', async () => {
+describe('view — in the package only as the trempel-view bin (2.1)', () => {
+  it('dist builds from src only; view/ and src/ ship for the bin; Vite and Playwright are optional peers, not dependencies', async () => {
     const { readFileSync } = await import('node:fs');
     const read = (p: string): Record<string, any> => JSON.parse(readFileSync(new URL(p, new URL('..', import.meta.url)), 'utf8'));
     expect(read('tsconfig.build.json').include).toEqual(['src']);
     const pkg = read('package.json');
-    expect(pkg.files).toEqual(['dist', 'LICENSE', 'README.md', 'CHANGELOG.md']); // публикация (d4f6e37): + лицензия и README
+    expect(pkg.files).toEqual(['dist', 'view', '!view/**/*.test.*', '!view/tsconfig.json', 'src', 'LICENSE', 'README.md', 'CHANGELOG.md']);
+    expect(pkg.bin).toMatchObject({ 'trempel-view': 'view/bin.mjs', scene: 'view/bin.mjs' });
     expect(pkg.dependencies.playwright).toBeUndefined();
+    expect(pkg.dependencies.vite).toBeUndefined();
+    expect(pkg.peerDependenciesMeta).toMatchObject({ playwright: { optional: true }, vite: { optional: true } });
     // dev tools come from the monorepo root (TRM-7)
     expect(read('../../package.json').devDependencies.playwright).toBeDefined();
   });

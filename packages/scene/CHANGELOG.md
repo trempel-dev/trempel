@@ -2,6 +2,18 @@
 
 The scene format has its own changelog at the end of [docs/format/scene-format.md](docs/format/scene-format.md).
 
+## 2.1.0
+
+Additions only; the format stays 1.3.
+
+- **`trempel-view` — the viewer's tools as a bin of the package** (`view/bin.mjs`; also the package's
+  default bin, so `npx @trempel/scene view:shot …` works): `trempel-view view:shot <scene> [--out]
+  [--settle] [--clip --t]` is the same deterministic headless snapshot + JSON of errors as
+  `npm run view:shot` in the repository, `trempel-view view <folder>` — the viewer. For agents with
+  Node (Codex and others) without cloning the repository. Vite and Playwright are optional peers: when
+  one is missing — `E_CLI` with the command that installs it. The package now ships `view/` and
+  `src/` (the viewer's dev server serves the sources).
+
 ## 2.0.0
 
 The major version is for the API: the stable entry is narrow now. The format is **1.3**: additions
