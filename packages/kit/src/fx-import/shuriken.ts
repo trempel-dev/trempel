@@ -117,6 +117,8 @@ export interface RawMinMax {
 
 export function readMinMax(v: YamlValue | undefined): RawMinMax {
   if (typeof v === 'string') return { state: 0, scalar: num(v), minScalar: num(v), curveScalar: num(v), max: [], min: [] };
+  // Not serialized (an older file without the field): zero.
+  if (v === undefined) return { state: 0, scalar: 0, minScalar: 0, curveScalar: 0, max: [], min: [] };
   const m = map(v);
   const max = curveOf(m.maxCurve);
   const min = curveOf(m.minCurve);

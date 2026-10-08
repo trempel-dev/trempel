@@ -75,6 +75,7 @@ Transform:
 describe('fx-import: Shuriken values', () => {
   it('min-max curves (the four modes, legacy constants), gradients, blends, names', () => {
     expect(readMinMax('3')).toMatchObject({ state: 0, scalar: 3 });
+    expect(readMinMax(undefined)).toMatchObject({ state: 0, scalar: 0, minScalar: 0 }); // a field the file does not have
     // Legacy (no minScalar): constants = scalar × key0 of the curves; curves keep the scalar.
     const legacy = readMinMax({ minMaxState: '3', scalar: '2', maxCurve: { m_Curve: [{ time: '0', value: '0.5' }] }, minCurve: { m_Curve: [{ time: '0', value: '0.25' }] } });
     expect(legacy).toMatchObject({ scalar: 1, minScalar: 0.5, curveScalar: 2 });
