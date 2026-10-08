@@ -8,7 +8,7 @@
 //
 // Genre-agnostic: an album page, a book, a card turned over (bend 0). The kit turns screens with it
 // (ui/transitions.ts: game.screens.show(name, { transition: { leaf } }), page turns and drag inside a
-// screen). Taken from A World of Differences (DIF-2) and the stand of gamekit.dev/references/page-flip.md.
+// screen).
 //
 // Portrait: the spine is the left edge of the column, the left page is off screen — the leaf is
 // wholly gone at some phase < 1 (goneAt: ~0.5 for a hard leaf, ~0.7 for a soft one); a forward turn
