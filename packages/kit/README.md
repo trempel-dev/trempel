@@ -9,7 +9,8 @@ Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`
 - **Screens, popups, overlays** — Trempel scenes (base SVG + heir + contract), with prefabs (`<use href>`), collections and project heirs — the Vite plugin collects the scenes, the game configures nothing; layout by fit policy with safe area and a playfield; a popup takes the input while it is open; screen templates in `ui/scenes` (`UI_SCENES`). `game.destroy()` takes the game down.
 - **UI kit** — components (`ui-button`, `ui-toggle`, `ui-panel`, `ui-progress`, `ui-slider`, `ui-stars`…) drawn from a skin; `trempel-skin` measures a skin's art into `skin.json`.
 - **Default skin** — prefabs and art in `skins/default/ui`, used as a Trempel collection: `$skin: npm:@trempel/kit/skins/default/ui` in `.trempel/project.mdz`, then `href="@skin/button.svg"` in scenes.
-- **Loop and time** — one game loop with injectable time and pause channels; tweens, Trempel clips, an event player, a state machine, an event bus; particles; sound over zvuk with procedural placeholder sounds.
+- **Loop and time** — one game loop with injectable time and pause channels; tweens, Trempel clips, an event player, a state machine, an event bus; sound over zvuk with procedural placeholder sounds (volume / pitch in the table, popup sounds, a click silent when it opened a popup, no lag on the first tap).
+- **Transitions and effects** — `game.show(name, { transition: { leaf: { dir, look: 'hard' | 'soft' } } })` turns a screen as a page (`PageLeaf`, by snapshots; a function transition for anything else), `game.transitions.turn()` / `.drag()` turn pages inside a screen; particles in the Unity Shuriken model with trails and a lazy effects table (`createGame({ fx: { effects, textures } })`); `trempel-fx-import` converts Unity particle systems straight from a Unity project (prefabs / scenes, nested prefabs, materials and textures by GUID) with a report auto / manual / hard.
 - **Build** — `@trempel/kit/vite`: `plugins: [trempelKit()]`; it injects the game's scene table (prefabs, collections of `.trempel/project.mdz`, project heirs) and compiles md clips — `import clips from './anim/win.md?clips=popup-win'` is checked against the scene, a bad clip fails the build; every build rewrites the bundle's images without metadata (ComfyUI workflows and prompts in PNG text chunks, EXIF / XMP, C2PA — no re-encoding, the pixels stay bit-identical) and fails with `E_ASSET_METADATA` on anything left or on generation sidecars (`*.png.json`…); `vite build --mode youtube` also runs the Playables gates (size, sterility, no-eval) and writes `build-report.md`. `@trempel/kit/e2e` — Playwright helpers.
 
 ## Entries
@@ -17,6 +18,14 @@ Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`
 `@trempel/kit` — the stable API: `createGame` and its options and types, the types of the game's members, the services and the kit's contracts, the UI components and the skin. `@trempel/kit/vite`, `@trempel/kit/testing`, `@trempel/kit/e2e`, `@trempel/kit/skin-cli`. Everything else is `@trempel/kit/internal/<module>` (no stability promise) — see CHANGELOG.md 2.0.0.
 
 The save: `game.save` is the game's own data; the kit keeps the sound settings and the services' store apart in the same save file — the game cannot overwrite them.
+
+## Effects from Unity
+
+```bash
+npx trempel-fx-import ../MyUnityGame --out src/fx/unity [--only PopupWin/] [--ppu 100] [--compare old-configs.json]
+```
+
+`effects.json` goes to `createGame({ fx: { effects, textures } })` as is (`textures`: texture name → URL, e.g. `import.meta.glob('./fx/unity/textures/*.png')`); `report.md` lists every system: `auto` — played exactly, `manual` — approximated (what), `hard` — something it uses is not played (what).
 
 ## Install
 

@@ -21,9 +21,9 @@ export type { Platform, RewardedResult } from './platform/types.js';
 export type { GameLoop, Clock, UpdateFn } from './time/loop.js';
 export type { Tweens, Ease, EaseName, TweenOptions } from './anim/tweens.js';
 export type { Clips, ClipPlayOptions, AnimClip, Handle } from './anim/clips.js';
-export type { Fx, Effect, EffectSpec, FxPlayOptions } from './fx/fx.js';
-export type { ParticleConfig } from './fx/types.js';
-export type { Sound, SoundSource } from './audio/sound.js';
+export type { Fx, Effect, EffectSpec, FxPlayOptions, FxTables } from './fx/fx.js';
+export type { ParticleConfig, TrailConfig } from './fx/types.js';
+export type { Sound, SoundSource, SoundEntry } from './audio/sound.js';
 export type { SynthSpec, SynthPreset } from './audio/synth.js';
 export type { Save, SaveOptions } from './data/save.js';
 export type { I18n, Strings } from './data/i18n.js';
@@ -32,11 +32,16 @@ export type { Input, InputAction, Dir, TapEvent } from './input/input.js';
 export type { EventBus, BusHandler } from './flow/bus.js';
 export type { Loader, AssetSpec, BundleMap } from './assets/loader.js';
 export type { Screen } from './ui/screen.js';
-export type { Screens } from './ui/screens.js';
+export type { Screens, ShowOptions } from './ui/screens.js';
+export type { Transitions, ScreenTransition, LeafOptions, TransitionFn, TransitionContext, PageDragOptions, PageTarget } from './ui/transitions.js';
 export type { Popups, PopupAnim, PopupLayer } from './ui/popups.js';
 export type { Overlays, OverlayHide, OverlayAnim } from './ui/overlays.js';
 export type { Backdrop, BackdropOptions } from './ui/backdrop.js';
 export type { CanvasMode, Rect, Insets } from './ui/layout.js';
+
+// ---- 2.1: the page leaf (fx) — genre-agnostic: a page, a cover, a card turned over --------------------
+export { PageLeaf, LEAF_HARD, LEAF_SOFT } from './fx/page-leaf.js';
+export type { LeafLook, LeafLookName } from './fx/page-leaf.js';
 
 // ---- services: contracts with a mandatory mock ---------------------------------------------------
 export { contract, extend, adapt, sticky, once, Services, ServiceError, services, inject, listen, provide, currentServices } from './services/index.js';

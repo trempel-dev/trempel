@@ -2,7 +2,7 @@
 // dynamic import that the youtube build folds away (the build gate checks `__trempel` is absent).
 //
 //   window.__trempel       — read-only probe for e2e: state, kit, save, services, current screen/popup,
-//                            node centre in screen px, fire(input), step/advance time.
+//                            node centre in screen px, fire(input), step/advance time, the transition.
 //   window.__trempel.cheats — only with ?cheat=1: the game's cheats (createGame({ cheats })).
 //   game.probe({ name: fn }) — the game's own read-only probes (genre: level → screen, zoom…),
 //                            merged in; a name the kit already has fails loud.
@@ -43,6 +43,8 @@ export function installProbe(game: Game<object, object>, cheats: Record<string, 
     relayout: () => game.layout(),
     /** Contracts: implementation, state, mock modes (services). */
     services: () => game.services.info(),
+    /** 2.1: the snapshot transition now: running, the leaf's phase, leaf / fade, snapshot textures alive. */
+    transition: () => game.transitions.info,
   };
   const kitNames = new Set(Object.keys(probe));
   const merge = (more: ProbeExtras): void => {

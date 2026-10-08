@@ -36,6 +36,7 @@ import { createPlatform } from './platform/index.js';
 import { GameLoop } from './time/loop.js';
 import { Backdrop } from './ui/backdrop.js';
 import { KitBackend, type KitBackendOptions } from './ui/kit-backend.js';
+import { Transitions } from './ui/transitions.js';
 import { platformFacade, platformProviders } from './services/platform.js';
 import { adoptServices, parseModeQuery, releaseServices } from './services/services.js';
 import { AdsService, KIT_CONTRACTS } from './services/standard.js';
@@ -175,7 +176,7 @@ export async function createGame<S extends object, D extends object = Record<str
   // ---- language, sound, save (the kit's space and the game's) -----------------------------------
   const i18n = new I18n(withKitStrings(cfg.i18n), platform.language());
   kit.lang = i18n.lang;
-  const sound = new Sound({ sounds: cfg.sounds, music: cfg.music, resolve });
+  const sound = new Sound({ sounds: cfg.sounds, music: cfg.music, resolve, quietClicks: cfg.quietClicks });
   disposers.push(() => sound.destroy());
   const saves = await loadSaves<D>(platform, cfg.save);
   services.store = saves.store;
@@ -189,6 +190,7 @@ export async function createGame<S extends object, D extends object = Record<str
   // ---- the runtime pieces ------------------------------------------------------------------------
   const state = reactive(cfg.state);
   const fx = new Fx(app.renderer as Renderer, resolve);
+  if (cfg.fx) fx.tables(cfg.fx);
   loop.add((dt) => fx.update(dt), 'ui');
   disposers.push(() => fx.clear());
   const backend = makeBackend(cfg.backend, { fontFamily: cfg.fontFamily, skin, slices: cfg.slices });
@@ -261,15 +263,28 @@ export async function createGame<S extends object, D extends object = Record<str
   overlays.onChange = (name, open) => bus.emit(open ? 'overlay:show' : 'overlay:hide', { name });
   popups.onChange = () => {
     kit.popup = popups.top() ?? '';
+    sound.popupMark();
     host!.gate();
   };
   screens.onChange = (name) => {
     kit.screen = name;
     bus.emit('screen:show', { name });
   };
+  // 2.1: transitions by snapshots — a layer over the screens, under the popups.
+  const transitions = new Transitions({
+    renderer: app.renderer as Renderer,
+    onFrame: (fn) => loop.add(fn, 'ui'),
+    live: screens.layer,
+    busy: (on) => host!.setBusy(on),
+    canvas: app.canvas,
+  });
+  if (webBuild() && new URLSearchParams(location.search).get('transition') === 'fade') transitions.fallback = true;
+  screens.transitions = transitions;
+  disposers.push(() => transitions.destroy());
   app.stage.addChildAt(screens.layer, 0);
-  app.stage.addChildAt(popups.layers.over, 1);
-  app.stage.addChildAt(popups.layers.default, 2);
+  app.stage.addChildAt(transitions.layer, 1);
+  app.stage.addChildAt(popups.layers.over, 2);
+  app.stage.addChildAt(popups.layers.default, 3);
   app.stage.addChildAt(backdrop.view, 0);
   app.stage.addChild(overlays.layer);
   app.renderer.on('resize', () => {
@@ -303,10 +318,10 @@ export async function createGame<S extends object, D extends object = Record<str
   /** A pause asked for again while the pause popup was closing (TRM-8b): it stays paused. */
   const pauseAgain = () => popups.isOpen('pause') || popups.queued('pause');
   game = {
-    state, kit, platform, app, loop, tweens, clips, fx, sound, save: saves.game, i18n, t: i18n.t, ads, input, bus, services, loader, screens, popups, overlays, backend, context, skin, playfield: layout.playfield, backdrop,
-    async show(name) {
+    state, kit, platform, app, loop, tweens, clips, fx, sound, save: saves.game, i18n, t: i18n.t, ads, input, bus, services, loader, screens, popups, overlays, transitions, backend, context, skin, playfield: layout.playfield, backdrop,
+    async show(name, opts) {
       host!.mountLazy(name);
-      await screens.show(name);
+      await screens.show(name, opts ?? {});
     },
     popup(name) {
       popups.show(name);
@@ -378,6 +393,8 @@ export async function createGame<S extends object, D extends object = Record<str
   loading.destroy();
   if (cfg.ready) await cfg.ready(game);
   platform.gameReady();
+  // 2.1: the browser's audio start (~150 ms the first time) now, under the start screen — not in the first tap.
+  setTimeout(() => !destroyed && sound.warm(), 0);
 
   if (webBuild()) {
     const { installProbe } = await import('./qa/probe.js');

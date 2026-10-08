@@ -1,6 +1,5 @@
 // types.ts — ParticleConfig: the particle format of the kit — Unity Shuriken modules, normalized
-// (a config converted from Shuriken plays here unchanged, except `trails`, not supported by the
-// kit runtime — warned once).
+// (a config converted from Shuriken — trempel-fx-import — plays here unchanged; 2.1: trails too).
 //
 // Units: one "unit" = `unit` pixels of the space the effect is mounted in. Curves: [[t, v], …]
 // linear. Angles in radians. y is DOWN. Bookkeeping fields of the converter (key, feature, cls)
@@ -53,13 +52,36 @@ export interface ParticleConfig {
   limitVelocity?: { limit: number; dampen: number };
   sheet?: { tilesX: number; tilesY: number; frameOverTime: Curve; mul: number; cycles: number };
   render: { mode: 'billboard' | 'stretch'; lengthScale: number; velocityScale: number };
-  /** Shuriken trails — not played by the kit runtime. */
-  trails?: unknown;
+  /** 2.1: Shuriken trails — a stroke along each particle's recent path (drawn under the particles). */
+  trails?: TrailConfig;
   /** Texture: a built-in shape ('circle' | 'square' | 'star' | 'spark') or an asset href. */
   texture: string;
   blend: Blend;
   /** Material tint multiplier. */
   tint: RGBA;
+}
+
+/**
+ * 2.1: a trail behind each particle (Shuriken Trails module, "particles" mode): a polyline of the
+ * particle's recent positions, thinning and fading towards the tail. Everything has a default.
+ */
+export interface TrailConfig {
+  /** Fraction of the particles that leave a trail, 0..1 (default 1). */
+  ratio?: number;
+  /** Length of the trail as a fraction of the particle's life (default 1). */
+  lifetime?: number;
+  /** A new point after the particle moved this far, units (default 0 — every frame). */
+  minVertexDistance?: number;
+  /** Width at the head, × the particle's size (default 1). */
+  width?: number;
+  /** Colour multiplier (× the particle's start colour, default white). */
+  color?: RGBA;
+  /** The trail material's texture in the source (strokes ignore it; kept for the report). */
+  texture?: string;
+  /** Blend of the trail (default: the particles'). */
+  blend?: Blend;
+  /** Material tint multiplier (default 1). */
+  tint?: RGBA;
 }
 
 /** A config with defaults for everything but what you name (authoring by hand). */

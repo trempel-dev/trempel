@@ -10,7 +10,7 @@ import type { Ads } from '../data/ads.js';
 import type { I18n, Strings } from '../data/i18n.js';
 import type { Save, SaveOptions } from '../data/save.js';
 import type { EventBus } from '../flow/bus.js';
-import type { Fx } from '../fx/fx.js';
+import type { Fx, FxTables } from '../fx/fx.js';
 import type { Input } from '../input/input.js';
 import type { Platform } from '../platform/types.js';
 import type { AnyContract, Impl } from '../services/contract.js';
@@ -22,7 +22,8 @@ import type { CanvasMode, Insets, Rect } from '../ui/layout.js';
 import type { Overlays, OverlayHide } from '../ui/overlays.js';
 import type { PopupAnim, PopupLayer, Popups } from '../ui/popups.js';
 import type { Screen, SceneSource } from '../ui/screen.js';
-import type { Screens } from '../ui/screens.js';
+import type { Screens, ShowOptions } from '../ui/screens.js';
+import type { Transitions } from '../ui/transitions.js';
 import type { Skin } from '../ui/skin/skin.js';
 
 /** A screen's code: built when its scene mounts; inject() / listen() in its fields resolve there. */
@@ -94,9 +95,24 @@ export interface GameConfig<S extends object, D extends object> {
   actions?: Actions | ((game: Game<S, D>) => Actions);
   /** Typed save of the game's own data (game.save). 2.0: the kit's settings and the services' store are kept apart. */
   save?: SaveOptions<D>;
-  /** One-shot sounds: URL(s), SynthSpec or { synth: preset }; presets work without declaring. */
+  /**
+   * One-shot sounds: URL(s), SynthSpec or { synth: preset }; presets work without declaring. 2.1: or
+   * { src, volume, pitch } — the level and the tone in the table (play() options multiply them).
+   */
   sounds?: Record<string, SoundSource>;
   music?: Record<string, string | readonly string[]>;
+  /** 2.1: the popups' sounds (names of `sounds` or presets): on show, on an animated close (not closeNow). */
+  popupSounds?: { show?: string; hide?: string };
+  /**
+   * 2.1: a button's click sound (`data-sound`, game.sound.click) is silent when that click opened or
+   * closed a popup — its sound plays instead. Default true.
+   */
+  quietClicks?: boolean;
+  /**
+   * 2.1: the game's particle effects and their textures: `game.fx.play('name', …)`; a texture of the
+   * table loads at the first play of an effect using it (trempel-fx-import writes `effects.json`).
+   */
+  fx?: FxTables;
   /** String tables per language. */
   i18n?: Record<string, Strings>;
   /**
@@ -257,6 +273,8 @@ export interface Game<S extends object, D extends object> {
   readonly screens: Screens;
   readonly popups: Popups;
   readonly overlays: Overlays;
+  /** 2.1: transitions by snapshots — the page leaf, page turns inside a screen, page drag. */
+  readonly transitions: Transitions;
   readonly backend: PixiBackend;
   /** The skin (null with skin: null). */
   readonly skin: Skin | null;
@@ -266,8 +284,11 @@ export interface Game<S extends object, D extends object> {
   readonly backdrop: Backdrop;
   /** Scene context (state, kit, t, built-ins, actions) — the same object every scene got. */
   readonly context: Record<string, unknown>;
-  /** Switch screen (loads its bundle first). */
-  show(name: string): Promise<void>;
+  /**
+   * Switch screen (loads its bundle first). 2.1: `{ transition }` — 'fade' (default), 'none',
+   * { fade: s }, { leaf: { dir, look: 'hard' | 'soft', duration } } or a function over the snapshots.
+   */
+  show(name: string, opts?: ShowOptions): Promise<void>;
   /** Open / close a popup. */
   popup(name: string): void;
   close(name?: string): Promise<void>;

@@ -50,7 +50,8 @@ const game = await createGame({
       g.popups.closeAll();
       g.resume();
       await g.ads.interstitial(); // natural pause → interstitial (cooldown inside)
-      await g.show('menu');
+      // The menu comes back as a page turned back (kit 2.1: a transition by snapshots).
+      await g.show('menu', { transition: { leaf: { dir: -1 } } });
     },
     hit: () => onHit(),
   }),
@@ -65,6 +66,8 @@ const game = await createGame({
   // The game's own e2e probe: the HUD's coin counter as drawn.
   probe: { coins: () => game.screen('game').component<{ root: { text: string } }>('coinsPlate').root.text },
   cheats: {
+    /** Transitions k times slower (e2e: a snapshot in the middle of a turn). */
+    slowTransitions: (k: unknown) => void (game.transitions.speed = Number(k) || 1),
     win: () => {
       round = { ...round, score: 9 };
       onHit();
@@ -102,7 +105,8 @@ async function startRound(): Promise<void> {
   round = newRound();
   Object.assign(game.state, { score: 0, time: round.time, won: false, stars: 0 });
   moveTarget();
-  await game.show('game');
+  // The menu turns away as a page over the game screen.
+  await game.show('game', { transition: { leaf: { look: 'soft' } } });
 }
 
 function onHit(): void {

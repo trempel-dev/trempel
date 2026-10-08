@@ -40,6 +40,10 @@ export class FakeApp {
       this.resizers.forEach((f) => f());
     },
     generateTexture: () => null,
+    resolution: 1,
+    /** 2.1: snapshots of the transitions render into textures. */
+    snapshots: 0,
+    render: () => void this.renderer.snapshots++,
   };
   async init(): Promise<void> {
     const { Container } = await vi.importActual<typeof import('pixi.js')>('pixi.js');

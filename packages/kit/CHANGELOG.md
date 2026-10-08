@@ -1,5 +1,78 @@
 # Changelog — @trempel/kit
 
+## 2.1.0
+
+What A World of Differences (DIF-2) and FindCat did around the kit, moved into it. Additions only:
+the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/scene` ^2.0.
+
+### Transitions: a page leaf, by snapshots
+
+- **`PageLeaf`** (stable entry; `LEAF_HARD`, `LEAF_SOFT`; the model — `@trempel/kit/internal/fx/page-leaf`):
+  a genre-agnostic page leaf — one `Mesh` with its GLSL (WebGL2), rolled around a cylinder from the
+  spine, with perspective, light on the front and the back, a shadow; `bend 0` — a hard leaf (a cover,
+  a card). Front / back by the sign of the final matrix's determinant (the screen and a RenderTexture
+  project Y differently; a mirrored parent too). Portrait: the turn ends when the leaf is wholly left
+  of the spine (early finish), the column is cut in the shader.
+- **`game.show(name, { transition })`** (`screens.show(name, { transition })`; a number — the fade
+  seconds — still works): `'fade'` (default, as before), `'none'`, `{ fade: s }`,
+  `{ leaf: { dir: 1 | -1, look: 'hard' | 'soft' | { bend, twist }, duration, back } }`, or a function
+  `(ctx) => Promise` over the snapshots `ctx.before` / `ctx.after` with a layer and frames — the
+  extension point for other transitions. The kit renders both screens into textures with the root's
+  world matrix and the column's corner (DIF-2 rake №1: on a desktop the column is narrower than the
+  window), hides the live screens while the transition plays, blocks the input (a blocker over the
+  screens and `game.input`), frees the textures after. Without WebGL2 (or a shader that does not build,
+  or `?transition=fade` in the web build) a leaf is a cross-fade of the same snapshots.
+- **`game.transitions`** (`Transitions`): `turn(page, change, leaf)` — a page of one screen (an album's
+  next world: snapshots around `change`), `drag({ page, allowed, can, change, … })` — pages turned with
+  a finger: the leaf follows after 12 px horizontally (a vertical gesture is not a turn), a flick only
+  while the finger moves, else by half the travel; a cancel switches the page back; `warm(pages)` —
+  the shader and the textures on the GPU before the first turn; `info` (active, phase, mode, textures
+  alive) for probes; `speed` (slow motion for e2e); `fallback`.
+
+### Particles
+
+- **Trails** in the kit's runtime (`ParticleConfig.trails`, typed `TrailConfig`: ratio, lifetime,
+  minVertexDistance, width, color, blend, tint — all with defaults): a stroke along each particle's
+  recent path, thinner and fainter towards the tail, one `Graphics` under the emitter's particles
+  (FindCat's trail layer). The "not supported" warning is gone.
+- **The effects table**: `createGame({ fx: { effects, textures } })` — `game.fx.play('name', …)` by name
+  (`effects`: a config or a group, parent first — trempel-fx-import's `effects.json` as is); `textures`:
+  a texture name → URL (or a function). A texture of the table that is not loaded yet loads at the
+  first play of an effect using it: the `Effect` is returned at once and starts when its textures are
+  in (`effect.ready`, `effect.pending`; its `time` runs from then). `fx.tables()`, `fx.names()`,
+  `fx.configs()`, `fx.preload()`.
+- **`trempel-fx-import`** (bin): Unity particle systems → the kit's effects, straight from a Unity
+  project — a folder, a prefab or a scene (Force Text YAML). Nested prefabs are expanded with their
+  overrides (ids `(instance ^ source) & 2^63−1`, property paths with arrays, removed components),
+  materials (new and old serialization) and textures by GUID through the `.meta` files, built-in
+  particle shaders → blends (Additive, Additive Soft → screen, Alpha Blended), legacy `_TintColor × 2`;
+  units: world — pixels per unit × the scale chain, uGUI (`UIParticleSystem`) — the chain, Coffee
+  `UIParticle` — its `m_Scale3D`; y-up → y-down. Writes `effects.json`, `textures/*.png` (no metadata;
+  TGA decoded), `report.md` / `report.json`: every system `auto` / `manual` / `hard` with what is exact,
+  approximated, not played; `--compare <configs.json>` — `compare.md` against a game's current configs.
+  The normalization is FindCat's converter (`findcat/tools/lib/particles.ts`), now on the raw YAML.
+
+### Sound
+
+- **Volume and pitch in the table**: `sounds: { name: { src, volume?, pitch? } }` (`play()` options
+  multiply them; `game.sound.level(name)`).
+- **Popup sounds**: `createGame({ popupSounds: { show, hide } })`; `Popups.onHideSound` — on a close with
+  the animation (not `closeNow()` / `closeAll()`).
+- **A click silent when it opened / closed a popup** (`quietClicks`, default on): `data-sound` buttons
+  and `game.sound.click(name)` play after the event, unless a popup opened or closed since the press
+  (its own sound plays instead).
+- **No lag on the first tap**: the AudioContext is made after boot (`sound.warm()`, suspended — the
+  browser's audio start, ~150 ms the first time, is under the start screen); the first gesture only
+  resumes it; synthesizing the presets and starting the loads run after that frame, one preset per
+  task; a synth sound played before its turn is synthesized right then; a sound plays as soon as it is
+  in (2.0: only after every sound loaded). Gate (the casual template's e2e): the first tap ≤ 20 ms of
+  main-thread work at CPU ×4 (was 117–133 ms in DIF-2).
+
+### Input
+
+- A tap right after a popup closes reaches the game (the popup is still animating out) — the 2.0 rule,
+  now under a test; a snapshot transition / a page drag blocks `game.input` while it runs.
+
 ## 2.0.0
 
 The holes a real game found (A World of Differences — `differences.dev` DIF-1 / DIF-2, the 1.4

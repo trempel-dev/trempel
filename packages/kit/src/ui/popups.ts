@@ -51,6 +51,8 @@ export class Popups {
   onChange: () => void = () => {};
   /** Called on every show (popup sound). */
   onShowSound: () => void = () => {};
+  /** 2.1: called when a popup starts closing with its animation (popup sound) — not by closeNow() / closeAll(). */
+  onHideSound: () => void = () => {};
 
   constructor(private readonly tweens: Tweens) {}
 
@@ -132,6 +134,7 @@ export class Popups {
     const o = this.open.find((x) => x.def.name === name && !x.closing);
     if (!o) return;
     o.closing = true;
+    if (!instant) this.onHideSound();
     this.gate();
     this.onChange();
     const { def } = o;

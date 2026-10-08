@@ -41,6 +41,8 @@ export interface SceneHost {
   ready(): Promise<void>;
   /** Re-apply who takes the input after the popups changed (the screens and game.input wait under an open popup). */
   gate(): void;
+  /** 2.1: a snapshot transition / page drag runs — game.input waits too. */
+  setBusy(on: boolean): void;
   /** Unmount every controller and component (their subscriptions), destroy every scene. */
   destroy(): void;
 }
@@ -96,12 +98,17 @@ export function createScenes(d: SceneDeps): SceneHost {
     press: (node) => buttonFx(node, tweens),
     sound: (node, name) => {
       node.eventMode = 'static';
-      node.on('pointertap', () => sound.play(name));
+      // 2.1: silent when this tap opened / closed a popup (the popup's sound plays): the mark of the
+      // press, as the scene's own on-click may run before this listener.
+      let since = sound.marks;
+      node.on('pointerdown', () => void (since = sound.marks));
+      node.on('pointertap', () => sound.click(name, {}, since));
     },
   };
   const deps = { backend: d.backend, context, registry, resolveHref: d.resolve, collections: cfg.collections, hooks, table: sceneTable() };
 
   const all: Screen[] = [];
+  let busy = false;
   const controllers = new Map<string, unknown>();
   const mountScreen = (name: string, spec: ScreenSpec | PopupSpec | OverlaySpec): Screen => {
     const s = new Screen(name, spec, spec.mode ?? layout.policy, deps);
@@ -130,7 +137,17 @@ export function createScenes(d: SceneDeps): SceneHost {
     overlays.add(name, mountScreen(`overlay:${name}`, spec), { onShow: spec.onShow, onHidden: spec.onHidden });
   }
 
-  popups.onShowSound = () => {};
+  // 2.1: popup sounds of the config (a game may set the hooks itself).
+  const ps = cfg.popupSounds;
+  popups.onShowSound = ps?.show ? () => sound.play(ps.show!) : () => {};
+  popups.onHideSound = ps?.hide ? () => sound.play(ps.hide!) : () => {};
+
+  // A popup takes the input while it is open (not while it closes): the screens and game.input wait.
+  function gate(): void {
+    const open = popups.isOpen();
+    screens.blocked = open;
+    d.input.enabled = !open && !busy;
+  }
 
   return {
     context,
@@ -148,11 +165,10 @@ export function createScenes(d: SceneDeps): SceneHost {
       screens.add(name, { screen: mountScreen(name, lazy), bundle: lazy.bundle, onShow: lazy.onShow, onHide: lazy.onHide });
     },
     ready: () => Promise.all(all.map((s) => s.scene.ready)).then(() => undefined),
-    gate() {
-      // A popup takes the input while it is open (not while it closes): the screens and game.input wait.
-      const open = popups.isOpen();
-      screens.blocked = open;
-      d.input.enabled = !open;
+    gate,
+    setBusy(on) {
+      busy = on;
+      gate();
     },
     destroy() {
       for (const m of owned.splice(0)) m.unmount();
