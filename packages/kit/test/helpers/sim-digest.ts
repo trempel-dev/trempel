@@ -24,13 +24,17 @@ export const OLD_CONFIGS: Record<string, ParticleConfig> = {
   arc: particleConfig({ rate: 30, duration: 0.5, shape: { type: 'circle', radius: 20, thickness: 0.3, arc: 2, scale: [1, 2] }, startDelay: 0.1 }),
 };
 
+/** 12 significant digits: a last-bit difference of Math.* between platforms (macOS arm64 vs CI
+ *  linux x64) must not fail the digest, a real change of the model still does. */
+const q = (_k: string, v: unknown) => (typeof v === 'number' ? Number(v.toPrecision(12)) : v);
+
 export function simDigest(c: ParticleConfig, seed = 11): string {
   const sim = new ParticleSim(c, seededRandom(seed));
   sim.play();
   const h = createHash('sha256');
   for (let f = 0; f < 90; f++) {
     sim.update(f % 7 === 0 ? 1 / 30 : 1 / 60);
-    for (const p of sim.particles) h.update(JSON.stringify([p.x, p.y, p.vx, p.vy, p.age, p.life, p.size, p.color, p.rotation, p.spin, p.outSize, p.outColor, p.frame, p.stretch]));
+    for (const p of sim.particles) h.update(JSON.stringify([p.x, p.y, p.vx, p.vy, p.age, p.life, p.size, p.color, p.rotation, p.spin, p.outSize, p.outColor, p.frame, p.stretch], q));
     h.update('|');
   }
   return h.digest('hex').slice(0, 32);

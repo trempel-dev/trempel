@@ -84,16 +84,17 @@ describe('particles — simulation without a renderer', () => {
 
 describe('particles 2.2 — the Cocos model fields', () => {
   it('a 2.1 config simulates bit for bit as in 2.1 (digests of the 2.1 kit)', () => {
-    // Recorded with the 2.1.0 sim (before the 2.2 fields): every particle's full state, 90 frames.
+    // Recorded with the 2.1.0 sim (before the 2.2 fields): every particle's state at 12 significant
+    // digits (platform-stable), 90 frames.
     expect(Object.fromEntries(Object.entries(OLD_CONFIGS).map(([k, c]) => [k, simDigest(c)]))).toEqual({
-      burst: '387233eb9976f25248c24f67fb00bd2e',
-      confetti: '5e2488dba646004e45a339d997d416b3',
-      sparkle: '0e40d845fcedd97379bf2504c1956bef',
-      smoke: 'eab471003c1e6ae2e3494b2b52e4b8a2',
-      coins: '3b29850360002011532a75946c949d5b',
-      trail: '477852e51b6b1236ec1c0abac8406d0a',
-      shuriken: '850c163ccfe14171b68d88f3b4c885bc',
-      arc: '6a1dbdbbb31b32d3c1e16a8ce4f0091f',
+      burst: 'cec217839835c22e1b79bda93f822589',
+      confetti: '97c8923f1452e2d6389d866c61dc2043',
+      sparkle: '6dec42b0c725acc55f4b0fbf62454806',
+      smoke: '96a5bc7788fce28045d82cf7121c9e40',
+      coins: '013a04c07b0d7a1a7b2c12df6fda4119',
+      trail: '2345d85ee940d09f8a199417c6d316a4',
+      shuriken: '2dc85bd8cb8aba626d29a5b357364683',
+      arc: '57939c08a5fad3de13f115809ee2323a',
     });
   });
 
