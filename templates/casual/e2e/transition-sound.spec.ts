@@ -46,15 +46,18 @@ test('menu → game turns as a page leaf: the middle is a real frame, input wait
   await page.waitForFunction(() => (window as any).__trempel.transition().t > 0.4);
   const mid = await info(page);
   expect(mid).toMatchObject({ active: true, mode: 'leaf', textures: 2 });
-  const shot = await page.screenshot({ path: `${SHOTS}/leaf-mid.png` });
-  expect(await spread(shot)).toBeGreaterThan(10);
-  expect(await diff(shot, menu)).toBeGreaterThan(2); // the leaf moved: not the menu any more (both are dark)
   // A tap under the turning leaf reaches nothing (the game screen's target, the menu's settings).
+  // Tapped first, while the leaf surely turns (a slow CI runner may finish the turn during the shot).
   const kit0 = await probe<{ popup: string }>(page, 'kit');
   const settings = await probe<{ x: number; y: number }>(page, 'node', 'menu', 'settingsBtn');
   await page.mouse.click(settings.x, settings.y);
+  const tapped = await info(page);
   expect((await probe<{ popup: string }>(page, 'kit')).popup).toBe(kit0.popup);
+  const shot = await page.screenshot({ path: `${SHOTS}/leaf-mid.png` });
+  expect(await spread(shot)).toBeGreaterThan(10);
+  expect(await diff(shot, menu)).toBeGreaterThan(2); // the leaf moved: not the menu any more (both are dark)
   await settled(page);
+  if (!tapped.active) throw new Error('the turn ended before the tap — the input-block check proved nothing');
   expect(await probe(page, 'screen')).toBe('game');
   expect(await info(page)).toMatchObject({ active: false, textures: 0 });
   const after = await page.screenshot();
