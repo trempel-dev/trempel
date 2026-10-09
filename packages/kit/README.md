@@ -10,7 +10,7 @@ Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`
 - **UI kit** — components (`ui-button`, `ui-toggle`, `ui-panel`, `ui-progress`, `ui-slider`, `ui-stars`…) drawn from a skin; `trempel-skin` measures a skin's art into `skin.json`.
 - **Default skin** — prefabs and art in `skins/default/ui`, used as a Trempel collection: `$skin: npm:@trempel/kit/skins/default/ui` in `.trempel/project.mdz`, then `href="@skin/button.svg"` in scenes.
 - **Loop and time** — one game loop with injectable time and pause channels; tweens, Trempel clips, an event player, a state machine, an event bus; sound over zvuk with procedural placeholder sounds (volume / pitch in the table, popup sounds, a click silent when it opened a popup, no lag on the first tap).
-- **Transitions and effects** — `game.show(name, { transition: { leaf: { dir, look: 'hard' | 'soft' } } })` turns a screen as a page (`PageLeaf`, by snapshots; a function transition for anything else), `game.transitions.turn()` / `.drag()` turn pages inside a screen; particles in the Unity Shuriken model with trails and a lazy effects table (`createGame({ fx: { effects, textures } })`); `trempel-fx-import` converts Unity particle systems straight from a Unity project (prefabs / scenes, nested prefabs, materials and textures by GUID) — or (`--cocos`) Cocos particle plists — with a report auto / manual / hard.
+- **Transitions and effects** — `game.show(name, { transition: { leaf: { dir, look: 'hard' | 'soft' } } })` turns a screen as a page (`PageLeaf`, by snapshots; a function transition for anything else), `game.transitions.turn()` / `.drag()` turn pages inside a screen; particles in the Unity Shuriken model with trails and a lazy effects table (`createGame({ fx: { effects, textures } })`); `trempel-fx-import` converts Unity particle systems straight from a Unity project (prefabs / scenes, nested prefabs, materials and textures by GUID) — or (`--cocos`) Cocos particle plists — with a report auto / manual / hard; `trempel-anim-import` turns Unity AnimationClips (prefabs, Animator controllers, `.anim`) into md clips, verified against Unity's own curves.
 - **Build** — `@trempel/kit/vite`: `plugins: [trempelKit()]`; it injects the game's scene table (prefabs, collections of `.trempel/project.mdz`, project heirs) and compiles md clips — `import clips from './anim/win.md?clips=popup-win'` is checked against the scene, a bad clip fails the build; every build rewrites the bundle's images without metadata (ComfyUI workflows and prompts in PNG text chunks, EXIF / XMP, C2PA — no re-encoding, the pixels stay bit-identical) and fails with `E_ASSET_METADATA` on anything left or on generation sidecars (`*.png.json`…); `vite build --mode youtube` also runs the Playables gates (size, sterility, no-eval) and writes `build-report.md`. `@trempel/kit/e2e` — Playwright helpers.
 
 ## Entries
@@ -34,6 +34,14 @@ npx trempel-fx-import --cocos fx/cocos --out src/fx/cocos [--scale 1] [--only fi
 ```
 
 Particle Designer / Particle2dx emitters (an XML `.plist` or the `.json` variant; a folder — every one in it), both modes (gravity and radius), the texture next to the file or embedded (`textureImageData`). Same output as for Unity; `report.md` also has the check of every emitter against a model of Cocos' particles (position / size / colour / rotation, every frame).
+
+## Clips from Unity
+
+```bash
+npx trempel-anim-import ../MyUnityGame/Assets/Hero.prefab --out scenes/anim [--scene scenes/hero.svg] [--map anim-map.md] [--ppu 100] [--ui-scale 1] [--tex "art/{}.png"]
+```
+
+AnimationClips (of a prefab's Animator, a controller or loose `.anim` files) become md clips — `<out>/<name>.anim.md` with a clip per state, the compiled `.anim.json` next to it. Curves keep Unity's shape (Hermite and weighted tangents as cubic eases, constants as steps); x / y / rotation are offsets of the rest pose, scale a multiplier. `anim-map.md` lists every animated path and its node id (by name in `--scene`; edit it and pass it back with `--map`). `report.md`: every clip `auto` / `manual` / `hard` per property, the transitions (listed, never run), and the verification — each clip played by Trempel against Unity's own evaluation of its curves.
 
 ## Install
 

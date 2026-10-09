@@ -52,7 +52,8 @@
   "bin": {
     "trempel-skin": "dist/cli/skin.js",
     "trempel-fx-import": "dist/cli/fx-import.js",
-    "trempel-spine-import": "dist/cli/spine-import.js"
+    "trempel-spine-import": "dist/cli/spine-import.js",
+    "trempel-anim-import": "dist/cli/anim-import.js"
   },
   "files": [
     "dist",

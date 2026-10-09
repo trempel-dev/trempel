@@ -42,6 +42,42 @@ start values over each particle's life); `colorPerChannel` (random colours drawn
 clamped); `whenFull: 'wait'` (Cocos: the emission clock stops while the emitter is full); the shape
 `type: 'box'` with `box: [halfW, halfH]`. `ParticleSim.spawned` counts spawned particles.
 
+### Unity clips: trempel-anim-import
+
+- **`trempel-anim-import`** (bin): Unity AnimationClips → md clips (scene format §9), straight from a
+  Unity project — a folder, a prefab, a controller (`.controller`, `.overrideController`) or an
+  `.anim` (Force Text YAML). A prefab with an Animator: its controller's states (every layer,
+  sub-state machines; an override controller — its base with the clips swapped) → clips named after
+  the states, the Animator's GameObject is the root of the curve paths and the prefab gives the rest
+  pose; a legacy Animation — its clips. One md per prefab / controller / loose clip
+  (`<out>/<name>.anim.md`) and the compiled `.anim.json` next to it.
+- **Curves**: Unity's Hermite keys → cubic Bézier eases `[x1, y1, x2, y2]` (control points at dt/3
+  along the slopes — exact), weighted tangents as their Bézier (exact for weights in 0..1: reported
+  verified), infinite tangents → `step`, a segment with no Trempel ease (a flat value with a moving
+  curve) baked into linear keys (adaptive). Position (Transform × `--ppu`, RectTransform anchored /
+  local × `--ui-scale`, y down), Euler Z (clockwise), quaternion Z (baked), scale (a multiplier of
+  the rest), CanvasGroup / colour alpha (multiplied), colour r g b → `tint` (one ease per row: exact
+  when the channels share it, else baked), `m_IsActive` / a renderer's `m_Enabled` → alpha 0 / 1 with
+  steps, sprites (`m_Sprite`, a sheet's sprite name from the `.meta`) → `tex` with a `$tex` template
+  (`--tex`), `m_SizeDelta` → width / height on a 9-slice scene node, events → `$events` (parameters in
+  the report), `m_StopTime` / `m_LoopTime` → `$duration` / `$loop`. A rotation about X / Y (a card flip)
+  → its orthographic projection (rotation + scaleX / scaleY, `manual`).
+- **Rest pose**: x / y / rotation are offsets of it, scale a multiplier — from the prefab's Transform /
+  RectTransform, else the scene node, else the clip's first key (reported `manual`).
+- **Ids**: `--scene X.svg` matches a path's last segment to the node ids (ambiguous / missing →
+  unmatched, left out); `anim-map.md` lists every path with its id — edit it and pass `--map`
+  (it wins). Without a scene: the idified last segments.
+- **Report** (`report.md` / `report.json`): every clip `auto` / `manual` / `hard` per property with the
+  reasons (weighted tangents, 3D rotations, guessed rest poses, `m_IsActive` as alpha; material
+  properties, Animator / humanoid / root motion curves, unknown components, BlendTrees, clips of model
+  files), the transitions (never executed — the game's logic). **Verification**: the md compiled and
+  played by Trempel (headless) against the importer's own evaluation of the Unity curves at
+  `--points` times: position ±0.5 px, rotation ±0.5°, scale ±0.5 %, alpha ±0.01, tint ±1/255, tex
+  exact, events — a clip that does not converge is a finding, not a failure (exit 0). Codes:
+  `E_ANIM_IMPORT_USAGE`, `E_ANIM_IMPORT_INPUT`, `E_ANIM_IMPORT_SCENE`, `E_ANIM_IMPORT_CLIP`,
+  `E_ANIM_IMPORT_CONTROLLER` (exit 2); `W_ANIM_IMPORT_UNMATCHED`, `W_ANIM_IMPORT_COMPILE`,
+  `W_ANIM_IMPORT_VERIFY`, `W_ANIM_IMPORT`.
+
 ## 2.1.0
 
 What A World of Differences (DIF-2) and FindCat did around the kit, moved into it. Additions only:
