@@ -32,6 +32,8 @@ export interface FxPlayOptions {
   scale?: number;
   /** Tint multiplier applied to every particle colour, 0xRRGGBB. */
   tint?: number;
+  /** 2.2: the random source of this effect (a seeded one — the same particles every time). */
+  rng?: Rng;
 }
 
 /** A group of emitters played together (one prefab). */
@@ -132,6 +134,14 @@ export class Fx {
     return fx;
   }
 
+  /**
+   * 2.2: an effect the caller updates itself (`effect.update(dt)`; not in the player's list) — an
+   * effect node of a scene steps its own effects on fixed frames.
+   */
+  make(spec: EffectSpec, parent: Container, x = 0, y = 0, opts: FxPlayOptions = {}): Effect {
+    return this.create(spec, parent, x, y, opts);
+  }
+
   /** Effect owned by the caller (loops until you call .stop()/.destroy()). */
   attach(spec: EffectSpec, parent: Container, x = 0, y = 0, opts: FxPlayOptions = {}): Effect {
     const fx = this.create(spec, parent, x, y, opts);
@@ -217,7 +227,7 @@ export class Fx {
     const build = () =>
       configs.map((c0, i) => {
         const c = tint === undefined ? c0 : { ...c0, tint: mulTint(c0.tint, tint) };
-        const e = new ParticleEmitter(c, this.texture(c.texture), this.rng);
+        const e = new ParticleEmitter(c, this.texture(c.texture), opts.rng ?? this.rng);
         if (i > 0) e.view.position.set(c.pos[0] * configs[0].unit[0], c.pos[1] * configs[0].unit[1]);
         return e;
       });
@@ -246,7 +256,12 @@ export class Fx {
   private shape(name: string): Texture {
     const hit = this.shapes.get(name);
     if (hit) return hit;
-    if (!this.renderer) return Texture.WHITE;
+    if (!this.renderer) {
+      // 2.2: no renderer (the viewer, the editor) — the same shape drawn on a canvas
+      const t = typeof document !== 'undefined' ? canvasShape(name) : Texture.WHITE;
+      this.shapes.set(name, t);
+      return t;
+    }
     const g = new Graphics();
     const r = 16;
     if (name === 'circle') g.circle(r, r, r).fill(0xffffff);
@@ -269,6 +284,28 @@ export class Fx {
 }
 
 const BUILTIN = new Set(['circle', 'square', 'star', 'spark']);
+
+/** A built-in shape on a 32×32 canvas (no renderer at hand). */
+function canvasShape(name: string): Texture {
+  const r = 16;
+  const c = document.createElement('canvas');
+  c.width = c.height = r * 2;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  if (name === 'circle') g.arc(r, r, r, 0, Math.PI * 2);
+  else if (name === 'square') g.rect(0, 0, r * 2, r * 2);
+  else if (name === 'spark') g.ellipse(r, r, r * 0.35, r, 0, 0, Math.PI * 2);
+  else
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const rr = i % 2 ? r * 0.42 : r;
+      if (i) g.lineTo(r + Math.cos(a) * rr, r + Math.sin(a) * rr);
+      else g.moveTo(r + Math.cos(a) * rr, r + Math.sin(a) * rr);
+    }
+  g.fill();
+  return Texture.from(c);
+}
 
 function presetOf(name: string, effects: string[] = []): ParticleConfig {
   const c = (PARTICLES as Record<string, ParticleConfig>)[name];

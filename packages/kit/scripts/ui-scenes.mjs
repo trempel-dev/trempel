@@ -1,6 +1,6 @@
 // ui-scenes.mjs — generates src/ui/scenes.ts from the kit's screen templates (ui/scenes/*.svg +
 // .tml.svg + .contract.xml), so a game can use them without copying: popups: { settings: UI_SCENES.settings }.
-// Run by `npm run build` (and checked by test/ui.test.ts). `components` is the showcase, not a template.
+// Run by `npm run build` (and checked by test/ui.test.ts). `components` and `effects` are showcases, not templates.
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = join(root, 'ui/scenes');
-const SKIP = new Set(['components']);
+const SKIP = new Set(['components', 'effects']);
 
 export function generate() {
   const names = readdirSync(dir)

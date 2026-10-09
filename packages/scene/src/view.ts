@@ -29,6 +29,18 @@ export interface ViewHookArgs {
   state: Record<string, unknown>;
 }
 
+/** 2.2: the scene posed by a clip (the viewer's `view:shot --clip --t`, the editor's clip panel). */
+export interface ViewClipArgs {
+  /** Scene id (path stem relative to the folder). */
+  id: string;
+  scene: MountedScene;
+  clip: string;
+  /** Seconds into the clip as shown. */
+  t: number;
+  /** The clip's markers ($events) at or before `t` in this cycle, by time. */
+  markers: { t: number; name: string }[];
+}
+
 export interface ViewConfig {
   /** Runs once before the first scene (install backend patches, preload art). */
   setup?: () => void | Promise<void>;
@@ -56,6 +68,12 @@ export interface ViewConfig {
   context?: (state: Record<string, unknown>) => Record<string, unknown>;
   /** After each mount: seed components (grid fields, icons) from the state. */
   onMount?: (args: ViewHookArgs) => void;
+  /**
+   * 2.2: after every pose of the scene by a clip (a seek, a played frame): what lives in time next
+   * to the clip — a particle effect fired by a marker — catches up to `t` (deterministically: the
+   * same `t` and markers, the same picture).
+   */
+  onClipTime?: (args: ViewClipArgs) => void;
   /** Stage background (CSS colour); default — transparent over the checkerboard. */
   background?: string;
   /**

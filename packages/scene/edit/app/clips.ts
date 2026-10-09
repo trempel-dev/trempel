@@ -93,7 +93,20 @@ export class Clips {
     if (!session?.scene || !session.animBackend) throw new Error(coded('E_EDIT_NO_SCENE', 'the scene is not drawn — nothing to play the clip on'));
     if (!this.player || this.scene !== session.scene) {
       this.scene = session.scene;
-      this.player = new ClipPlayer(session.scene, session.animBackend);
+      const scene = session.scene;
+      const onClipTime = this.ed.runtime.config.onClipTime;
+      // 2.2: the module's onClipTime — effects fired by markers catch up to the frame shown
+      this.player = new ClipPlayer(scene, session.animBackend, {
+        onTime: onClipTime
+          ? (time) => {
+              try {
+                onClipTime({ id: this.ed.entry?.id ?? '', scene, ...time });
+              } catch (e) {
+                this.ed.log('error', coded('E_VIEW_MODULE', `view module onClipTime(): ${msg(e)}`));
+              }
+            }
+          : undefined,
+      });
     }
     this.player.loop = this.loop;
     this.player.speed = this.speed;

@@ -31,6 +31,7 @@ import { I18n } from './data/i18n.js';
 import { withKitStrings } from './data/kit-strings.js';
 import { EventBus } from './flow/bus.js';
 import { Fx } from './fx/fx.js';
+import { playFxMarker } from './fx/node.js';
 import { Input } from './input/input.js';
 import { createPlatform } from './platform/index.js';
 import { GameLoop } from './time/loop.js';
@@ -195,6 +196,8 @@ export async function createGame<S extends object, D extends object = Record<str
   disposers.push(() => fx.clear());
   const backend = makeBackend(cfg.backend, { fontFamily: cfg.fontFamily, skin, slices: cfg.slices });
   const clips = new Clips(backend, loop);
+  // 2.2: a clip's `fx:<name>@<node>` marker plays the effect at that node of the clip's scene
+  clips.onMarker = (name, scene) => void playFxMarker(fx, name, scene);
   const input = new Input();
   disposers.push(() => input.detach());
   const ads = new Ads(platform, {

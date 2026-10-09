@@ -19,6 +19,8 @@ import type { Input } from '../input/input.js';
 import type { Mounted, Services } from '../services/services.js';
 import { buttonFx } from '../ui/buttons.js';
 import { uiComponents } from '../ui/components/index.js';
+import { adopt } from '../ui/components/base.js';
+import { fxComponents } from '../fx/node.js';
 import { Overlays } from '../ui/overlays.js';
 import { Popups } from '../ui/popups.js';
 import { sceneTable } from '../ui/scene-table.js';
@@ -87,6 +89,9 @@ export function createScenes(d: SceneDeps): SceneHost {
 
   const registry = new Registry();
   if (d.skin) for (const [name, f] of Object.entries(uiComponents({ skin: d.skin, tweens, context }))) registry.register(name, f);
+  // 2.2: effect nodes (`tml:type="fx"`) on the loop's ui channel; a game's own `fx` component wins
+  const ks = d.kitServices();
+  for (const [name, f] of Object.entries(fxComponents({ fx: ks.fx, tick: (fn) => ks.loop.add(fn, 'ui'), place: adopt }))) registry.register(name, f);
   const comps = typeof cfg.components === 'function' ? cfg.components(d.kitServices()) : (cfg.components ?? {});
   // The game's components are owners: inject() / listen() in them resolve at mount (awake).
   for (const [name, f] of Object.entries(comps)) registry.register(name, (ctx) => own(`component ${name}${ctx.attrs.id ? '#' + ctx.attrs.id : ''}`, () => f(ctx)));

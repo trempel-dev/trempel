@@ -9,8 +9,13 @@
 //     does not drift); `poseAt(t)` is the same without changing the player's time.
 //
 // Stop (back to the rest pose) is the host's business: it reopens the scene.
+//
+// 2.2: `onTime` — after every seek and played frame the host hears the clip time and the clip's
+// markers ($events) already crossed in this cycle, with their times: what lives in time next to the
+// clip (a particle effect fired by `fx:<name>@<node>`) catches up to the frame (the module's
+// onClipTime).
 
-import { Animator, compileClipsResult, within, type AnimClip, type Handle, type MountedScene, type RendererBackend, type SceneNode } from '../src/core.js';
+import { Animator, compileClipsResult, within, type AnimClip, type Handle, type Marker, type MountedScene, type RendererBackend, type SceneNode } from '../src/core.js';
 
 export interface SceneClip {
   name: string;
@@ -59,6 +64,20 @@ class ManualClock {
   }
 }
 
+/** 2.2: what the player reports after a seek / a played frame. */
+export interface ClipTime {
+  clip: string;
+  /** Seconds into the clip as shown. */
+  t: number;
+  /** Markers at or before `t` in this cycle, by time. */
+  markers: Marker[];
+}
+
+export interface ClipPlayerOptions {
+  /** 2.2: called after every seek and played frame. */
+  onTime?: (time: ClipTime) => void;
+}
+
 export class ClipPlayer {
   private readonly clock = new ManualClock();
   private readonly animator: Animator;
@@ -70,7 +89,11 @@ export class ClipPlayer {
   loop = true;
   speed = 1;
 
-  constructor(scene: MountedScene, backend: RendererBackend) {
+  constructor(
+    scene: MountedScene,
+    backend: RendererBackend,
+    private readonly opts: ClipPlayerOptions = {},
+  ) {
     this.animator = new Animator(backend, this.clock, (id) => scene.byId.get(id), { path: (id) => scene.path(id) });
   }
 
@@ -119,6 +142,15 @@ export class ClipPlayer {
       this.clock.ms += step * 1000;
       this.animator.tick();
     }
+    this.report();
+  }
+
+  /** Tell the host the time shown and the markers crossed (2.2). */
+  private report(): void {
+    if (!this.clip || !this.opts.onTime) return;
+    const t = this.time;
+    const markers = (this.clip.clip.markers ?? []).filter((m) => m.t <= t + 1e-9);
+    this.opts.onTime({ clip: this.clip.name, t, markers });
   }
 
   /** Move time by `ms` of wall time (×speed) — call once per frame while playing. */
@@ -134,6 +166,7 @@ export class ClipPlayer {
     this.elapsed += dt;
     this.clock.ms += dt * 1000;
     this.animator.tick();
+    this.report();
   }
 
   /** Stop the playback (the nodes keep the last pose — the host reopens the scene for the rest pose). */

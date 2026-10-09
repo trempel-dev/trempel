@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Kit showcase: effects as scene nodes (2.2). Placeholders: plain SVG shows a dot per effect. -->
+  <rect id="bg" x="0" y="0" width="720" height="1280" fill="#141a2a"/>
+  <g id="sparkle" transform="translate(360 360)" data-effect="sparkle" data-scale="1.5">
+    <circle r="10" fill="#ffd54a" opacity="0.6"/>
+  </g>
+  <g id="trail" transform="translate(160 760)" data-effect="trail" data-loop="true">
+    <circle r="6" fill="#9ad4ff" opacity="0.6"/>
+  </g>
+  <g id="star" transform="translate(360 820)">
+    <circle r="48" fill="#ffcf3f"/>
+  </g>
+  <g id="top" transform="translate(360 220)" data-effect="confetti" data-autostart="false">
+    <rect x="-8" y="-8" width="16" height="16" fill="#ff6b8a" opacity="0.6"/>
+  </g>
+  <text x="360" y="1180" text-anchor="middle" font-size="32" fill="#c9d2e8">EFFECTS</text>
+</svg>

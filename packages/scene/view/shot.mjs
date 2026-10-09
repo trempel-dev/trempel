@@ -34,6 +34,8 @@ const cwd = process.env.INIT_CWD ?? process.cwd();
 const SUFFIXES = ['.tml.svg', '.contract.xml', '.state.json', '.svg'];
 /** Virtual clock: start time (ms since the epoch — a fixed date) and one frame step. */
 const CLOCK_START = Date.UTC(2026, 0, 1);
+/** install() this far before CLOCK_START, so pauseAt(CLOCK_START) is always ahead of the running clock. */
+const PAUSE_AHEAD = 10_000;
 const FRAME_MS = 1000 / 60;
 
 function parseArgs(argv) {
@@ -135,7 +137,10 @@ try {
     page = await browser.newPage();
     pageErrors = [];
     page.on('pageerror', (e) => pageErrors.push(e.message));
-    await page.clock.install({ time: CLOCK_START });
+    // install() starts the fake clock running; by the time pauseAt() comes a few real ms have passed,
+    // and pausing at a moment already past leaves them on the clock (2.2: a frame more or less on the
+    // 16 ms frame grid — effects of the kit differed). Pausing at a moment ahead is exact.
+    await page.clock.install({ time: CLOCK_START - PAUSE_AHEAD });
     await page.clock.pauseAt(CLOCK_START);
     await page.goto(`${url}?headless=1`);
     const deadline = Date.now() + 60_000;
@@ -153,7 +158,14 @@ try {
     await page.close();
   }
   const opened = await page.evaluate(({ id, state, viewport }) => window.tmlView.open(id, { state, viewport }), { id, state, viewport: args.viewport });
-  for (let i = 0; i < settleFrames; i++) await page.clock.runFor(FRAME_MS);
+  // Settle to fixed moments of the page clock (CLOCK_START + i frames), not by steps from "now":
+  // loading leaks a ms or two of fake time, and the frames fall on a 16 ms grid — steps from a
+  // leaked start end a frame apart (2.2).
+  for (let i = 1; i <= settleFrames; i++) {
+    const now = await page.evaluate(() => Date.now());
+    const ahead = Math.round(CLOCK_START + i * FRAME_MS) - now;
+    if (ahead > 0) await page.clock.runFor(ahead);
+  }
   const r = { ...opened, ...(await page.evaluate(({ clip, t }) => window.tmlView.snap({ clip, t }), { clip: args.clip, t: times })) };
 
   const write = (file, data) => writeFileSync(file, Buffer.from(data.replace(/^data:image\/png;base64,/, ''), 'base64'));

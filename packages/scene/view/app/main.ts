@@ -459,7 +459,19 @@ async function clipFrames(entry: SceneEntry, name: string, times: number[]): Pro
     issues.push({ level: 'error', kind: 'clips', message: coded('E_ANIM_UNKNOWN', `the scene has no clip "${name}" (clips: ${have}; files: ${Object.keys(md).join(', ') || '—'})`) });
     return { frames: [], issues };
   }
-  const player = new ClipPlayer(scene, session.animBackend);
+  // 2.2: the module's onClipTime — what lives next to the clip (effects fired by markers) catches up
+  const onClipTime = runtime?.config.onClipTime;
+  const player = new ClipPlayer(scene, session.animBackend, {
+    onTime: onClipTime
+      ? (time) => {
+          try {
+            onClipTime({ id: entry.id, scene, ...time });
+          } catch (e) {
+            issues.push({ level: 'error', kind: 'component', message: coded('E_VIEW_MODULE', `view module onClipTime(): ${msg(e)}`) });
+          }
+        }
+      : undefined,
+  });
   player.loop = false; // a time past the end shows the last frame
   const frames: { t: number; png: string }[] = [];
   try {
