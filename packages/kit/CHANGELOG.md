@@ -2,9 +2,82 @@
 
 ## 2.2.0
 
-Additions only: the 2.1 API and configs are unchanged — new optional `ParticleConfig` fields, a new
-mode of the bin. A 2.1 config simulates bit for bit as before (the new fields draw their random values
-after the 2.1 ones and only when set; a test holds digests of the 2.1 simulation).
+The animation pipeline (TRM-12): Spine skeletons and Unity clips become scenes and md clips, Cocos
+particles become the kit's effects, a choreography of named steps plays as data, and an effect is a
+node of a scene that the viewer, the editor and `view:shot` draw deterministically. Additions only: the
+2.1 API and configs are unchanged (new bins, entries, members, optional fields). Needs
+`@trempel/scene` ^2.2 (the module's `onClipTime`). A 2.1 particle config simulates bit for bit as
+before (the new fields draw their random values after the 2.1 ones and only when set; a test holds
+digests of the 2.1 simulation).
+
+### Spine skeletons: trempel-spine-import
+
+- **`trempel-spine-import <skeleton.json | folder>… [--out] [--atlas] [--fps 30] [--skin] [--points 60]
+  [--art false] [--verify false] [--frames 0,0.5 [--clip]]`** (bin): Spine JSON 3.5–4.2 + its atlas →
+  `scene.svg` (a sterile base: bone → nested `<g id>` with the setup pose, y flipped; slot →
+  `<g id="<slot>-slot">` with its `<image>`s in the draw order), `<name>.anim.md` (md clips: bones →
+  relative x y rotation scaleX scaleY, bezier → `[x1,y1,x2,y2]`, stepped → `step`, a segment without a
+  normal form baked adaptively; attachments → `tex` or alpha 0/1; events → `$events`) + the compiled
+  `.anim.json`, `art/<region>.png` cut from the atlas (rotated / trimmed / premultiplied pages; our own
+  PNG reader, no metadata, no native dependency), `report.md` (a folder: `summary.md`). The Spine
+  runtime is not used: the JSON is read by our own code, from the format documentation.
+- **Format 1.3 where the original had none**: slot colour → `data-tint` and the `tint` column (one
+  ease per row when the channels agree, else baked; attachment colours on the images while the slot
+  colour does not animate; the dark colour of a two-colour tint — reported); blend modes →
+  `mix-blend-mode` (additive → plus-lighter, multiply, screen); draw order timelines → the `z` column of
+  the siblings they reorder. `data-z` orders siblings only, so the setup draw order still needs bone
+  group clones where two sibling subtrees interleave (the greedy walk is minimal; the report counts
+  them); a draw order key that moves a slot across groups — reported, the setup order kept there.
+- **Verification**: our own Spine pose sampler (from the documentation) against Trempel itself — the
+  base mounted on a headless backend with Pixi's transform semantics, the md compiled and played by
+  the Animator — at `--points` per animation: position ±0.5 px, rotation ±0.5°, scale ±0.5 %, alpha
+  ±0.01, colour ±0.01, attachment and draw order exact. Codes `E_SPINE_IMPORT_USAGE / _INPUT / _ATLAS /
+  _ART`. Tests on skeletons built in code; a real corpus — a local run (`TREMPEL_SPINE_CORPUS`).
+- **`clip-import`** (`@trempel/kit/internal/clip-import`): what the clip importers share — the headless
+  backend, Bézier segments → eases, md clip tables, `playHeadless`.
+
+### An effect as a scene node
+
+- **`tml:type="fx"`** (registered by `createGame`, `fxComponents()`): a particle effect placed in a
+  scene — `data-effect` (a name of the effects table or a preset), `data-autostart` (default on),
+  `data-loop`, `data-scale`, `data-seed`; the base keeps a placeholder (a dot) and stays sterile;
+  `data-tint` tints it as any node. The effects of a node step on fixed frames of 1/60 s from a seeded
+  random source (the node id + seed): an effect `t` seconds old is the same picture at any frame rate,
+  `seek(t)` replays it. In a game the loop ticks them (pause / speed apply). The component's API:
+  `play()`, `stop()`, `seek(t)`, `fire(effect)`, `node` (`FxNode`, its `FxHost`).
+- **Clip markers `fx:<name>@<node>`**: `game.clips.play()` plays the effect at that node of the clip's
+  scene (an effect node fires it, another node gets a one-shot in its place; `Clips.onMarker` — the
+  kit's handler before the play's own).
+- **`@trempel/kit/view`** — `kitView(options)` for a game's `trempel.view.ts`: the kit's UI components
+  in a skin (or `skin: false`), effect nodes from the game's effects table (its textures loaded in
+  `setup`, before the first scene), the game's own components, and `onClipTime`: the effects fired by
+  markers replayed to the clip time shown — `view:shot --clip x --t 0.8` draws them, the editor's clip
+  panel scrubs them. The page's time is counted in ticks of its clock, not in frames drawn, so
+  `view:shot` gives the same picture every run (10 / 10 with a clip, 20 / 20 settled — the kit's
+  showcase `ui/scenes/effects`).
+- `Fx`: `make()` (an effect the caller steps), `rng` in the play options, built-in shapes drawn on a
+  canvas when there is no renderer (the viewer).
+
+### Choreography as data
+
+- **`loadChoreo(files, { eases })`**: md documents (`# $seq <id>` with `$title` / `$skip` and a table of
+  rows; `# $consts` — numbers per speed mode normal / quick / turbo) → sequences of named steps over
+  different objects: formula times (`step * k`, `@fly.end`, `max(@a.end, @b.end)`), instances (`k=0..n`,
+  `p in list`), `when`, durations or `loop`, `poll:` conditions, nested sequences (`run:`), sync
+  (await / parallel / resolve), skip rules (cut / now / +N). Strict: every problem is
+  `E_CHOREO_LOAD: <file>:<seq>:<row>: …`. The formula language has no eval (`E_CHOREO_EXPR`).
+- **`Director`** on the loop's logical time: every row fires in the first frame at or after its time,
+  the log keeps the exact `t` (`at` — the frame); a sequence started at the previous one's logical end
+  keeps a round free of frame drift. Rows go to **actions** by the prefix of their `action` —
+  `kitActions({ scene, tweens, clips, clipOf, fx, sound, calls })`: `clip:` (a clip with params from
+  `value`), `tween:` (from → to / += / = over `dur` with the kit's eases; a row fired late starts that
+  far in; skip jumps to the end), `fx:` (at the target node), `sound:`, `call:` — and the game's own;
+  a `sink` sees every row (sounds by the `sound` column, a view that draws everything itself).
+  `E_CHOREO_RUN`, `E_CHOREO_ACTION`.
+- **`verifyLog`** — the log against a reference timeline (`timeline.json` of the original): ±1 frame
+  for frame-timed actions, exact for timers and events, durations, order-only steps with the reason,
+  coverage; `variant` for a game's per-variant values. **`verifyLive`** — probes of a live recording
+  through the original's 60 Hz tick model. In the stable entry (types `ChoreoEvent`, `Choreo`, …).
 
 ### Particles from Cocos
 

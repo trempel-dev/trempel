@@ -73,7 +73,7 @@ function frames(): (fn: Tick) => () => void {
 
 /** The kit's view config: UI components and effect nodes in the viewer, the editor, view:shot. */
 export function kitView(o: KitViewOptions = {}): ViewConfig {
-  const { effects, textures, skin: skinOpt, components, componentContext, backend, onMount, ...rest } = o;
+  const { effects, textures, skin: skinOpt, components, componentContext, backend, onMount, setup, ...rest } = o;
   const skin = skinOpt === false ? null : (skinOpt ?? defaultSkin());
   const tick = frames();
   const tweens = new Tweens();
@@ -83,6 +83,11 @@ export function kitView(o: KitViewOptions = {}): ViewConfig {
   const clipTime = new FxClipTime(fx);
   return {
     ...rest,
+    // the effects' textures are in before the first scene: a lazy load would land mid-settle
+    setup: async () => {
+      await setup?.();
+      await fx.preload();
+    },
     backend: backend ?? (skin ? () => new KitBackend({ skin }) : undefined),
     registry: () => {
       const reg = new Registry();

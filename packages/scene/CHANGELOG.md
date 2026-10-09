@@ -2,6 +2,23 @@
 
 The scene format has its own changelog at the end of [docs/format/scene-format.md](docs/format/scene-format.md).
 
+## 2.2.0
+
+Additions only; the format stays 1.3.
+
+- **`onClipTime` of the consumer module** (`trempel.view.ts`, §11; type `ViewClipArgs` of
+  `@trempel/scene/view`): after every pose of the scene by a clip — `view:shot --clip --t`, a seek or a
+  played frame of the editor's clip panel — the module hears `{ id, scene, clip, t, markers }`: the time
+  shown and the clip's `$events` crossed in this cycle. What lives in time next to the clip catches up
+  to the frame: the kit's view module (`@trempel/kit/view`) replays the particle effects fired by
+  `fx:<name>@<node>` markers, so `view:shot` and the editor draw them at that moment. The viewer's
+  `ClipPlayer` takes `{ onTime }` for it.
+- **`view:shot` settles to fixed moments of the virtual clock** (`CLOCK_START + i` frames) instead of
+  steps from "now": loading leaks a millisecond or two of fake time, and with the page's frames on a
+  16 ms grid the steps from a leaked start sometimes ended a frame later — a picture that lives in time
+  (particles) differed between runs. Still images and the golden snapshots are unchanged (0/255); a
+  scene with effects is now the same bit for bit (20 runs of 20 in the kit's effects showcase).
+
 ## 2.1.0
 
 Additions only; the format stays 1.3.

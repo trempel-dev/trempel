@@ -9,7 +9,7 @@
 > `error=E_CODE` must fail with exactly that code, every other block must pass.
 
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 2.1 (format 1.3). The examples of this document
+npm package `@trempel/scene` 2.2 (format 1.3). The examples of this document
 are checked by tests at every build.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes
@@ -995,6 +995,7 @@ is a plain configuration object; every field is optional:
 | `fonts`, `fontFamily` | web fonts loaded before the first mount; default text family |
 | `context(state)` | extra expression context next to `state` (texts, real handlers) |
 | `onMount({ id, scene, state })` | seed components after each mount |
+| `onClipTime({ id, scene, clip, t, markers })` | 2.2: after every pose of the scene by a clip (`view:shot --clip --t`, a seek or a played frame of the editor's clip panel): `t` — seconds shown, `markers` — the clip's `$events` at or before `t` in this cycle; what lives in time next to the clip (a particle effect fired by a marker) catches up — deterministically |
 | `background` | stage background colour |
 | `prefabs` | prefab folders for the editor palette, e.g. `['ui']` |
 | `collections` | v1.1: collection name → folder URL (relative to the scene folder, or absolute), over the project's (§12) |
@@ -1460,4 +1461,5 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 - **1.1** — collections: `@name/path` hrefs into named folders (`.trempel/project.mdz`, folders from the project root or `npm:` packages), `collections` in `MountOptions` / `defineView`, resolved before `baseUrl`/`resolveHref`, unknown name — an error, contract `href` compared by the resolved file; the dev server serves the project root and the collections; the editor's palette groups a collection's prefabs and writes `@name/…`; `flatten` — any scene as one vanilla SVG (`--embed`, `--state`; `@trempel/scene/node`, bin `trempel-flatten`); `migrate-collections.mjs`.
 - **1.3** (package 2.0) — what a real game needed: an instance's context inherits the scene's (names added after the mount — a game's actions — are seen inside prefabs); clip parameters (`$name` number cells, `play(clip, { params })`, `E_ANIM_PARAM`); `preserveAspectRatio` of an `<image>` (meet / slice, `E_ASPECT`); an heir of the project extending a collection document, and project heirs — every instance of a collection document is built with the project's heir over the collection's (`heirs` in `MountOptions`, found by the Node tools, `E_PROJECT_HEIR`).
 - **2.0** (package; the format stays 1.2) — every message in English with a code (§16); `<!DOCTYPE>` and entities are refused (`E_DOCTYPE`); a narrow stable API (§15), the rest under `@trempel/scene/internal/*`; `checkScene`; `@trempel/scene/view`; the examples of this document are tests.
+- **2.2** (package; the format stays 1.3) — the consumer module's `onClipTime` (§11): the viewer and the editor report the clip time shown and the markers crossed, so effects fired by clip markers are drawn at that moment; `view:shot` settles to fixed moments of its virtual clock (a picture that lives in time is the same every run).
 - **1.2** — no format changes. The runtime has no built-in components: the demo grid component of 1.1 left `createDefaultRegistry()`, which is now an empty registry — games register their own. The repository is a monorepo: `@trempel/scene` and the game kit `@trempel/kit` (screens, popups, layout, UI components, a default skin as the collection `npm:@trempel/kit/skins/default/ui`), versioned together.

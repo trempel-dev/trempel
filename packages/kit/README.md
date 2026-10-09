@@ -15,9 +15,37 @@ Docs: [trempel.dev](https://trempel.dev) · the scene format: [`scene-format.md`
 
 ## Entries
 
-`@trempel/kit` — the stable API: `createGame` and its options and types, the types of the game's members, the services and the kit's contracts, the UI components and the skin. `@trempel/kit/vite`, `@trempel/kit/testing`, `@trempel/kit/e2e`, `@trempel/kit/skin-cli`. Everything else is `@trempel/kit/internal/<module>` (no stability promise) — see CHANGELOG.md 2.0.0.
+`@trempel/kit` — the stable API: `createGame` and its options and types, the types of the game's members, the services and the kit's contracts, the UI components and the skin. `@trempel/kit/vite`, `@trempel/kit/testing`, `@trempel/kit/e2e`, `@trempel/kit/skin-cli`, `@trempel/kit/view` (2.2: `kitView()` for a game's `trempel.view.ts`). Everything else is `@trempel/kit/internal/<module>` (no stability promise) — see CHANGELOG.md 2.0.0.
 
 The save: `game.save` is the game's own data; the kit keeps the sound settings and the services' store apart in the same save file — the game cannot overwrite them.
+
+## Spine skeletons
+
+```bash
+npx trempel-spine-import spine/hero.json --out scenes/hero [--atlas spine/hero.atlas] [--fps 30] [--frames 0.2,0.5 --clip idle]
+npx trempel-spine-import spine/ --out scenes/spine        # every skeleton of the folder + summary.md
+```
+
+`scene.svg` (bones → nested groups, slots in the draw order, slot colour → `data-tint`, blend → `mix-blend-mode`), `<name>.anim.md` (+ `.anim.json`), `art/` cut from the atlas, `report.md` — what was transferred and the check of every animation against Trempel's own player.
+
+## Effects in scenes
+
+```xml
+<!-- X.svg (base): a placeholder dot -->      <g id="sparkle" transform="translate(360 640)" data-effect="sparkle" data-scale="1.5"><circle r="8"/></g>
+<!-- X.tml.svg (heir) -->                      <tml:ref id="sparkle" tml:type="fx"/>
+```
+
+An effect node plays from the mount (`data-autostart="false"` — on `play()`); a clip's `$events` row `fx:burst@star` plays an effect at a node. In the viewer, the editor and `view:shot`, `export default kitView({ effects, textures })` (`@trempel/kit/view`) draws them — seeded, on the page's clock, the same picture every run.
+
+## Choreography
+
+```ts
+const choreo = loadChoreo(import.meta.glob('./choreo/*.md', { eager: true, query: '?raw', import: 'default' }));
+const director = new Director({ choreo, loop: game.loop, actions: kitActions({ scene: screen.scene, tweens: game.tweens, clips: game.clips, clipOf, fx: game.fx, sound: game.sound }) });
+const end = await director.run('deal', { count: 5 });
+```
+
+Sequences of named steps as md tables (formula times, `@row.end`, instances, speed modes, skip rules, nested sequences) on the loop's logical time; `verifyLog` checks the log against a reference timeline.
 
 ## Effects from Unity
 

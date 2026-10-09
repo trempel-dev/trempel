@@ -1,6 +1,6 @@
 {
   "name": "@trempel/template-casual",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "description": "Trempel kit template: an empty casual game \u2014 loading, menu, game screen stub, pause, settings, win/lose, save, restart; coins on the wallet service; web and YouTube Playables builds.",

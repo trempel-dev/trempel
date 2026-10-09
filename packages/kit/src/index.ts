@@ -64,10 +64,10 @@ export { UI_SCENES } from './ui/scenes.js';
 export { assetTable } from './assets/loader.js';
 
 // ---- 2.2: choreography as data — sequences of named steps on the loop's logical time ---------------
-export { Director, loadChoreo, kitActions, verifyLog, verifyLive, formatFindings, tickGrid, KIT_EASES, FRAME_KINDS } from './choreo/index.js';
+export { Director, loadChoreo, kitActions, verifyLog, verifyLive, formatFindings, tickGrid, stepTicks, locate, isLiveRef, compile as compileFormula, evaluate as evaluateFormula, scopeOf, KIT_EASES, FRAME_KINDS } from './choreo/index.js';
 export type {
   Choreo, Sequence, Row, SpeedMode, Sync, ValueItem, LoadOptions, Action, ChoreoEvent, DirectorOptions, EventProp, RowCtl, RunOptions, Sink, KitActionDeps,
-  VerifyOptions, VerifyResult, Finding, TimelineDoc, LiveDoc, LiveProbe, LiveMapping, LiveMeasure, LiveRow, Value as ChoreoValue, EventKind as ChoreoKind,
+  VerifyOptions, VerifyResult, Finding, TimelineDoc, TimelineSeq, TimelineStep, LiveDoc, LiveProbe, LiveStats, LiveMapping, LiveMeasure, LiveSample, LiveRow, LiveFinding, Value as ChoreoValue, Scope as ChoreoScope, EventKind as ChoreoKind,
 } from './choreo/index.js';
 
 // ---- 2.2: an effect as a scene node (`tml:type="fx"`), clip markers `fx:<name>@<node>` -------------
