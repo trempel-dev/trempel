@@ -62,3 +62,14 @@ export { KitBackend } from './ui/kit-backend.js';
 export type { KitBackendOptions, SliceLookup } from './ui/kit-backend.js';
 export { UI_SCENES } from './ui/scenes.js';
 export { assetTable } from './assets/loader.js';
+
+// ---- 2.2: choreography as data — sequences of named steps on the loop's logical time ---------------
+export { Director, loadChoreo, kitActions, verifyLog, verifyLive, formatFindings, tickGrid, KIT_EASES, FRAME_KINDS } from './choreo/index.js';
+export type {
+  Choreo, Sequence, Row, SpeedMode, Sync, ValueItem, LoadOptions, Action, ChoreoEvent, DirectorOptions, EventProp, RowCtl, RunOptions, Sink, KitActionDeps,
+  VerifyOptions, VerifyResult, Finding, TimelineDoc, LiveDoc, LiveProbe, LiveMapping, LiveMeasure, LiveRow, Value as ChoreoValue, EventKind as ChoreoKind,
+} from './choreo/index.js';
+
+// ---- 2.2: an effect as a scene node (`tml:type="fx"`), clip markers `fx:<name>@<node>` -------------
+export { fxComponents } from './fx/node.js';
+export type { FxNode, FxHost, FxRun, FxRunOptions, FxNodeDeps } from './fx/node.js';
