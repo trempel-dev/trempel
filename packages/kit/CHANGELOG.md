@@ -1,5 +1,47 @@
 # Changelog — @trempel/kit
 
+## 2.2.0
+
+Additions only: the 2.1 API and configs are unchanged — new optional `ParticleConfig` fields, a new
+mode of the bin. A 2.1 config simulates bit for bit as before (the new fields draw their random values
+after the 2.1 ones and only when set; a test holds digests of the 2.1 simulation).
+
+### Particles from Cocos
+
+- **`trempel-fx-import --cocos <X.plist | X.json | folder>… --out <dir> [--scale 1]`**: Cocos particles
+  (Particle Designer / Particle2dx — an XML `.plist`, or the `.json` variant with the same keys; a
+  folder — every particle file under it) → the kit's effects, the same output as the Unity mode:
+  `effects.json` (`{ name: [ParticleConfig] }`, `createGame({ fx: { effects } })` as is),
+  `textures/*.png` without metadata, `report.md` / `report.json` (every emitter `auto` / `manual` /
+  `hard` and why). One file = one effect named after it. Both emitter modes: gravity (gravity x / y,
+  speed, angle, radial and tangential acceleration, source position variance → a box) and radius
+  (start / end radius, rotation per second); start / end size, colour (per channel) and rotation with
+  variance, lifetime, `duration` (−1 — loops), `maxParticles`, emission rate (`totalParticles /
+  particleLifespan` unless `emissionRate`); blend pairs (ONE/ONE, SRC_ALPHA/ONE → add;
+  SRC_ALPHA/ONE_MINUS_SRC_ALPHA, ONE/ONE_MINUS_SRC_ALPHA → normal; others — the nearest, `manual`);
+  `positionType` free / relative — `manual` (particles move with the effect). Y up, counter-clockwise
+  degrees → y down, radians; points → px (`unit: [scale, scale]`). Texture: `textureFileName` next to
+  the file, else `textureImageData` (base64 → gzip / zlib / raw PNG; a TIFF payload — the built-in
+  circle, `manual`). Its own XML plist reader, no new dependencies. Errors: `E_FX_IMPORT_INPUT`,
+  `E_FX_IMPORT_COCOS` (a malformed plist / JSON, not a particle file), `E_FX_IMPORT_USAGE`
+  (`--ppu` with `--cocos`, `--scale` without it).
+- **The check**: every emitter is simulated by the kit and by a reference model of Cocos' particle
+  rules (written from the format's semantics) fed the same random values — the min, middle and max of
+  every variance — and compared at every frame: position, size, colour, rotation of a particle, the
+  particle count of a whole run. Tolerances (report and tests): 0.01 px, 0.01 px, 1e-4, 1e-4 rad, the
+  count within two frames of emission; the synthetic emitters of the tests match within ~3e-7 px. Out of
+  tolerance — `hard`.
+
+### Particles: the Cocos model in the runtime
+
+New optional `ParticleConfig` fields (typed, with doc comments; `OrbitConfig`, `ParticleShape` types):
+`gravityX`; `radialAccel`, `tangentialAccel` (about the emitter's origin, per particle); `angle` (the
+direction of the start velocity, replaces the shape's); `orbit` (`{ radius, endRadius?, speed }` — the
+radius mode: particles circle their start point); `endSize`, `endColor`, `endRotation` (linear from the
+start values over each particle's life); `colorPerChannel` (random colours drawn channel by channel,
+clamped); `whenFull: 'wait'` (Cocos: the emission clock stops while the emitter is full); the shape
+`type: 'box'` with `box: [halfW, halfH]`. `ParticleSim.spawned` counts spawned particles.
+
 ## 2.1.0
 
 What A World of Differences (DIF-2) and FindCat did around the kit, moved into it. Additions only:

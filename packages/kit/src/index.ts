@@ -22,7 +22,7 @@ export type { GameLoop, Clock, UpdateFn } from './time/loop.js';
 export type { Tweens, Ease, EaseName, TweenOptions } from './anim/tweens.js';
 export type { Clips, ClipPlayOptions, AnimClip, Handle } from './anim/clips.js';
 export type { Fx, Effect, EffectSpec, FxPlayOptions, FxTables } from './fx/fx.js';
-export type { ParticleConfig, TrailConfig } from './fx/types.js';
+export type { ParticleConfig, TrailConfig, OrbitConfig, ParticleShape } from './fx/types.js';
 export type { Sound, SoundSource, SoundEntry } from './audio/sound.js';
 export type { SynthSpec, SynthPreset } from './audio/synth.js';
 export type { Save, SaveOptions } from './data/save.js';

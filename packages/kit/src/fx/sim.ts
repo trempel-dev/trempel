@@ -3,6 +3,12 @@
 // (start values, sphere/circle emission, gravity, limit-velocity dampen, size/colour over
 // lifetime, angular speed `spin`, texture sheet, stretched billboards) — on plain Pixi, no
 // particle library and no private API.
+//
+// 2.2: the Cocos particle model on top (all optional config fields — trempel-fx-import --cocos):
+// gravity x, radial / tangential acceleration, an emission angle, the orbit mode, a box shape, end
+// size / colour / rotation per particle, per-channel colour variance, emission that waits while full.
+// Its random draws come after the 2.1 ones and only when a field is set: a 2.1 config draws and
+// simulates exactly as before.
 
 import type { Curve, MinMax, ParticleConfig, RGBA } from './types.js';
 
@@ -22,6 +28,22 @@ export interface SimParticle {
   outColor: RGBA;
   frame: number;
   stretch: number;
+  // 2.2 (set only when the config uses them):
+  /** Radial / tangential acceleration of this particle, units/s². */
+  radialAccel?: number;
+  tangentialAccel?: number;
+  /** End size and colour (linear from the start ones over the life). */
+  endSize?: number;
+  endColor?: RGBA;
+  /** Rotation speed towards the end rotation, rad/s. */
+  rotationSpeed?: number;
+  /** Orbit mode: the centre, angle, angular speed, radius and its speed. */
+  ox?: number;
+  oy?: number;
+  orbitAngle?: number;
+  orbitSpeed?: number;
+  radius?: number;
+  radiusSpeed?: number;
 }
 
 export type Rng = () => number;
@@ -75,6 +97,13 @@ export function spawnPoint(shape: ParticleConfig['shape'], rng: Rng): { x: numbe
   // Shuriken without a shape module emits along +Z — no velocity on screen.
   // For "random direction from a point" use { type: 'circle', radius: 0 }.
   if (shape.type === 'point') return { x: 0, y: 0, dx: 0, dy: 0 };
+  // 2.2: a box (Cocos' source position variance) — a point, no direction (the config's `angle` gives it).
+  if (shape.type === 'box') {
+    const [bx, by] = shape.box ?? [0, 0];
+    const x = bx * (rng() * 2 - 1);
+    const y = by * (rng() * 2 - 1);
+    return { x, y, dx: 0, dy: 0 };
+  }
   const radius = shape.radius * (1 - shape.thickness * rng());
   let dx: number;
   let dy: number;
@@ -106,12 +135,20 @@ export class ParticleSim {
   private loopsDone = 0;
   /** Frames of the texture sheet (1 when none). */
   frames = 1;
+  /** 2.2: particles spawned since the start (spawn index of the next one). */
+  spawned = 0;
+  /** 2.2: the config uses the Cocos model fields. */
+  private readonly ext: boolean;
 
   constructor(
     readonly config: ParticleConfig,
     private readonly rng: Rng = Math.random,
   ) {
     if (config.sheet) this.frames = config.sheet.tilesX * config.sheet.tilesY;
+    const c = config;
+    this.ext =
+      c.radialAccel !== undefined || c.tangentialAccel !== undefined || c.angle !== undefined || c.orbit !== undefined ||
+      c.endSize !== undefined || c.endColor !== undefined || c.endRotation !== undefined;
   }
 
   get count(): number {
@@ -126,6 +163,7 @@ export class ParticleSim {
   play(): void {
     this.time = 0;
     this.rateAcc = 0;
+    this.spawned = 0;
     this.burstDone = this.config.bursts.map(() => 0);
     this.loopsDone = 0;
     this.playing = true;
@@ -169,6 +207,32 @@ export class ParticleSim {
         this.pool.push(p);
         continue;
       }
+      if (p.orbitAngle !== undefined) {
+        // 2.2: orbit mode — the position is the orbit's (gravity, accelerations, speed do not apply).
+        p.orbitAngle += p.orbitSpeed! * dt;
+        p.radius! += p.radiusSpeed! * dt;
+        const x = p.ox! + Math.cos(p.orbitAngle) * p.radius!;
+        const y = p.oy! + Math.sin(p.orbitAngle) * p.radius!;
+        p.vx = (x - p.x) / dt;
+        p.vy = (y - p.y) / dt;
+        p.x = x;
+        p.y = y;
+        p.rotation += p.spin * dt;
+        if (p.rotationSpeed) p.rotation += p.rotationSpeed * dt;
+        this.output(p);
+        continue;
+      }
+      if (p.radialAccel !== undefined) {
+        // 2.2: radial / tangential acceleration about the emitter's origin.
+        const d = Math.hypot(p.x, p.y);
+        const ux = d > 0 ? p.x / d : 0;
+        const uy = d > 0 ? p.y / d : 0;
+        const ra = p.radialAccel;
+        const ta = p.tangentialAccel!;
+        p.vx += (ux * ra + uy * ta) * dt;
+        p.vy += (uy * ra - ux * ta) * dt;
+      }
+      if (c.gravityX) p.vx += c.gravityX * dt;
       p.vy += c.gravity * dt;
       if (c.limitVelocity) {
         const v = Math.hypot(p.vx, p.vy);
@@ -182,6 +246,7 @@ export class ParticleSim {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rotation += p.spin * dt;
+      if (p.rotationSpeed) p.rotation += p.rotationSpeed * dt;
       this.output(p);
     }
   }
@@ -204,11 +269,21 @@ export class ParticleSim {
     }
     const local = c.loop ? t1 - cycle * c.duration : t1;
     if (c.rate > 0 && this.emitting) {
-      this.rateAcc += Math.min(dt, t1 - Math.max(0, t0)) * c.rate;
-      const n = Math.floor(this.rateAcc);
-      if (n > 0) {
-        this.rateAcc -= n;
-        this.emit(n);
+      if (c.whenFull === 'wait') {
+        // 2.2 (Cocos): the emission clock runs only while there is room; what is due waits for it.
+        if (this.particles.length < c.max) this.rateAcc += Math.min(dt, t1 - Math.max(0, t0)) * c.rate;
+        const n = Math.min(Math.floor(this.rateAcc), c.max - this.particles.length);
+        if (n > 0) {
+          this.rateAcc -= n;
+          this.emit(n);
+        }
+      } else {
+        this.rateAcc += Math.min(dt, t1 - Math.max(0, t0)) * c.rate;
+        const n = Math.floor(this.rateAcc);
+        if (n > 0) {
+          this.rateAcc -= n;
+          this.emit(n);
+        }
       }
     }
     c.bursts.forEach((b, i) => {
@@ -235,25 +310,76 @@ export class ParticleSim {
     p.age = 0;
     p.life = Math.max(1e-3, sampleMinMax(c.lifetime, emitT, rng));
     p.size = sampleMinMax(c.size, emitT, rng);
-    const col = c.color;
-    if (Array.isArray(col[0])) {
-      const [a, b] = col as [RGBA, RGBA];
-      const k = rng();
-      for (let i = 0; i < 4; i++) p.color[i] = a[i] + (b[i] - a[i]) * k;
-    } else for (let i = 0; i < 4; i++) p.color[i] = (col as RGBA)[i];
+    if (c.colorPerChannel) pickColor(c.color, rng, true, p.color);
+    else {
+      const col = c.color;
+      if (Array.isArray(col[0])) {
+        const [a, b] = col as [RGBA, RGBA];
+        const k = rng();
+        for (let i = 0; i < 4; i++) p.color[i] = a[i] + (b[i] - a[i]) * k;
+      } else for (let i = 0; i < 4; i++) p.color[i] = (col as RGBA)[i];
+    }
     const flip = rng() < c.flipRotation ? -1 : 1;
     p.rotation = sampleMinMax(c.rotation, emitT, rng) * flip;
     p.spin = c.spin !== undefined ? sampleMinMax(c.spin, emitT, rng) * flip : 0;
+    if (this.ext) this.spawnExt(p, emitT, flip, speed, sp.x, sp.y);
+    this.spawned++;
     this.particles.push(p);
     this.output(p);
+  }
+
+  /** 2.2: the Cocos model's per-particle values (drawn after the 2.1 ones). */
+  private spawnExt(p: SimParticle, emitT: number, flip: number, speed: number, x: number, y: number): void {
+    const c = this.config;
+    const rng = this.rng;
+    const life = p.life;
+    const angle = c.angle !== undefined ? sampleMinMax(c.angle, emitT, rng) : undefined;
+    if (c.endSize !== undefined) {
+      p.size = Math.max(0, p.size);
+      p.endSize = Math.max(0, sampleMinMax(c.endSize, emitT, rng));
+    } else p.endSize = undefined;
+    if (c.endColor !== undefined) p.endColor = pickColor(c.endColor, rng, !!c.colorPerChannel, p.endColor ?? [1, 1, 1, 1]);
+    else p.endColor = undefined;
+    p.rotationSpeed = c.endRotation !== undefined ? (sampleMinMax(c.endRotation, emitT, rng) * flip - p.rotation) / life : undefined;
+    if (c.orbit) {
+      const o = c.orbit;
+      const r0 = sampleMinMax(o.radius, emitT, rng);
+      const r1 = o.endRadius !== undefined ? sampleMinMax(o.endRadius, emitT, rng) : r0;
+      p.ox = x;
+      p.oy = y;
+      p.orbitAngle = angle ?? 0;
+      p.orbitSpeed = sampleMinMax(o.speed, emitT, rng);
+      p.radius = r0;
+      p.radiusSpeed = (r1 - r0) / life;
+      p.x = x + Math.cos(p.orbitAngle) * r0;
+      p.y = y + Math.sin(p.orbitAngle) * r0;
+      p.vx = 0;
+      p.vy = 0;
+      p.radialAccel = undefined;
+      return;
+    }
+    p.orbitAngle = undefined;
+    if (angle !== undefined) {
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed;
+    }
+    if (c.radialAccel !== undefined || c.tangentialAccel !== undefined) {
+      p.radialAccel = c.radialAccel !== undefined ? sampleMinMax(c.radialAccel, emitT, rng) : 0;
+      p.tangentialAccel = c.tangentialAccel !== undefined ? sampleMinMax(c.tangentialAccel, emitT, rng) : 0;
+    } else p.radialAccel = undefined;
   }
 
   private output(p: SimParticle): void {
     const c = this.config;
     const t = Math.min(1, p.age / p.life);
-    p.outSize = p.size * (c.sizeOverLifetime ? sampleCurve(c.sizeOverLifetime, t) : 1);
+    const size = p.endSize !== undefined ? p.size + (p.endSize - p.size) * t : p.size;
+    p.outSize = size * (c.sizeOverLifetime ? sampleCurve(c.sizeOverLifetime, t) : 1);
     const g = c.colorOverLifetime ? sampleGradient(c.colorOverLifetime, t, [1, 1, 1, 1]) : null;
-    for (let i = 0; i < 4; i++) p.outColor[i] = Math.max(0, Math.min(1, p.color[i] * (g ? g[i] : 1) * c.tint[i]));
+    const e = p.endColor;
+    for (let i = 0; i < 4; i++) {
+      const col = e ? p.color[i] + (e[i] - p.color[i]) * t : p.color[i];
+      p.outColor[i] = Math.max(0, Math.min(1, col * (g ? g[i] : 1) * c.tint[i]));
+    }
     if (c.render.mode === 'stretch') {
       const v = Math.hypot(p.vx, p.vy);
       p.stretch = p.outSize > 0 ? (p.outSize * c.render.lengthScale + v * c.render.velocityScale) / p.outSize : 1;
@@ -264,4 +390,20 @@ export class ParticleSim {
       p.frame = Math.min(this.frames - 1, Math.max(0, Math.floor(k * this.frames)));
     } else p.frame = 0;
   }
+}
+
+/** A colour of a config (one, or random between two: one mix factor, or — perChannel — a draw per channel, clamped). */
+function pickColor(col: RGBA | [RGBA, RGBA], rng: Rng, perChannel: boolean, out: RGBA): RGBA {
+  if (!Array.isArray(col[0])) {
+    for (let i = 0; i < 4; i++) out[i] = (col as RGBA)[i];
+    return out;
+  }
+  const [a, b] = col as [RGBA, RGBA];
+  if (perChannel) {
+    for (let i = 0; i < 4; i++) out[i] = Math.max(0, Math.min(1, a[i] + (b[i] - a[i]) * rng()));
+    return out;
+  }
+  const k = rng();
+  for (let i = 0; i < 4; i++) out[i] = a[i] + (b[i] - a[i]) * k;
+  return out;
 }

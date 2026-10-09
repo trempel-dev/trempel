@@ -3,6 +3,7 @@ import { ParticleSim, sampleCurve, sampleMinMax } from '../src/fx/sim.js';
 import { particleConfig } from '../src/fx/types.js';
 import { PARTICLES } from '../src/fx/presets.js';
 import { seededRandom } from '../src/qa/random.js';
+import { OLD_CONFIGS, simDigest } from './helpers/sim-digest.js';
 
 describe('particles — simulation without a renderer', () => {
   it('curves and min-max', () => {
@@ -78,5 +79,108 @@ describe('particles — simulation without a renderer', () => {
       return s.particles.map((p) => [p.x, p.y]);
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe('particles 2.2 — the Cocos model fields', () => {
+  it('a 2.1 config simulates bit for bit as in 2.1 (digests of the 2.1 kit)', () => {
+    // Recorded with the 2.1.0 sim (before the 2.2 fields): every particle's full state, 90 frames.
+    expect(Object.fromEntries(Object.entries(OLD_CONFIGS).map(([k, c]) => [k, simDigest(c)]))).toEqual({
+      burst: '387233eb9976f25248c24f67fb00bd2e',
+      confetti: '5e2488dba646004e45a339d997d416b3',
+      sparkle: '0e40d845fcedd97379bf2504c1956bef',
+      smoke: 'eab471003c1e6ae2e3494b2b52e4b8a2',
+      coins: '3b29850360002011532a75946c949d5b',
+      trail: '477852e51b6b1236ec1c0abac8406d0a',
+      shuriken: '850c163ccfe14171b68d88f3b4c885bc',
+      arc: '6a1dbdbbb31b32d3c1e16a8ce4f0091f',
+    });
+  });
+
+  it('box shape, emission angle, gravity x, end size / colour / rotation over the life', () => {
+    const c = particleConfig({
+      speed: 100, angle: Math.PI / 2, gravityX: 50, lifetime: 1, size: 10, endSize: 30, color: [1, 0, 0, 1], endColor: [0, 0, 1, 0],
+      rotation: 0, endRotation: 2, shape: { type: 'box', radius: 0, thickness: 1, arc: 0, scale: [1, 1], box: [10, 4] },
+    });
+    const sim = new ParticleSim(c, () => 1 - 1e-9);
+    sim.emit(1);
+    const p = sim.particles[0];
+    expect(p.x).toBeCloseTo(10, 6);
+    expect(p.y).toBeCloseTo(4, 6);
+    expect(p.vx).toBeCloseTo(0, 9);
+    expect(p.vy).toBeCloseTo(100, 6); // down
+    for (let i = 0; i < 30; i++) sim.update(1 / 60);
+    expect(p.vx).toBeCloseTo(25, 6);
+    expect(p.outSize).toBeCloseTo(20, 6);
+    expect(p.outColor).toEqual([0.5, 0, 0.5, 0.5].map((v) => expect.closeTo(v, 6)));
+    expect(p.rotation).toBeCloseTo(1, 6);
+    expect(sim.spawned).toBe(1);
+    // a box without a size; sizes clamped at 0 with an end size
+    const z = new ParticleSim(particleConfig({ shape: { type: 'box', radius: 0, thickness: 1, arc: 0, scale: [1, 1] }, size: -5, endSize: [-3, -3] }), () => 0.5);
+    z.emit(1);
+    expect([z.particles[0].x, z.particles[0].outSize]).toEqual([0, 0]);
+  });
+
+  it('radial and tangential acceleration about the origin (tangential: counter-clockwise on screen)', () => {
+    const sim = new ParticleSim(particleConfig({ speed: 0, angle: 0, radialAccel: 10, tangentialAccel: 20, shape: { type: 'box', radius: 0, thickness: 1, arc: 0, scale: [1, 1], box: [5, 0] } }), () => 1);
+    sim.emit(1);
+    const p = sim.particles[0];
+    expect(p.x).toBe(5);
+    sim.update(0.1);
+    expect(p.vx).toBeCloseTo(1, 9); // radial: right, away
+    expect(p.vy).toBeCloseTo(-2, 9); // tangential at the right: up (y down)
+    const only = new ParticleSim(particleConfig({ speed: 0, tangentialAccel: 1 }), () => 0.5);
+    only.emit(1);
+    only.update(0.1);
+    expect(only.particles[0].vx).toBe(0); // at the origin: no direction
+  });
+
+  it('orbit mode: (cos θ, sin θ)·r from the start point, θ turning, r from start to end; speed / gravity ignored', () => {
+    const sim = new ParticleSim(particleConfig({ speed: 999, gravity: 999, lifetime: 2, angle: 0, orbit: { radius: 10, endRadius: 30, speed: Math.PI }, render: { mode: 'stretch', lengthScale: 1, velocityScale: 0.1 } }), () => 0.5);
+    sim.emit(1);
+    const p = sim.particles[0];
+    expect([p.x, p.y]).toEqual([10, 0]);
+    sim.update(0.5);
+    expect(p.x).toBeCloseTo(0, 9);
+    expect(p.y).toBeCloseTo(15, 9); // a quarter turn clockwise on screen, r 10 → 15
+    expect(p.vy).toBeGreaterThan(0);
+    const keep = new ParticleSim(particleConfig({ orbit: { radius: 7, speed: 0 }, endRotation: 1, lifetime: 1 }), () => 0.5);
+    keep.emit(1);
+    keep.update(0.5);
+    expect(keep.particles[0].x).toBeCloseTo(7, 9);
+    expect(keep.particles[0].rotation).toBeCloseTo(0.5, 9);
+  });
+
+  it('colour per channel: a draw per channel, clamped; end colour random between two', () => {
+    const draws = [0, 1, 1, 0.25];
+    let i = 0;
+    const sim = new ParticleSim(
+      particleConfig({ speed: 0, color: [[0, 0, -1, 0], [1, 1, 3, 1]], colorPerChannel: true }),
+      () => draws[i++ % draws.length],
+    );
+    sim.emit(1);
+    // draws (constant speed / lifetime / size draw nothing): r, g, b, a — b: −1 + 1·4 = 3, clamped
+    expect(sim.particles[0].color).toEqual([0, 1, 1, 0.25]);
+    // one colour + perChannel: copied
+    const one = new ParticleSim(particleConfig({ color: [0.1, 0.2, 0.3, 0.4], endColor: [[0, 0, 0, 0], [1, 1, 1, 1]], colorPerChannel: true }), () => 0.75);
+    one.emit(1);
+    expect(one.particles[0].color).toEqual([0.1, 0.2, 0.3, 0.4]);
+    expect(one.particles[0].endColor).toEqual([0.75, 0.75, 0.75, 0.75]);
+    // the mixed (one factor) end colour
+    const mix = new ParticleSim(particleConfig({ endColor: [[0, 0, 0, 0], [1, 1, 1, 1]] }), () => 0.25);
+    mix.emit(1);
+    expect(mix.particles[0].endColor).toEqual([0.25, 0.25, 0.25, 0.25]);
+  });
+
+  it("whenFull 'wait': the emission clock stops while full (Cocos); 'skip' keeps the schedule and drops what is due", () => {
+    const run = (whenFull: 'wait' | 'skip') => {
+      const sim = new ParticleSim(particleConfig({ loop: true, duration: 1, rate: 37 / 1.23, max: 37, lifetime: 1.23, speed: 0, whenFull }), () => 0.5);
+      sim.play();
+      for (let f = 0; f < 300; f++) sim.update(1 / 60);
+      return sim.spawned;
+    };
+    // Cocos' rate = max / life: a particle is due about when the oldest dies (still counted then) —
+    // 'wait' delays it and everything after it, 'skip' drops it and stays on schedule.
+    expect([run('wait'), run('skip')]).toEqual([148, 150]);
   });
 });

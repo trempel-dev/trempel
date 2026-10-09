@@ -1,5 +1,8 @@
 // types.ts — ParticleConfig: the particle format of the kit — Unity Shuriken modules, normalized
-// (a config converted from Shuriken — trempel-fx-import — plays here unchanged; 2.1: trails too).
+// (a config converted from Shuriken — trempel-fx-import — plays here unchanged; 2.1: trails too;
+// 2.2: what Cocos particles need — gravity x, radial / tangential acceleration, an emission angle, an
+// orbit ("radius") mode, end size / colour / rotation per particle, a box shape — all optional: a
+// config without them plays exactly as before).
 //
 // Units: one "unit" = `unit` pixels of the space the effect is mounted in. Curves: [[t, v], …]
 // linear. Angles in radians. y is DOWN. Bookkeeping fields of the converter (key, feature, cls)
@@ -44,7 +47,7 @@ export interface ParticleConfig {
   /** Particles per second. */
   rate: number;
   bursts: Burst[];
-  shape: { type: 'point' | 'circle' | 'sphere'; radius: number; thickness: number; arc: number; scale: [number, number] };
+  shape: ParticleShape;
   sizeOverLifetime?: Curve;
   colorOverLifetime?: { color: [number, number, number, number][]; alpha: Curve };
   /** Angular velocity, rad/s. */
@@ -59,6 +62,77 @@ export interface ParticleConfig {
   blend: Blend;
   /** Material tint multiplier. */
   tint: RGBA;
+
+  // ── 2.2: the Cocos particle model (all optional; absent — the simulation is the 2.1 one) ──────────
+
+  /** 2.2: gravity along x, units/s² (`gravity` is along y, down). */
+  gravityX?: number;
+  /**
+   * 2.2: acceleration along the line from the emitter's origin to the particle, units/s² (positive —
+   * away from the origin, negative — towards it). Sampled per particle.
+   */
+  radialAccel?: MinMax;
+  /**
+   * 2.2: acceleration perpendicular to that line, units/s² (positive — counter-clockwise on screen).
+   * Sampled per particle.
+   */
+  tangentialAccel?: MinMax;
+  /**
+   * 2.2: the direction of the start velocity, radians, y down (0 — right, π/2 — down); replaces the
+   * shape's direction (the shape still gives the start point). In `orbit` mode — the start angle.
+   */
+  angle?: MinMax;
+  /** 2.2: the orbit ("radius") mode — particles circle the emitter's origin instead of flying. */
+  orbit?: OrbitConfig;
+  /**
+   * 2.2: the end size per particle — the size goes linearly from the start one (`size`) to this over
+   * the particle's life (then × `sizeOverLifetime` if any). Both are clamped at 0.
+   */
+  endSize?: MinMax;
+  /**
+   * 2.2: the end colour per particle — the colour goes linearly from the start one (`color`) to this
+   * over the particle's life (then × `colorOverLifetime` if any). Random between two colours like `color`.
+   */
+  endColor?: RGBA | [RGBA, RGBA];
+  /**
+   * 2.2: "random between two colours" (`color`, `endColor`) draws every channel on its own (Cocos'
+   * colour variance) instead of one mix factor for all four; the drawn colours are clamped to 0..1.
+   */
+  colorPerChannel?: boolean;
+  /** 2.2: the end rotation per particle, radians — the rotation goes linearly from `rotation` to this over the life (plus `spin`). */
+  endRotation?: MinMax;
+  /**
+   * 2.2: emission while the emitter has `max` particles: 'skip' (default, Shuriken) — the particles due
+   * then are not emitted, the schedule goes on; 'wait' (Cocos) — the emission clock stops while full,
+   * what was due comes out as room frees, and the schedule shifts.
+   */
+  whenFull?: 'skip' | 'wait';
+}
+
+/** Where particles start (and which way they go unless `angle` is set). */
+export interface ParticleShape {
+  /** 2.2: 'box' — a point uniformly in [−box[0], box[0]] × [−box[1], box[1]], no direction of its own. */
+  type: 'point' | 'circle' | 'sphere' | 'box';
+  radius: number;
+  thickness: number;
+  arc: number;
+  scale: [number, number];
+  /** 2.2: the half-size of the 'box' shape, units. */
+  box?: [number, number];
+}
+
+/**
+ * 2.2: the orbit mode of a config (Cocos "radius" mode): a particle sits at (cos θ, sin θ) × r from its
+ * start point (the shape's), θ starting at `angle` and turning at `speed`, r going linearly from
+ * `radius` to `endRadius` over the life. Speed, gravity and accelerations do not apply.
+ */
+export interface OrbitConfig {
+  /** Start radius, units. */
+  radius: MinMax;
+  /** End radius, units (default: the start one, per particle). */
+  endRadius?: MinMax;
+  /** Angular speed, rad/s (positive — clockwise on screen, y down). */
+  speed: MinMax;
 }
 
 /**

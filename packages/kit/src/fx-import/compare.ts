@@ -9,6 +9,8 @@ import type { ParticleConfig } from '../fx/types.js';
 export const COMPARED = [
   'unit', 'pos', 'duration', 'loop', 'prewarm', 'startDelay', 'lifetime', 'speed', 'size', 'color', 'rotation', 'flipRotation', 'gravity', 'max', 'rate',
   'bursts', 'shape', 'sizeOverLifetime', 'colorOverLifetime', 'spin', 'limitVelocity', 'sheet', 'render', 'texture', 'blend', 'tint', 'trails',
+  // 2.2 (the Cocos model)
+  'gravityX', 'radialAccel', 'tangentialAccel', 'angle', 'orbit', 'endSize', 'endColor', 'colorPerChannel', 'endRotation', 'whenFull',
 ] as const;
 
 export interface CompareRow {
