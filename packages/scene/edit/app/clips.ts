@@ -78,7 +78,7 @@ export class Clips {
   /** After a render: recompile, and drop a pose the new scene no longer has. */
   private refresh(): void {
     const scene = this.ed.session?.scene ?? null;
-    const compiled = compileSceneClips(this.ed.clipSources.md, this.ed.session?.tree ?? null);
+    const compiled = compileSceneClips(this.ed.clipSources.md, this.ed.session?.tree ?? null, this.ed.entry?.id);
     this.list = compiled.clips;
     this.errors = compiled.errors;
     if (this.selected && !this.current) this.selected = null;

@@ -744,6 +744,12 @@ Clips are written as **clip tables** in Markdown (`anim/<name>.md` next to the s
 `X.anim.md` in the scene's folder). The compiled JSON (`anim.json` shape) is only an output for the
 game: viewer and editor always play the `.md`.
 
+Which scene a clip file belongs to (2.3.1): a file named after a scene of its folder —
+`anim/<scene>.md` or `<scene>.anim.md` — is that scene's only; every other clip file of the folder is
+shared and compiled against each scene of the folder (targets missing from a scene are its
+`E_ANIM_TARGET`). So `anim/popup-victory.md` is checked only against `popup-victory`, while
+`anim/world-complete.md` with no scene `world-complete` is checked against all of them.
+
 ### 9.1 Syntax
 
 ```markdown
@@ -1487,4 +1493,5 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 - **2.0** (package; the format stays 1.2) — every message in English with a code (§16); `<!DOCTYPE>` and entities are refused (`E_DOCTYPE`); a narrow stable API (§15), the rest under `@trempel/scene/internal/*`; `checkScene`; `@trempel/scene/view`; the examples of this document are tests.
 - **2.2** (package; the format stays 1.3) — the consumer module's `onClipTime` (§11): the viewer and the editor report the clip time shown and the markers crossed, so effects fired by clip markers are drawn at that moment; `view:shot` settles to fixed moments of its virtual clock (a picture that lives in time is the same every run).
 - **2.3** (package; the format stays 1.3) — the consumer module's `inspectors` (§11): the editor shows a consumer's panels for its components' nodes (the kit's particle editor), their palettes and agent APIs. The editor (not the format): md clips edited by commands with a minimal diff (the timeline), the heir's two effect edits (`heir.setAttr`, `heir.insertFx`), scenes extending another one edited (their clips and effects), the agent's bridge into the open page (`trempel-edit`).
+- **2.3.1** (package; the format stays 1.3) — a clip file named after a scene of its folder (`anim/<scene>.md`, `<scene>.anim.md`) is compiled only against that scene (§9); the rest stay shared by the folder's scenes. Scans skip build outputs `dist-*`.
 - **1.2** — no format changes. The runtime has no built-in components: the demo grid component of 1.1 left `createDefaultRegistry()`, which is now an empty registry — games register their own. The repository is a monorepo: `@trempel/scene` and the game kit `@trempel/kit` (screens, popups, layout, UI components, a default skin as the collection `npm:@trempel/kit/skins/default/ui`), versioned together.

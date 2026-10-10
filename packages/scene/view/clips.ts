@@ -15,6 +15,7 @@
 // clip (a particle effect fired by `fx:<name>@<node>`) catches up to the frame (the module's
 // onClipTime).
 
+import { sharedClipHint } from '../src/anim/clip-files.js';
 import { Animator, compileClipsResult, within, type AnimClip, type Handle, type Marker, type MountedScene, type RendererBackend, type SceneNode } from '../src/core.js';
 
 export interface SceneClip {
@@ -43,14 +44,15 @@ export function clipDuration(clip: AnimClip): number {
 
 /**
  * Compile the scene's clip files. `md` — file → md clip text; `tree` — the mounted (merged) tree
- * targets are checked against.
+ * targets are checked against. 2.3.1: `sceneId` — a target error of a shared clip file (not named
+ * after the scene) tells how to bind the file.
  */
-export function compileSceneClips(md: Record<string, string>, tree: SceneNode | null): CompiledClips {
+export function compileSceneClips(md: Record<string, string>, tree: SceneNode | null, sceneId?: string): CompiledClips {
   const clips: SceneClip[] = [];
   const errors: string[] = [];
   for (const [file, text] of Object.entries(md)) {
     const r = compileClipsResult(text, tree ?? undefined);
-    errors.push(...r.errors.map((e) => within(file, e)));
+    errors.push(...r.errors.map((e) => (sceneId ? sharedClipHint(file, sceneId, within(file, e)) : within(file, e))));
     for (const [name, clip] of Object.entries(r.clips)) clips.push({ name, file, clip, duration: clipDuration(clip) });
   }
   return { clips, errors };

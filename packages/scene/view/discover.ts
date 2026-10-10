@@ -8,6 +8,7 @@
 // A heir without its base is still listed (the viewer reports the missing base), a lone contract
 // or state file is not a scene.
 
+import { sceneClipFiles } from '../src/anim/clip-files.js';
 import { HEIR_EXT, LEGACY } from '../src/compat.js';
 
 export interface SceneEntry {
@@ -57,13 +58,9 @@ export const isServiceDir = (name: string): boolean => SKIP_DIRS.has(name) || na
 /**
  * Clip files (md clips) of a scene, by convention: `anim/*.md` next to the scene (v0.7) and
  * `*.anim.md` in the scene's folder (v0.8 — what an animation importer writes: `el_nine.anim.md`).
+ * 2.3.1: a file named after a scene of the folder (`anim/<scene>.md`, `<scene>.anim.md`) belongs to
+ * that scene only; the rest are shared by every scene of the folder (src/anim/clip-files.ts).
  */
 export function clipFiles(files: string[], sceneId: string): string[] {
-  const dir = sceneId.includes('/') ? sceneId.slice(0, sceneId.lastIndexOf('/') + 1) : '';
-  return files.filter((raw) => {
-    const f = raw.replace(/\\/g, '/');
-    if (!f.startsWith(dir) || !f.endsWith('.md')) return false;
-    const rest = f.slice(dir.length);
-    return (rest.startsWith('anim/') && !rest.slice(5).includes('/')) || (rest.endsWith('.anim.md') && !rest.includes('/'));
-  });
+  return sceneClipFiles(files, sceneId, discoverScenes(files).map((s) => s.id));
 }

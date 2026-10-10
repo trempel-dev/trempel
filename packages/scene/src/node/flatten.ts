@@ -4,6 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { sceneClipFiles } from '../anim/clip-files.js';
 import { readHeir, sceneStem } from '../compat.js';
 import { flattenLeftovers, flattenScene } from '../flatten.js';
 import { coded } from '../codes.js';
@@ -52,14 +53,14 @@ function fileLoader(url: string): SceneSource | null {
   return src.base != null || src.heir != null ? src : null;
 }
 
-/** Clip files next to a scene (anim/*.md, *.anim.md) — flatten cannot carry them. */
+/** Clip files of a scene (anim/*.md, *.anim.md; 2.3.1: not those named after another scene) — flatten cannot carry them. */
 function clipsOf(stem: string): string[] {
   const dir = dirname(stem);
-  const out: string[] = [];
+  const files = readdirSync(dir);
   const anim = join(dir, 'anim');
-  if (existsSync(anim) && statSync(anim).isDirectory()) out.push(...readdirSync(anim).filter((f) => f.endsWith('.md')).map((f) => `anim/${f}`));
-  out.push(...readdirSync(dir).filter((f) => f.endsWith('.anim.md')));
-  return out;
+  if (existsSync(anim) && statSync(anim).isDirectory()) files.push(...readdirSync(anim).map((f) => `anim/${f}`));
+  const scenes = files.filter((f) => f.endsWith('.svg')).map(sceneStem);
+  return sceneClipFiles(files, basename(stem), scenes);
 }
 
 export function flattenFile(opts: FlattenFileOptions): FlattenFileResult {

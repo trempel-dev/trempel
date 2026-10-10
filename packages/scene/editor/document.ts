@@ -6,6 +6,7 @@
 // what will be saved. Validation never blocks: a command that breaks the contract is applied and
 // the problem lands in doc.errors (an artist may break things on the way).
 
+import { sharedClipHint } from '@trempel/scene/internal/anim/clip-files';
 import { coded, compileClipsResult, composeScene, parse, parseContract, parseHeir, within, type SceneLoader, type SceneNode, type SceneSource } from '@trempel/scene/core';
 import { baseDuplicateIdErrors, baseTmlErrors } from '@trempel/scene/internal/tree';
 import { geometryErrors } from '@trempel/scene/internal/geom/check';
@@ -502,7 +503,8 @@ export class EditorDocument {
     const merged = c.tree ?? scene;
     errors.push(...geometryErrors(merged), ...propErrors(merged));
     for (const [file, d] of this.clipDocs) {
-      errors.push(...compileClipsResult(d.toString(), merged).errors.map((e) => within(file, e)));
+      const id = this.path?.replace(/\\/g, '/').replace(/(\.tml)?\.svg$/, '');
+      errors.push(...compileClipsResult(d.toString(), merged).errors.map((e) => (id ? sharedClipHint(file, id, within(file, e)) : within(file, e))));
     }
     this._scene = scene;
     this._merged = merged;

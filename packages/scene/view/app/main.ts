@@ -451,7 +451,7 @@ async function clipFrames(entry: SceneEntry, name: string, times: number[]): Pro
   if (!session || !scene || !session.animBackend) return { frames: [], issues: [{ level: 'error', kind: 'clips', message: coded('E_ANIM_PLAY', `clip ${name}: the scene is not mounted`) }] };
   const md: Record<string, string> = {};
   for (const f of clipFiles(folderFiles, entry.id)) md[f] = (await text(f)) ?? '';
-  const compiled = compileSceneClips(md, session.tree);
+  const compiled = compileSceneClips(md, session.tree, entry.id);
   compiled.errors.forEach((m) => issues.push({ level: 'error', kind: 'clips', message: m }));
   const clip = compiled.clips.find((c) => c.name === name);
   if (!clip) {
