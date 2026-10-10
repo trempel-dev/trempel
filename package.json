@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Trempel monorepo: @trempel/scene (scene format, runtime, editor), @trempel/kit (game kit) and @trempel/slot (slot on the kit), plus casual and slot game templates.",
+  "description": "Trempel monorepo: @trempel/scene (scene format, runtime, editor), @trempel/kit (game kit), @trempel/slot (slot on the kit) and @trempel/hub (projects, processes, actions; the `trempel` CLI), plus casual and slot game templates.",
   "license": "MIT",
   "author": "Denys Vynohradskyi",
   "homepage": "https://trempel.dev",
@@ -18,11 +18,12 @@
     "packages/scene",
     "packages/kit",
     "packages/slot",
+    "packages/hub",
     "templates/casual",
     "templates/slot"
   ],
   "scripts": {
-    "build": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run build -w @trempel/slot",
+    "build": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run build -w @trempel/slot && npm run build -w @trempel/hub",
     "typecheck": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run typecheck --workspaces --if-present",
     "test": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run test --workspaces --if-present",
     "test:e2e": "npm run build && npm run test:e2e --workspaces --if-present",
@@ -36,7 +37,8 @@
     "editor:commands": "npm run editor:commands -w @trempel/scene",
     "build:browser": "npm run build:browser -w @trempel/scene",
     "error-codes": "npm run error-codes -w @trempel/scene",
-    "visual-gate": "npm run visual-gate -w @trempel/scene --"
+    "visual-gate": "npm run visual-gate -w @trempel/scene --",
+    "hub": "npm run build -w @trempel/hub && node packages/hub/dist/cli.js hub"
   },
   "engines": {
     "node": ">=22.6"

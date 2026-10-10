@@ -1,0 +1,62 @@
+# Trempel hub — the hub's layer of actions
+
+Actions that don't depend on the engine's version: every project gets them. A user's
+`~/.trempel/actions.mdz`, the project's kit and the project itself override any of them by id.
+
+## actions
+
+### open:folder
+$title: Open folder
+$icon: folder
+$group: project
+$js: actions/open.mjs
+
+### open:ide
+$title: Open in IDE
+$icon: code
+$group: project
+$pin: true
+$js: actions/ide.mjs
+
+The editor command — `TREMPEL_IDE` (default `code`); a user's action `open:ide` replaces this one.
+
+### terminal
+$title: Terminal here
+$icon: terminal
+$group: project
+$js: actions/terminal.mjs
+
+### git:status
+$title: Git status
+$icon: git
+$group: git
+$when: git
+$shell: git status --short --branch
+
+### git:pull
+$title: Git pull
+$icon: download
+$group: git
+$when: $[git, git.upstream]
+$shell: git pull --ff-only
+
+### git:commit
+$title: Commit everything
+$icon: check
+$group: git
+$when: git.dirty
+$input.message: { type: "text", label: "Message" }
+$shell: $[git add -A ., git commit -m ${input.message}]
+
+### kit:update
+$title: Update the kit
+$icon: arrow-up
+$group: project
+$when: dep:@trempel/kit
+$input.version: { type: "text", default: "latest", label: "Version (or an npm spec)" }
+$confirm: Changes package.json and the lock file, then runs the gates; roll back with git
+$js: actions/kit-update.mjs
+
+Raises `@trempel/kit` (and `@trempel/scene` to what that kit needs), then runs every gate of the
+new kit (the `gates` group — tests, e2e, the YouTube build) and prints the result. Nothing is
+committed: keep it — `git:commit`; roll back — `git checkout package.json package-lock.json && npm install`.

@@ -1,0 +1,102 @@
+# @trempel/kit — actions of this kit version for the Trempel hub
+
+The hub (`@trempel/hub`, `trempel run <id>`) reads this file from the project's
+`node_modules/@trempel/kit/hub/` — a project gets the dev server, builds, gates and the editor of
+the kit it runs on. The project overrides any of them by id (`## actions` of `.trempel/project.mdz`).
+Field reference — the hub's README.
+
+## actions
+
+### dev
+$title: Dev server
+$icon: play
+$group: run
+$pin: true
+$kind: service
+$port: auto
+$shell: npx vite --port ${port} --strictPort
+
+### build:web
+$title: Build (web)
+$icon: package
+$group: build
+$shell: npx vite build --mode web
+
+### build:yt
+$title: Build (YouTube Playables) + gates
+$icon: package
+$group: gates
+$shell: npx vite build --mode youtube
+
+The YouTube build runs the kit's Playables gates (size, sterility, metadata, services) and writes
+`build-report.md`; a failed gate fails the action.
+
+### test
+$title: Unit tests
+$icon: check
+$group: gates
+$pin: true
+$shell: npx vitest run --passWithNoTests
+
+### e2e
+$title: e2e (web + YouTube builds, Playwright)
+$icon: check
+$group: gates
+$when: file:playwright.config.ts
+$shell: $[npx vite build --mode web, npx vite build --mode youtube, npx playwright test]
+
+### editor
+$title: Scene editor
+$icon: edit
+$group: run
+$pin: true
+$kind: service
+$port: auto
+$input.folder: { type: "text", default: "scenes", label: "Scenes folder" }
+$when: file:${pkg:@trempel/scene}/edit/cli.mjs
+$shell: node ${pkg:@trempel/scene}/edit/cli.mjs ${input.folder} --port ${port}
+
+The editor page of the scene package this kit runs with (`<folder>/trempel.view.ts` plugs the
+kit's inspectors in). While it runs, `editor:eval` / `editor:save` / `editor:state` reach the open
+page through its agent bridge (`trempel-edit`).
+
+### editor:eval
+$title: Editor: run a script
+$icon: terminal
+$group: agents
+$when: running:editor
+$input.code: { type: "text", label: "tml script (edit/API.md)" }
+$shell: node ${pkg:@trempel/scene}/view/edit-bin.mjs eval --port ${services.editor.port} ${input.code}
+
+### editor:save
+$title: Editor: save (⌘S)
+$icon: save
+$group: agents
+$when: running:editor
+$shell: node ${pkg:@trempel/scene}/view/edit-bin.mjs save --port ${services.editor.port}
+
+### editor:state
+$title: Editor: state
+$icon: info
+$group: agents
+$when: running:editor
+$shell: node ${pkg:@trempel/scene}/view/edit-bin.mjs state --port ${services.editor.port}
+
+### editor:mcp
+$title: Editor: MCP server line for an agent
+$icon: robot
+$group: agents
+$when: running:editor
+$shell: node -e "console.log(JSON.stringify({ command: 'node', args: [process.argv[1], 'mcp', '--port', process.argv[2]] }, null, 2))" ${pkg:@trempel/scene}/view/edit-bin.mjs ${services.editor.port}
+
+Prints the MCP server entry (stdio) of the running editor's bridge — `editor.eval`, `editor.save`,
+`editor.state` — to paste into an agent's MCP config.
+
+### view:shot
+$title: Scene snapshot (PNG)
+$icon: camera
+$group: content
+$input.scene: { type: "file", label: "Scene (X.svg / X.tml.svg)" }
+$input.out: { type: "text", default: "shot.png" }
+$input.settle: { type: "text", default: 2, label: "Seconds after mount" }
+$shell: node ${pkg:@trempel/scene}/view/bin.mjs view:shot ${input.scene} --out ${input.out} --settle ${input.settle}

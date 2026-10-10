@@ -1,0 +1,59 @@
+{
+  "name": "@trempel/hub",
+  "version": "2.4.0",
+  "description": "Trempel hub: one control panel per machine for Trempel projects — finds projects, runs their actions (a layer of the hub, of the user, of the project's kit version and of the project) from a local web page or the `trempel` CLI, keeps track of long-running services (ports, URLs, logs, stop by process tree).",
+  "type": "module",
+  "license": "MIT",
+  "author": "Denys Vynohradskyi",
+  "homepage": "https://trempel.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trempel-dev/trempel.git",
+    "directory": "packages/hub"
+  },
+  "bugs": {
+    "url": "https://github.com/trempel-dev/trempel/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "trempel": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "ui",
+    "actions",
+    "actions.mdz",
+    "legacy-kit.mdz",
+    "templates",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/templates.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && vitest run",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "@trempel/scene": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "trempel",
+    "hub",
+    "launcher",
+    "projects",
+    "cli"
+  ]
+}

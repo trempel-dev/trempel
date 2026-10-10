@@ -1,0 +1,55 @@
+# Trempel hub — actions for a kit without its own
+
+A kit older than 2.4 ships no `hub/actions.mdz`: the hub stands in with the project's npm scripts,
+so an old project still gets its dev server, builds and gates (each only if the script exists).
+A newer kit replaces this whole layer with its own.
+
+## actions
+
+### dev
+$title: Dev server
+$icon: play
+$group: run
+$pin: true
+$kind: service
+$port: auto
+$when: script:dev
+$shell: npm run dev -- --port ${port} --strictPort
+
+### build:web
+$title: Build (web)
+$icon: package
+$group: build
+$when: script:build:web
+$shell: npm run build:web
+
+### build:yt
+$title: Build (YouTube Playables) + gates
+$icon: package
+$group: gates
+$when: script:build:yt
+$shell: npm run build:yt
+
+### test
+$title: Unit tests
+$icon: check
+$group: gates
+$when: script:test
+$shell: npm test
+
+### e2e
+$title: e2e
+$icon: check
+$group: gates
+$when: script:test:e2e
+$shell: npm run test:e2e
+
+### editor
+$title: Scene editor
+$icon: edit
+$group: run
+$kind: service
+$port: auto
+$input.folder: { type: "text", default: "scenes", label: "Scenes folder" }
+$when: file:${pkg:@trempel/scene}/edit/cli.mjs
+$shell: node ${pkg:@trempel/scene}/edit/cli.mjs ${input.folder} --port ${port}
