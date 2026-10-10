@@ -1,5 +1,9 @@
 # Changelog — @trempel/kit
 
+## 2.2.1
+
+- Choreography: the Director log is bounded (`logLimit`, default 10000; `Infinity` for verify) — an idling slot no longer grows it forever.
+
 ## 2.2.0
 
 The animation pipeline (TRM-12): Spine skeletons and Unity clips become scenes and md clips, Cocos

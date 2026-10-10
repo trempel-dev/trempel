@@ -1,5 +1,9 @@
 # Changelog — @trempel/slot
 
+## 2.3.0
+
+The additions of TRM-17 (were listed under the unreleased 2.2.0 by mistake — 2.2.0 had shipped): expanding wilds (`frameExpandedWild` → expand, `LineWin.mult`), reels landing one by one, anticipation from data, idle / quickstop / skip bindings, `bigWin:<level>`, the grid as data.
+
 ## 2.2.0
 
 The first release of the slot package, versioned with `@trempel/scene` and `@trempel/kit` 2.2. A slot is

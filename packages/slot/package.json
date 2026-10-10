@@ -1,6 +1,6 @@
 {
   "name": "@trempel/slot",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Trempel slot: a slot on @trempel/kit — the round feed (types, plan, sources: fixtures / HTTP / function), a round player that plays the feed through choreography bound by data, pixi-reels reels as a scene component, the standard HUD heir and popups.",
   "type": "module",
   "license": "MIT",
@@ -48,7 +48,7 @@
     "pixi-reels": "^3.1.0"
   },
   "peerDependencies": {
-    "@trempel/kit": "^2.2.0",
+    "@trempel/kit": "^2.2.1",
     "@trempel/scene": "^2.2.0",
     "pixi.js": "^8.19.0"
   },

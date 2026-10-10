@@ -129,6 +129,9 @@ export interface DirectorOptions {
   globals?: Record<string, Value>;
   /** `rand` of `poll:` rows (kit seededRandom in the game; deterministic in tests). */
   random?: () => number;
+  /** Keep at most this many newest log entries (default 10000; `Infinity` — all, for verify). A game
+   *  idles for hours: an unbounded log is a slow memory leak. */
+  logLimit?: number;
 }
 
 export class Director {
@@ -138,6 +141,13 @@ export class Director {
   private readonly globals: Record<string, Value>;
   private processing = false;
   private readonly removeTick: () => void;
+
+  /** Appends to the log; past `logLimit` drops the oldest quarter at once (amortised, no per-push shift). */
+  private record(ev: ChoreoEvent): void {
+    this.log.push(ev);
+    const limit = this.o.logLimit ?? 10000;
+    if (this.log.length > limit) this.log.splice(0, this.log.length - Math.floor(limit * 0.75));
+  }
 
   constructor(private readonly o: DirectorOptions) {
     this.globals = o.globals ?? {};
@@ -450,7 +460,7 @@ export class Director {
       mode: run.mode,
       chain: chainOf(run),
     };
-    this.log.push(ev);
+    this.record(ev);
     const m = /^run:(.+)$/.exec(action);
     if (m) {
       const child = this.o.choreo.sequences[m[1]];
@@ -473,7 +483,7 @@ export class Director {
   }
 
   private emitSeq(run: Run, row: '^' | '$', t: number): void {
-    this.log.push({ t, at: this.now(), seq: run.seq.id, run: run.id, seqStart: run.start, row, ref: '', vars: {}, target: '', action: row === '^' ? 'seq:start' : 'seq:end', dur: 0, ease: '', sound: '', props: [], kind: 'seq', mode: run.mode, chain: chainOf(run) });
+    this.record({ t, at: this.now(), seq: run.seq.id, run: run.id, seqStart: run.start, row, ref: '', vars: {}, target: '', action: row === '^' ? 'seq:start' : 'seq:end', dur: 0, ease: '', sound: '', props: [], kind: 'seq', mode: run.mode, chain: chainOf(run) });
   }
 }
 

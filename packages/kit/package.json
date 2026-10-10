@@ -1,7 +1,7 @@
 {
   "name": "@trempel/kit",
-  "version": "2.2.0",
-  "description": "Trempel kit: a game kit on top of Trempel scenes \u2014 services (contracts with a mandatory mock: wallet, iap, leaderboard, your own), platform adapters (web, YouTube Playables, mock), game loop, tweens and clips, event player, state machine, event bus, screens and popups, layout (fit policies, safe area), UI components and skins, a default skin, bundle loader, sound, particles, save, i18n, ads, QA helpers, build gates.",
+  "version": "2.2.1",
+  "description": "Trempel kit: a game kit on top of Trempel scenes — services (contracts with a mandatory mock: wallet, iap, leaderboard, your own), platform adapters (web, YouTube Playables, mock), game loop, tweens and clips, event player, state machine, event bus, screens and popups, layout (fit policies, safe area), UI components and skins, a default skin, bundle loader, sound, particles, save, i18n, ads, QA helpers, build gates.",
   "type": "module",
   "license": "MIT",
   "author": "Denys Vynohradskyi",

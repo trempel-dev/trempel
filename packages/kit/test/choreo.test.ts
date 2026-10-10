@@ -367,3 +367,13 @@ describe('choreo: verify against a reference timeline', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('choreography log limit', () => {
+  it('keeps the newest entries within logLimit (a game idles for hours)', async () => {
+    const { Director: D } = await import('../src/choreo/director.js');
+    const d = new D({ choreo: { seqs: new Map(), consts: {} } as never, loop: { add: () => () => {}, now: () => 0 } as never, logLimit: 8 });
+    for (let i = 0; i < 50; i++) (d as unknown as { record(e: unknown): void }).record({ t: i } as never);
+    expect(d.log.length).toBeLessThanOrEqual(8);
+    expect((d.log.at(-1) as unknown as { t: number }).t).toBe(49);
+  });
+});
