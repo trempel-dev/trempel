@@ -156,6 +156,9 @@ test('a stop press while the reels spin plays the quickstop; a press in the wins
   expect(l.some((e) => e.seq === 'skip')).toBe(true);
   expect(l.some((e) => e.seq === 'bigwin.mega')).toBe(true);
   expect((await state(page)).win).toBe(45);
+  // the big win popup closes with an animation after the round is no longer busy: on a slow runner the
+  // turbo click and Space below otherwise land on its dim and are swallowed
+  await page.waitForFunction(() => !(window as any).__trempel.popup(), undefined, { timeout: 20000 });
   await fixture(page, '10-epic');
   await click(page, 'turboBtn');
   await page.keyboard.press('Space');
