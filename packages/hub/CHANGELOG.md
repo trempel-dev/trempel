@@ -1,5 +1,18 @@
 # Changelog — @trempel/hub
 
+## 2.4.1
+
+Fixes; additions only.
+
+- **Projects sharing a name** (a game and its live copy with one `package.json` name) are listed as
+  `name · folder` — the page and `trempel projects` (`ProjectInfo.label`; the path when the folder
+  name repeats too). Ids and the logic are unchanged.
+- **`trempel stop <action>` outside a project** without `--project`: stops the action in the one
+  project that runs it; when several do — `E_HUB_AMBIGUOUS` with their run ids (exit 2), nothing
+  stopped.
+- An action's `INIT_CWD` is its own folder: a hub started by `npm run …` no longer hands its own to
+  the project's tools (the scene's editor and `view:shot` resolve folders from it).
+
 ## 2.4.0
 
 The first release (versions follow the kit's).

@@ -86,7 +86,7 @@ describe('layers', () => {
     const a = await projectActions(old);
     const b = await projectActions(cur);
     expect(a.project.kit).toBe('2.2.0');
-    expect(b.project.kit).toBe('2.4.0');
+    expect(b.project.kit).toBe('2.4.1');
     const ea = a.actions.get('editor')!;
     const eb = b.actions.get('editor')!;
     expect(ea.title).toBe('Editor of kit 2.2');
@@ -139,7 +139,7 @@ describe('projects', () => {
   it('the monorepo templates are projects; versions are the installed ones', () => {
     expect(isProject(join(REPO, 'templates', 'casual'))).toBe(true);
     const p = describeProject(join(REPO, 'templates', 'slot'));
-    expect(p.kit).toBe('2.4.0');
+    expect(p.kit).toBe('2.4.1');
     expect(p.scene).toMatch(/^2\./);
     expect(p.hasProjectFile).toBe(true);
   });

@@ -22,7 +22,7 @@ test('projects → casual → dev → the URL answers → stop', async ({ page, 
   const cards = page.getByTestId('project-card');
   await expect(cards).toHaveCount(2);
   const casual = page.locator(`[data-project="${CASUAL}"]`);
-  await expect(casual.getByTestId('kit-version')).toHaveText('kit 2.4.0');
+  await expect(casual.getByTestId('kit-version')).toHaveText('kit 2.4.1');
   await casual.getByTestId('project-link').click();
   await expect(page.getByTestId('project-name')).toHaveText(CASUAL);
 

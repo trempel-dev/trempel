@@ -2,6 +2,25 @@
 
 The scene format has its own changelog at the end of [docs/format/scene-format.md](docs/format/scene-format.md).
 
+## 2.3.1
+
+Fixes; additions only, the format stays 1.3.
+
+- **The editor page ships in the package** — `edit/` (the page's dev server and its sources) and the
+  editor core's sources (`editor/`), without tests, e2e and tsconfigs. `trempel-edit serve <folder>
+  [--port N] [--module m.ts] [--open]` (or `trempel-view edit <folder>`) starts it in a project with
+  `vite` installed, so the kit's hub action `editor` is on for a project installed from npm. A bin's
+  folder is relative to where it runs (an npm parent's `INIT_CWD` no longer leaks in).
+- **md clips bound to scenes** — `anim/<scene>.md` or `<scene>.anim.md` is compiled only against the
+  scene of its folder with that name; other clip files of the folder stay shared by all its scenes,
+  as before (no more false `E_ANIM_TARGET` of one screen's clips against another screen). The viewer,
+  `view:shot --clip`, the editor and `flatten`'s note follow it (`src/anim/clip-files.ts`); a target
+  error of a shared file says how to bind it (spec §9).
+- **Editor:** the note of a scene extending another one (heir of … — the base is edited there, open)
+  is a line under the toolbar, not a box over the stage.
+- **Scans** (viewer, editor) skip build outputs `dist-*` like `dist` and dot-folders; such folders are
+  neither served nor written.
+
 ## 2.3.0
 
 Additions only; the format stays 1.3. The editor: an animator and the consumer's inspectors.

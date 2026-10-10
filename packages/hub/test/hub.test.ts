@@ -105,7 +105,7 @@ describe('a new project', () => {
     createProject({ template: 'casual', dest });
     const pj = JSON.parse(readFileSync(join(dest, 'package.json'), 'utf8')) as { name: string; dependencies: Record<string, string>; devDependencies: Record<string, string> };
     expect(pj.name).toBe('my-game');
-    expect(pj.dependencies['@trempel/kit']).toBe('^2.4.0');
+    expect(pj.dependencies['@trempel/kit']).toBe('^2.4.1');
     expect(pj.devDependencies.vite).toBeDefined();
     expect(existsSync(join(dest, 'node_modules'))).toBe(false);
     expect(JSON.parse(readFileSync(join(dest, 'tsconfig.json'), 'utf8')).extends).toBeUndefined();

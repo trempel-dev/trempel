@@ -1,5 +1,15 @@
 # Changelog — @trempel/kit
 
+## 2.4.1
+
+No API changes; follows scene 2.3.1 and hub 2.4.1.
+
+- The hub action `editor` (`hub/actions.mdz`) is on for a project installed from npm once its
+  `@trempel/scene` is 2.3.1+ (the scene package ships its editor page; before, only in the monorepo).
+- The casual template (follows the kit): `scenes/trempel.view.ts` gives the viewer, the editor and
+  `view:shot` the game's context (its texts, the wallet's starting state) and `game.state.json` the
+  round's stand-in state — `view:shot` of the game screen no longer fails on `services.wallet.balance`.
+
 ## 2.4.0
 
 Additions only.

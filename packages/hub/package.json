@@ -1,6 +1,6 @@
 {
   "name": "@trempel/hub",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Trempel hub: one control panel per machine for Trempel projects — finds projects, runs their actions (a layer of the hub, of the user, of the project's kit version and of the project) from a local web page or the `trempel` CLI, keeps track of long-running services (ports, URLs, logs, stop by process tree).",
   "type": "module",
   "license": "MIT",

@@ -87,7 +87,7 @@ function mcp() {
       return out({
         jsonrpc: '2.0',
         id,
-        result: { protocolVersion: params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'trempel-edit', version: '2.3.0' } },
+        result: { protocolVersion: params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'trempel-edit', version: '2.3.1' } },
       });
     }
     if (method === 'ping') return out({ jsonrpc: '2.0', id, result: {} });

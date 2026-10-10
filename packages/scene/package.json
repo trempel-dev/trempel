@@ -1,6 +1,6 @@
 {
   "name": "@trempel/scene",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Trempel \u2014 agent-first 2D game scenes: a scene format that is valid SVG (+ tml: namespace), a PixiJS runtime, an animation player and an editor core.",
   "type": "module",
   "license": "MIT",
