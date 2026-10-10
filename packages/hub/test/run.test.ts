@@ -142,7 +142,7 @@ describe('services', () => {
       expect(ready.status).toBe('ready');
       expect(await (await fetch(`http://127.0.0.1:${r.port}/`)).text()).toBe(`hello from ${r.port}`);
       await expect(startAction(root, 'web')).rejects.toThrow(/E_HUB_RUNNING/);
-      const pids = await until(() => existsSync(join(root, 'pids.json')) && (JSON.parse(readFileSync(join(root, 'pids.json'), 'utf8')) as Record<string, number>), 5000, 'pids');
+      const pids = await until(() => (existsSync(join(root, 'pids.json')) ? (JSON.parse(readFileSync(join(root, 'pids.json'), 'utf8')) as Record<string, number>) : null), 5000, 'pids');
       expect(alive(pids.kid) && alive(pids.runaway)).toBe(true);
       const stopped = await stopRun(r.id);
       expect(stopped?.status).toBe('stopped');

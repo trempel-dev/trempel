@@ -5,3 +5,28 @@ collection (package `@trempel/kit`). The game bundles its art through the `#kit-
 
 ## collections
 $skin: npm:@trempel/kit/skins/default/ui
+
+## actions
+
+Actions of this game for the Trempel hub (`trempel run --list` — with the kit's and the hub's).
+
+### fixtures
+$title: Rebuild the fixtures
+$icon: sparkles
+$group: content
+$confirm: Rewrites fixtures/*.json and fixtures/5x3/*.json from the hand table of rounds
+$shell: node scripts/fixtures.mjs
+
+The synthetic rounds (`scripts/fixtures.mjs`, the hand table) → `fixtures/`, `fixtures/5x3/`.
+
+### dev
+$title: Dev server
+$icon: play
+$group: run
+$pin: true
+$kind: service
+$port: auto
+$url: http://localhost:${port}/?skin=default&cheat=1
+$shell: npx vite --port ${port} --strictPort
+
+The kit's `dev`, opened on the default skin with the cheat panel.

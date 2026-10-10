@@ -71,6 +71,13 @@ npx trempel-anim-import ../MyUnityGame/Assets/Hero.prefab --out scenes/anim [--s
 
 AnimationClips (of a prefab's Animator, a controller or loose `.anim` files) become md clips — `<out>/<name>.anim.md` with a clip per state, the compiled `.anim.json` next to it. Curves keep Unity's shape (Hermite and weighted tangents as cubic eases, constants as steps); x / y / rotation are offsets of the rest pose, scale a multiplier. `anim-map.md` lists every animated path and its node id (by name in `--scene`; edit it and pass it back with `--map`). `report.md`: every clip `auto` / `manual` / `hard` per property, the transitions (listed, never run), and the verification — each clip played by Trempel against Unity's own evaluation of its curves.
 
+## The hub's actions
+
+`hub/actions.mdz` is this kit version's layer of actions for [`@trempel/hub`](../hub): `trempel run dev`
+in a project starts its dev server on a free port, `trempel run editor` — the scene editor of the
+scene package this kit runs with, `trempel run --list` shows them with the hub's, the user's and the
+project's own.
+
 ## Install
 
 ```bash

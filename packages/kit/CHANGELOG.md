@@ -1,5 +1,16 @@
 # Changelog — @trempel/kit
 
+## 2.4.0
+
+Additions only.
+
+- **Actions for the Trempel hub** — `hub/actions.mdz` (exported as `@trempel/kit/hub/*`): the hub
+  (`@trempel/hub`, `trempel run <id>`) reads it from a project's `node_modules`, so a project gets the
+  actions of the kit it runs on: `dev` (a service on a free port), `build:web`, `build:yt` (the
+  Playables gates), `test`, `e2e`, `editor` (the scene editor of the scene package this kit runs with),
+  while it runs `editor:eval` / `editor:save` / `editor:state` / `editor:mcp` (its agent bridge,
+  `trempel-edit`), `view:shot`. A project overrides any of them by id.
+
 ## 2.3.0
 
 Additions only (needs `@trempel/scene` ^2.3: the consumer module's `inspectors`); 2.2.1 included.
