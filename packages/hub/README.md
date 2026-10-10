@@ -124,15 +124,19 @@ trempel new <template> <dir> [--name n] [--install]  |  templates
 
 `--project` defaults to the nearest project from the current folder up. `run` in the foreground
 streams the log (a service prints `[hub] ready: <url>`; Ctrl+C stops its tree) and exits with the
-action's code; `--detach` prints a service's URL (or the run id) and leaves it running. Exit codes:
-2 — usage (a missing input, an unknown action, a confirmation without `--yes`), 3 — already running.
+action's code; `--detach` prints a service's URL (or the run id) and leaves it running. `stop <action>`
+outside any project (and without `--project`) stops the action in the one project that runs it; when
+several do, it stops nothing and lists their run ids (`E_HUB_AMBIGUOUS`). Exit codes:
+2 — usage (a missing input, an unknown action, a confirmation without `--yes`, an ambiguous stop),
+3 — already running.
 
 ## Projects
 
 Found under the roots (default: `Studio/Projects` in the home folder; `trempel roots`,
 `TREMPEL_HUB_ROOTS`, Settings on the page; two levels deep) — a folder is a project when it depends
 on `@trempel/kit` or `@trempel/scene` or has `.trempel/project.mdz` — plus the ones added by hand.
-A card: name, kit and scene versions (installed, else declared), git (branch, clean/dirty,
+A card: name (a name two projects share — a game and its live copy — gets the folder:
+`name · folder`), kit and scene versions (installed, else declared), git (branch, clean/dirty,
 ahead/behind), the last results of the `gates` actions, the pinned actions, running services.
 
 **A new project** — `trempel new casual ~/games/my-game` (or the page): a template shipped with this

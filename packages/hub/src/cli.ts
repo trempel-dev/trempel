@@ -194,12 +194,30 @@ async function stop(args: Args): Promise<number> {
   let ids: string[];
   if (readRun(what)) ids = [what];
   else {
-    const root = projectRoot(args.flags.project);
-    const pid = describeProject(root).id;
-    ids = listRuns({ projectId: pid })
-      .filter((r) => r.action === what && isActive(r))
-      .map((r) => r.id);
-    if (!ids.length) throw new HubError(`E_HUB_NOT_RUNNING: nothing of "${what}" runs for ${root}.`, 1);
+    let root: string | null;
+    try {
+      root = projectRoot(args.flags.project);
+    } catch (e) {
+      // 2.4.1: outside a project without --project — the action's runs of every project
+      if (args.flags.project !== undefined || !(e instanceof HubError) || !e.message.startsWith('E_HUB_PROJECT')) throw e;
+      root = null;
+    }
+    if (root) {
+      const pid = describeProject(root).id;
+      ids = listRuns({ projectId: pid })
+        .filter((r) => r.action === what && isActive(r))
+        .map((r) => r.id);
+      if (!ids.length) throw new HubError(`E_HUB_NOT_RUNNING: nothing of "${what}" runs for ${root}.`, 1);
+    } else {
+      const runs = listRuns().filter((r) => r.action === what && isActive(r));
+      if (!runs.length) throw new HubError(`E_HUB_NOT_RUNNING: nothing of "${what}" runs (no project here — any project's).`, 1);
+      const projects = new Set(runs.map((r) => r.projectId));
+      if (projects.size > 1) {
+        const list = runs.map((r) => `  ${r.id}  ${r.projectName}  ${r.projectRoot}`).join('\n');
+        throw new HubError(`E_HUB_AMBIGUOUS: "${what}" runs in ${projects.size} projects — trempel stop <run id>, or --project <dir>:\n${list}`, 2);
+      }
+      ids = runs.map((r) => r.id);
+    }
   }
   for (const id of ids) {
     const r = await stopRun(id);
@@ -232,7 +250,7 @@ async function projects(args: Args): Promise<number> {
   console.log(`roots: ${cfg.roots.join(', ') || '—'}`);
   for (const p of rows) {
     const g = p.git ? `${p.git.branch ?? 'detached'}${p.git.dirty ? '*' : ''}${p.git.ahead ? ` ↑${p.git.ahead}` : ''}${p.git.behind ? ` ↓${p.git.behind}` : ''}` : 'no git';
-    console.log(`${pad(p.name, 28)}${pad(`kit ${p.kit ?? '—'}`, 14)}${pad(`scene ${p.scene ?? '—'}`, 16)}${pad(g, 20)}${p.root}`);
+    console.log(`${pad(p.label, 28)}${pad(`kit ${p.kit ?? '—'}`, 14)}${pad(`scene ${p.scene ?? '—'}`, 16)}${pad(g, 20)}${p.root}`);
   }
   return 0;
 }

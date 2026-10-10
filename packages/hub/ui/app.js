@@ -167,7 +167,7 @@ async function projectsView() {
         h(
           'div.card',
           { 'data-testid': 'project-card', 'data-project': p.name },
-          h('h3', h('a', { href: `#/p/${p.id}`, 'data-testid': 'project-link' }, p.name)),
+          h('h3', h('a', { href: `#/p/${p.id}`, 'data-testid': 'project-link', title: p.label !== p.name ? `${p.name} — ${p.root}` : undefined }, p.label ?? p.name)),
           h('div.path', p.root),
           h('div.row', h('span.tag', { 'data-testid': 'kit-version' }, `kit ${p.kit ?? '—'}`), h('span.tag', `scene ${p.scene ?? '—'}`), p.manual ? h('span.tag', 'added') : null),
           gitLine(p.git),
@@ -238,7 +238,7 @@ async function projectView(id) {
     );
   return [
     h('div.row', h('a', { href: '#/' }, '← Projects')),
-    h('h1', { 'data-testid': 'project-name' }, p.name),
+    h('h1', { 'data-testid': 'project-name' }, p.label ?? p.name),
     h('div.path', p.root),
     h('div.row', h('span.tag', `kit ${p.kit ?? '—'}`), h('span.tag', `scene ${p.scene ?? '—'}`), gitLine(d.git)),
     d.errors.length ? h('div.errors', d.errors.join('\n')) : null,

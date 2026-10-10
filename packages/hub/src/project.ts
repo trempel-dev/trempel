@@ -39,6 +39,11 @@ export interface ProjectInfo {
   kitDir: string | null;
   hasProjectFile: boolean;
   manual: boolean;
+  /**
+   * 2.4.1: the name to show — `name`, or `name · folder` when another listed project has the same name
+   * (a game and its live copy both named after one package.json); the id and the logic use `id`/`root`.
+   */
+  label: string;
 }
 
 const isDir = (p: string): boolean => {
@@ -110,7 +115,26 @@ export function describeProject(root: string, manual = false): ProjectInfo {
     kitDir: declared(pj, '@trempel/kit') !== null ? kit.dir : null,
     hasProjectFile: existsSync(join(abs, PROJECT_FILE)),
     manual,
+    label: pj?.name ?? basename(abs),
   };
+}
+
+/** 2.4.1: labels of a list — a name shared by several projects gets the folder (`name · folder`; the path if even that repeats). */
+export function labelProjects<T extends ProjectInfo>(list: T[]): T[] {
+  const count = (key: (p: T) => string): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const p of list) m.set(key(p), (m.get(key(p)) ?? 0) + 1);
+    return m;
+  };
+  const names = count((p) => p.name);
+  const withFolder = (p: T): string => (basename(p.root) === p.name ? p.name : `${p.name} · ${basename(p.root)}`);
+  const folders = count(withFolder);
+  for (const p of list) {
+    if (names.get(p.name)! < 2) p.label = p.name;
+    else if (folders.get(withFolder(p))! < 2) p.label = withFolder(p);
+    else p.label = `${p.name} · ${p.root}`;
+  }
+  return list;
 }
 
 const SKIP = /^(?:node_modules|dist|dist-.*|build|coverage|test-results|playwright-report)$/;
@@ -144,7 +168,7 @@ export function scanProjects(roots: string[], manual: string[], depth = 2): Proj
     else walk(r, depth);
   }
   for (const m of manual) if (isDir(m)) add(m, true);
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return labelProjects([...found.values()].sort((a, b) => a.name.localeCompare(b.name) || a.root.localeCompare(b.root)));
 }
 
 function git(cwd: string, args: string[]): Promise<string | null> {

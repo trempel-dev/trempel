@@ -187,6 +187,37 @@ describe('services', () => {
     expect(st.stdout).toContain(`${web.id}: stopped`);
     expect(readRun(web.id)?.status).toBe('stopped');
   });
+
+  it('2.4.1: stop <action> outside a project: the one project running it, else the run ids', async () => {
+    const env = { TREMPEL_HOME: process.env.TREMPEL_HOME! };
+    const nowhere = tmp('hub-nowhere-');
+    // a live copy of the same game: the same package name, another folder
+    const twin = makeProject(tmp(), { name: 'fixture', dependencies: { '@trempel/scene': '^2.3.0' } }, { '.trempel/project.mdz': PROJECT_MDZ, 'server.mjs': SERVER });
+    expect((await cli(['stop', 'web'], { cwd: nowhere, env })).stderr).toMatch(/E_HUB_NOT_RUNNING/);
+
+    const one = await cli(['run', 'web', '--project', root, '--detach'], { env });
+    expect(one.code).toBe(0);
+    const id = activeServices().find((r) => r.action === 'web' && r.projectRoot === root)!.id;
+    const st = await cli(['stop', 'web'], { cwd: nowhere, env });
+    expect(st.code).toBe(0);
+    expect(st.stdout).toContain(`${id}: stopped`);
+
+    expect((await cli(['run', 'web', '--project', root, '--detach'], { env })).code).toBe(0);
+    expect((await cli(['run', 'web', '--project', twin, '--detach'], { env })).code).toBe(0);
+    const both = activeServices().filter((r) => r.action === 'web').map((r) => r.id);
+    expect(both).toHaveLength(2);
+    const amb = await cli(['stop', 'web'], { cwd: nowhere, env });
+    expect(amb.code).toBe(2);
+    expect(amb.stderr).toMatch(/^E_HUB_AMBIGUOUS: "web" runs in 2 projects/m);
+    for (const x of both) expect(amb.stderr).toContain(x);
+    expect(activeServices().filter((r) => r.action === 'web')).toHaveLength(2); // nothing stopped
+    // inside a project: only its own
+    const own = await cli(['stop', 'web'], { cwd: twin, env });
+    expect(own.code).toBe(0);
+    expect(activeServices().filter((r) => r.action === 'web').map((r) => r.projectRoot)).toEqual([root]);
+    expect((await cli(['stop', 'web'], { cwd: nowhere, env })).code).toBe(0);
+    expect(activeServices().filter((r) => r.action === 'web')).toHaveLength(0);
+  });
 });
 
 describe('the CLI', () => {
