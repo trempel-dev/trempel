@@ -1,6 +1,6 @@
 {
   "name": "@trempel/template-slot",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
   "description": "Trempel template: a slot with five lines on @trempel/slot (3×3 and 5×3) — expanding multiplier wilds, scatters, free spins, big win levels; rounds from synthetic fixtures, the base choreography of a slot with lines as data, two skins; web and YouTube Playables builds.",

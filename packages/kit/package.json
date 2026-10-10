@@ -1,6 +1,6 @@
 {
   "name": "@trempel/kit",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Trempel kit: a game kit on top of Trempel scenes — services (contracts with a mandatory mock: wallet, iap, leaderboard, your own), platform adapters (web, YouTube Playables, mock), game loop, tweens and clips, event player, state machine, event bus, screens and popups, layout (fit policies, safe area), UI components and skins, a default skin, bundle loader, sound, particles, save, i18n, ads, QA helpers, build gates.",
   "type": "module",
   "license": "MIT",
@@ -76,7 +76,7 @@
     "fflate": "^0.8.2"
   },
   "peerDependencies": {
-    "@trempel/scene": "^2.2.0",
+    "@trempel/scene": "^2.3.0",
     "pixi.js": "^8.19.0",
     "vite": "^6.0.0",
     "sharp": "^0.34.0"
@@ -90,7 +90,7 @@
     }
   },
   "devDependencies": {
-    "@trempel/scene": "^2.2.0",
+    "@trempel/scene": "^2.3.0",
     "pixi.js": "^8.19.0"
   },
   "engines": {

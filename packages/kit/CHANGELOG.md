@@ -1,5 +1,23 @@
 # Changelog — @trempel/kit
 
+## 2.3.0
+
+Additions only (needs `@trempel/scene` ^2.3: the consumer module's `inspectors`); 2.2.1 included.
+
+- **The particle editor in the scene editor**: `kitView()` brings the inspector of `tml:type="fx"`
+  nodes (`inspectors.fx`, `src/fx/inspector.ts`): the node's effect (presets, the project's
+  `fx/<name>.json`, the game's table) — changed by `heir.setAttr`; the config of each system in groups
+  (emission and bursts, shape and the Cocos radial mode, lifetime / speed / size / rotation as a
+  constant, a range or curves, gravity, accelerations, limitVelocity, colour and the colour-over-life
+  gradient, size over life, sheet, render, tint, texture); the live preview on the node (⟲, a burst, the
+  node's seed or a random one); save — `fx/<name>.json` whole, a converter's `systems.json` — only the
+  effect's systems, the rest of the file byte for byte (`src/fx/json-edit.ts`); an effect from code or a
+  preset — read-only, «move to a file» writes `fx/<name>.json` (hooking it up is the game's); a palette
+  of effects to drag onto the stage; `tml.inspect.fx` for scripts and agents (`list`, `origin`, `get`,
+  `update`, `save`, `extract`, `unsaved`).
+- **`kitView({ effectSources })`**: effect files the game imports, by path relative to the scene folder
+  → the imported JSON — the inspector finds an effect's file by the identity of its configs.
+
 ## 2.2.1
 
 - Choreography: the Director log is bounded (`logLimit`, default 10000; `Infinity` for verify) — an idling slot no longer grows it forever.
