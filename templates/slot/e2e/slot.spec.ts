@@ -141,6 +141,7 @@ test('5×3: the reels land one by one, the scatters tease the reels after them, 
 });
 
 test('a stop press while the reels spin plays the quickstop; a press in the wins — the skip; the big win levels have their own sequences', async ({ page }) => {
+  test.setTimeout(180_000); // two big win levels play in full — a slow CI runner needs more than the default minute
   await page.goto('./?cheat=1');
   await waitGame(page);
   await fixture(page, '09-mega');
