@@ -49,6 +49,12 @@ export function discoverScenes(files: string[]): SceneEntry[] {
 export const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 
 /**
+ * 2.3.1: a service folder — one of SKIP_DIRS, any build output `dist-*` (a game's `dist-web/`,
+ * `dist-yt/` inside its scene folder) or a dot-folder (`.trempel`, `.git`, `.cache`…).
+ */
+export const isServiceDir = (name: string): boolean => SKIP_DIRS.has(name) || name.startsWith('dist-') || name.startsWith('.');
+
+/**
  * Clip files (md clips) of a scene, by convention: `anim/*.md` next to the scene (v0.7) and
  * `*.anim.md` in the scene's folder (v0.8 — what an animation importer writes: `el_nine.anim.md`).
  */

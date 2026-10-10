@@ -27,7 +27,7 @@ import type { Plugin } from 'vite';
 import { legacyName, VIEW_MODULE, VIEW_MODULES } from '../src/compat.js';
 import { coded } from '../src/core.js';
 import { loadProject, isInside, type Project } from '../src/node/project.js';
-import { discoverScenes, SKIP_DIRS, type SceneEntry } from './discover';
+import { discoverScenes, isServiceDir, type SceneEntry } from './discover';
 
 export const MODULE_NAME = VIEW_MODULE;
 const VIRTUAL = 'virtual:trempel-view-module';
@@ -48,13 +48,13 @@ const TYPES: Record<string, string> = {
   '.otf': 'font/otf',
 };
 
-/** Relative paths of every file under `dir` (skipping node_modules, dist, dot-folders). */
+/** Relative paths of every file under `dir` (skipping node_modules, dist, dist-*, dot-folders). */
 export function listFiles(dir: string): string[] {
   const out: string[] = [];
   const walk = (d: string): void => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(d, e.name));
+        if (!isServiceDir(e.name)) walk(join(d, e.name));
       } else if (e.isFile()) {
         out.push(relative(dir, join(d, e.name)).split(sep).join('/'));
       }
@@ -151,8 +151,8 @@ export function servedFile(pathname: string, root: string, collections: Record<s
   } else return null;
   const file = resolve(base, decodeURIComponent(rel));
   if (!isInside(base, file) || file === resolve(base)) return { status: 403, error: coded('E_VIEW_ACCESS', `${decodeURIComponent(rel)}: outside the project root and its collections`) };
-  // dot-folders (.git, .env…) and node_modules / dist of the project are not served
-  if (relative(base, file).split(sep).some((p) => (p.startsWith('.') && p !== '.trempel') || SKIP_DIRS.has(p))) {
+  // dot-folders (.git, .env…) and node_modules / dist / dist-* of the project are not served
+  if (relative(base, file).split(sep).some((p) => p !== '.trempel' && isServiceDir(p))) {
     return { status: 403, error: coded('E_VIEW_ACCESS', `${decodeURIComponent(rel)}: a service folder`) };
   }
   return { file };
@@ -184,7 +184,7 @@ export function writeSceneFile(dir: string, rel: unknown, text: unknown): WriteR
     return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the editor writes a scene base or heir (X.svg, X.tml.svg), md clips (anim/*.md, X.anim.md) and effect data (fx/*.json, systems.json) only`) };
   }
   const parts = relative(root, file).split(sep);
-  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
+  if (parts.some(isServiceDir)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text);
   return { status: 200, file, hash: textHash(text) };
@@ -201,7 +201,7 @@ export function writeRenderFile(dir: string, rel: unknown, base64: unknown): Wri
   if (!file.startsWith(root + sep)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: outside the scene folder`) };
   const parts = relative(root, file).split(sep);
   if (!file.endsWith('.png') || parts.at(-2) !== 'renders') return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: pictures are written only to renders/*.png`) };
-  if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
+  if (parts.some(isServiceDir)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
   const data = Buffer.from(base64, 'base64');
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, data);

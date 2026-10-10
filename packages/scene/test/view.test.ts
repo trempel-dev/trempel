@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { discoverScenes } from '../view/discover';
-import { scanScenes } from '../view/plugin';
+import { scanScenes, writeSceneFile } from '../view/plugin';
 import { fitStage, parseViewport, parseViewBox } from '../view/viewport';
 import { openScene, hasErrors, type ViewIssue } from '../view/session';
 import { TrempelError, Registry, type RendererBackend } from '../src/core';
@@ -60,6 +60,21 @@ describe('view — discovery', () => {
       { id: 'broken', base: 'broken.svg', heir: 'broken.tml.svg', contract: 'broken.contract.xml', state: 'broken.state.json' },
       { id: 'nested/ok', base: 'nested/ok.svg', heir: 'nested/ok.tml.svg', state: 'nested/ok.state.json' },
     ]);
+  });
+
+  it('2.3.1: build outputs dist-* and service dot-folders are not scanned, nor written', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'tml-skip-'));
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>';
+    for (const f of ['menu.svg', 'popups/win.svg', 'dist/menu.svg', 'dist-web/menu.svg', 'dist-yt/popups/win.svg', '.trempel/shots/menu.svg', '.trempel-cache/x.svg', 'node_modules/x/y.svg', 'distant/far.svg']) {
+      mkdirSync(join(dir, f, '..'), { recursive: true });
+      writeFileSync(join(dir, f), svg);
+    }
+    expect(scanScenes(dir).map((s) => s.id)).toEqual(['distant/far', 'menu', 'popups/win']);
+    expect(writeSceneFile(dir, 'dist-web/menu.svg', svg)).toMatchObject({ status: 403 });
+    expect(writeSceneFile(dir, 'distant/far.svg', svg)).toMatchObject({ status: 200 });
   });
 });
 
