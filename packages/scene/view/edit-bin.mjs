@@ -7,14 +7,18 @@
 //   trempel-edit save [--port 5181]              = ⌘S (the base, the heir, the clips)
 //   trempel-edit state [--port 5181]             scene, unsaved, errors, selection, the clip shown
 //   trempel-edit mcp [--port 5181]               an MCP server (stdio): editor.eval, editor.save, editor.state
+//   trempel-edit serve <folder> [--port 5181] [--module m.ts] [--open]
+//                                                the editor page itself (edit/cli.mjs; needs vite in the project)
 //
 // Output: the page's answer as JSON ({ ok, value, errors, dirty }); exit 1 when not ok. The bridge
 // answers only on localhost (POST /__tml/agent of the editor's dev server).
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
-const USAGE = "usage: trempel-edit eval [--port N] '<code>' | eval --file x.js | save | state | mcp [--port N]";
+const USAGE = "usage: trempel-edit eval [--port N] '<code>' | eval --file x.js | save | state | mcp [--port N] | serve <folder> [--port N]";
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -99,7 +103,21 @@ function mcp() {
   });
 }
 
-if (cmd === 'mcp') mcp();
+if (cmd === 'serve') {
+  // The page: the same dev server as `npm run edit` in the repository, from the installed package.
+  const require = createRequire(import.meta.url);
+  try {
+    require.resolve('vite');
+  } catch {
+    console.log(JSON.stringify({ ok: false, errors: ['E_CLI: serve needs vite — npm i -D vite (or npx -p @trempel/scene -p vite trempel-edit serve <folder>)'] }, null, 2));
+    process.exit(2);
+  }
+  const argv = process.argv.slice(2);
+  // a bin's folder is relative to where it runs: INIT_CWD is `npm run edit`'s, and leaks from an npm parent
+  process.env.INIT_CWD = process.cwd();
+  process.argv = [process.argv[0], fileURLToPath(new URL('../edit/cli.mjs', import.meta.url)), ...argv.slice(argv.indexOf('serve') + 1)];
+  await import('../edit/cli.mjs');
+} else if (cmd === 'mcp') mcp();
 else if (cmd === 'eval' || cmd === 'save' || cmd === 'state') {
   let code;
   if (cmd === 'eval') {

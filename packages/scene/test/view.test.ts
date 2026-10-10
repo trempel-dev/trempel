@@ -210,8 +210,8 @@ describe('view — in the package only as the trempel-view bin (2.1)', () => {
     const read = (p: string): Record<string, any> => JSON.parse(readFileSync(new URL(p, new URL('..', import.meta.url)), 'utf8'));
     expect(read('tsconfig.build.json').include).toEqual(['src']);
     const pkg = read('package.json');
-    expect(pkg.files).toEqual(['dist', 'view', '!view/**/*.test.*', '!view/tsconfig.json', 'src', 'LICENSE', 'README.md', 'CHANGELOG.md']);
-    expect(pkg.bin).toMatchObject({ 'trempel-view': 'view/bin.mjs', scene: 'view/bin.mjs' });
+    expect(pkg.files).toEqual(['dist', 'view', '!view/**/*.test.*', '!view/tsconfig.json', 'src', 'edit', '!edit/**/*.test.*', '!edit/e2e', '!edit/tsconfig*.json', '!edit/lib.config.ts', 'editor', '!editor/**/*.test.*', '!editor/tsconfig*.json', 'LICENSE', 'README.md', 'CHANGELOG.md']);
+    expect(pkg.bin).toMatchObject({ 'trempel-view': 'view/bin.mjs', scene: 'view/bin.mjs', 'trempel-edit': 'view/edit-bin.mjs' });
     expect(pkg.dependencies.playwright).toBeUndefined();
     expect(pkg.dependencies.vite).toBeUndefined();
     expect(pkg.peerDependenciesMeta).toMatchObject({ playwright: { optional: true }, vite: { optional: true } });

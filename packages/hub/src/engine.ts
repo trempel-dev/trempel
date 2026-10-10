@@ -118,7 +118,9 @@ export async function startAction(root: string | ProjectInfo, actionId: string, 
   const vars: VarContext = { project, input, port, services: servicesOf(pa.running), here: action.base };
   if (port !== undefined) vars.url = interpolate(action.url ?? 'http://localhost:${port}/', vars);
   const cwd = action.cwd ? resolve(project.root, interpolate(action.cwd, vars)) : project.root;
-  const env: Record<string, string> = {};
+  // 2.4.1: INIT_CWD is where a command was started (npm's); a hub started by `npm run …` must not
+  // hand its own to the project's tools (the scene's editor and view:shot resolve folders from it)
+  const env: Record<string, string> = { INIT_CWD: cwd };
   for (const [k, v] of Object.entries(action.env)) env[k] = interpolate(v, vars);
   if (port !== undefined) env.PORT = String(port);
   const id = newRunId();

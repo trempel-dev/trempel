@@ -77,6 +77,8 @@ npm run view:shot -- packages/scene/examples/motion --out shot.png   # a determi
 
 **A live snapshot without the repository.** `npx -p @trempel/scene -p vite -p playwright trempel-view view:shot scenes/menu.svg --out menu.png [--settle 2] [--clip intro --t 0.5]` — the same deterministic headless PNG + JSON of errors (in a project with `vite` and `playwright` installed: `npx trempel-view view:shot …`; once: `npx playwright install chromium`).
 
+**The editor page without the repository** (2.3.1). `npx trempel-edit serve scenes [--port 5181]` (or `npx trempel-view edit scenes`) in a project with `vite` installed — the same page as `npm run edit` here, with the folder's `trempel.view.ts`; the kit's hub action `editor` starts it.
+
 **Open a scene anywhere.** `npm run flatten -- packages/scene/examples/prefabs/menu.svg --out menu.svg --embed` (bin `trempel-flatten` in the package) turns a scene — heir, prefabs, 9-slice, slots, `@skin/…` collection links — into one vanilla SVG that any browser and Figma draw.
 
 ## License

@@ -66,6 +66,10 @@ $kind: service
 $port: auto
 $shell: node server.mjs
 
+### where
+$title: Where
+$shell: node -e "console.log('init-cwd=' + process.env.INIT_CWD)"
+
 ### danger
 $title: Danger
 $confirm: Deletes everything
@@ -94,6 +98,19 @@ describe('once actions', () => {
     expect(done.code).toBe(0);
     expect(readLog(r.id)).toContain("hello Ann O'Neil");
     expect(listRuns({ projectId: done.projectId }).some((x) => x.id === r.id)).toBe(true);
+  });
+
+  it('2.4.1: INIT_CWD is the action\'s folder, not the one of an npm that started the hub', async () => {
+    const was = process.env.INIT_CWD;
+    process.env.INIT_CWD = '/somewhere/else';
+    try {
+      const r = await startAction(root, 'where');
+      await waitRun(r.id, { timeoutMs: 20_000 });
+      expect(readLog(r.id)).toContain(`init-cwd=${root}`);
+    } finally {
+      if (was === undefined) delete process.env.INIT_CWD;
+      else process.env.INIT_CWD = was;
+    }
   });
 
   it('a list of commands stops at the first failure', async () => {
