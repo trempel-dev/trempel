@@ -1,0 +1,12 @@
+{
+  "spin": { "synth": "rise" },
+  "land": { "wave": "square", "freq": 160, "to": 110, "dur": 0.07, "volume": 0.3 },
+  "mark": { "wave": "triangle", "notes": [784, 1175], "dur": 0.07, "volume": 0.3 },
+  "tease": { "wave": "saw", "freq": 220, "to": 440, "dur": 0.9, "volume": 0.18, "attack": 0.3 },
+  "expand": { "wave": "triangle", "freq": 330, "to": 990, "dur": 0.35, "volume": 0.35 },
+  "line": { "synth": "coin" },
+  "coin": { "wave": "square", "notes": [1319, 1568], "dur": 0.06, "volume": 0.2 },
+  "scatter": { "wave": "sine", "notes": [659, 880, 1319], "dur": 0.1, "volume": 0.35 },
+  "fanfare": { "synth": "win" },
+  "click": { "synth": "click" }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "06-big",
+  "note": "a ×2 wild on reel 3, the top line of E over five reels: a big win (20 bets)",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["E","E","A"],["E","B","C"],["D","V","E"],["E","A","B"],["E","C","D"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}],"symbol":"V"}},
+    {"type":"paylines","value":[{"lineId":"1","line":[0,0,0,0,0],"value":2000}]},
+    {"type":"win","value":2000},
+    {"type":"roundFinished","value":2000}
+  ]
+}

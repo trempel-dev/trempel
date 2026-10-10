@@ -1,0 +1,12 @@
+{
+  "name": "09-mega",
+  "note": "a ×2 wild among E: every line ×2, mega (45 bets)",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["E","E","E"],["E","V","E"],["E","E","E"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":1,"row":0},{"reel":1,"row":1},{"reel":1,"row":2}],"symbol":"V"}},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":900},{"lineId":"1","line":[0,0,0],"value":900},{"lineId":"2","line":[2,2,2],"value":900},{"lineId":"3","line":[0,1,2],"value":900},{"lineId":"4","line":[2,1,0],"value":900}]},
+    {"type":"win","value":4500},
+    {"type":"roundFinished","value":4500}
+  ]
+}

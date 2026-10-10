@@ -4,5 +4,7 @@
   "C": { "texture": "symbols/orange.png" },
   "D": { "texture": "symbols/grapes.png" },
   "E": { "texture": "symbols/watermelon.png" },
+  "W": { "label": "WILD", "color": "#3a7d2c", "labelColor": "#fff6c8" },
+  "V": { "label": "W×2", "color": "#9b2c1f", "labelColor": "#ffe066" },
   "S": { "texture": "symbols/bell.png" }
 }

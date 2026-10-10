@@ -3,10 +3,15 @@
 // loop's logical time (each sequence starts at the logical end of the previous one). The player decides
 // WHAT plays and with which data (the event's vars); WHEN and HOW is the choreography — data of the game.
 //
-// Bindings: book event type → sequence id (`frame`, `cascade`, `hits`, `lines`, `stepWin`, `multTotal`,
-// `spinWin`, `maxWin`, `spinsLeft`, `fsStart`, `fsEnd`, `bigWin`, `roundEnd`), `step:<kind>` (or `step`)
-// for step markers, the transform type for the game's own transforms (`extra` events). An event without
-// a binding only changes the state; `frame` and `cascade` must be shown — bound, or handled by a hook.
+// Bindings: book event type → sequence id (`frame`, `cascade`, `expand`, `hits`, `lines`, `stepWin`,
+// `multTotal`, `spinWin`, `maxWin`, `spinsLeft`, `fsStart`, `fsEnd`, `bigWin`, `roundEnd`), `step:<kind>`
+// (or `step`) for step markers, `bigWin:<level>` (or `bigWin`) for the big win levels, the transform type
+// for the game's own transforms (`extra` events). An event without a binding only changes the state;
+// `frame` and `cascade` must be shown — bound, or handled by a hook.
+// Outside the book: `idle` — played in passes while no round runs (after a round, and from idle());
+// a spin skips the pass and starts at once, so its sequence is `$skip: on` with rows that end on a skip;
+// `quickstop` / `skip` — played at the moment of a skip press (reels still spinning / the rest of the
+// round), next to the skip rules of the running sequences.
 // Hooks: the same keys → a function that plays the event itself (api.run(seq, vars)) — the game's
 // own events and presentations without a fork of the player.
 //
@@ -14,7 +19,7 @@
 // a sequence may animate (win, big win amount) — set to their final values after it.
 // Money: the feed is in credits (one bet = betCredits); the state shows currency = credits × bet / betCredits.
 
-import type { ChoreoValue, Director, GameLoop, SpeedMode } from '@trempel/kit';
+import type { ChoreoValue, Director, GameLoop, Sequence, SpeedMode } from '@trempel/kit';
 import { DEFAULT_KINDS, planRound, type BookEvent, type PlanOptions, type RoundPlan, type StepKinds } from './feed/plan.js';
 import type { Pos } from './feed/types.js';
 import type { RoundSource } from './feed/source.js';
@@ -53,13 +58,24 @@ export interface RoundPlayerOptions {
   onRoundEnd?: (plan: RoundPlan) => void;
   /** Skip pressed during a round (after the sequences applied their rules): land the reels. */
   onSkip?: () => void;
+  /** Letters whose cells a frame lists in `marks` (scatters, wilds — what lands with a show). */
+  marks?: readonly string[];
+  /** Anticipation: reels after the one where `count` of `symbols` have landed are teased (`tease` of a frame). */
+  tease?: { symbols: readonly string[]; count: number };
 }
 
 /** The binding key of a book event. */
 export function eventKey(e: BookEvent): string {
   if (e.type === 'step') return `step:${e.step.kind}`;
+  if (e.type === 'bigWin') return `bigWin:${e.level}`;
   if (e.type === 'extra') return e.transform.type;
   return e.type;
+}
+
+/** Binding keys of an event, the specific first (`step:spin`, `step`; `bigWin:mega`, `bigWin`). */
+function keysOf(e: BookEvent): string[] {
+  const k = eventKey(e);
+  return e.type === 'step' || e.type === 'bigWin' ? [k, e.type] : [k];
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -75,6 +91,10 @@ export class RoundPlayer {
   private committed = 0;
   private spinWin = 0;
   private readonly kinds: StepKinds;
+  private idleRun: Promise<void> | null = null;
+  private idleOn = false;
+  /** Vars of the idle presentation: the last round's won lines. */
+  private idleVars: Record<string, ChoreoValue> = { lines: [], cells: [], count: 0, total: 0 };
 
   constructor(private readonly o: RoundPlayerOptions) {
     this.kinds = { ...DEFAULT_KINDS, ...o.plan?.kinds };
@@ -83,6 +103,7 @@ export class RoundPlayer {
       if (!seqs[seq]) throw new Error(`E_SLOT_BINDING: "${key}" → unknown sequence "${seq}" (known: ${Object.keys(seqs).join(', ') || '—'})`);
     }
     if (!o.bindings.frame && !o.hooks?.frame) throw new Error('E_SLOT_BINDING: no sequence for "frame" (the reels must land: bind it or give a hook)');
+    if (o.bindings.idle) skippable(o.bindings.idle, seqs, new Set());
   }
 
   get state(): SlotState {
@@ -120,9 +141,46 @@ export class RoundPlayer {
 
   /** Skip press during a round: every active skippable sequence applies its rules; the reels land. */
   skip(): void {
-    if (!this.o.state.busy) return;
+    const s = this.o.state;
+    if (!s.busy) return;
+    const reaction = this.o.bindings[s.phase === 'spin' || s.phase === 'stop' ? 'quickstop' : 'skip'];
     this.o.director.skip();
     this.o.onSkip?.();
+    if (reaction) this.o.director.run(reaction, { phase: s.phase, fs: s.mode !== '' }, { mode: this.mode }).catch(() => {});
+  }
+
+  /** Start the idle presentation (the `idle` binding) unless it runs or a round does; a spin stops it. */
+  idle(): void {
+    const seq = this.o.bindings.idle;
+    if (!seq || this.idleRun || this.o.state.busy) return;
+    this.idleOn = true;
+    const vars = this.idleVars;
+    const run = (async () => {
+      let at = this.o.director.now();
+      while (this.idleOn) {
+        const end = await this.o.director.run(seq, vars, { at, mode: this.mode });
+        if (end <= at) break; // an empty pass: nothing to repeat
+        at = end;
+      }
+    })()
+      .catch(() => {})
+      .finally(() => {
+        if (this.idleRun === run) this.idleRun = null;
+      });
+    this.idleRun = run;
+  }
+
+  /** The idle presentation runs. */
+  get idling(): boolean {
+    return this.idleRun !== null;
+  }
+
+  private async stopIdle(): Promise<void> {
+    const run = this.idleRun;
+    if (!run) return;
+    this.idleOn = false;
+    this.o.director.skip(); // every idle row ends on a skip (checked in the constructor)
+    await run;
   }
 
   /** Play one round (a spin, or a bought feature). Resolves back in idle. */
@@ -130,7 +188,10 @@ export class RoundPlayer {
     const s = this.o.state;
     if (!this.canSpin(buy)) return;
     s.busy = true;
+    let played = false;
     try {
+      await this.stopIdle();
+      this.idleVars = { lines: [], cells: [], count: 0, total: 0 };
       const feed = await this.o.source.next({ bet: s.bet, buy });
       const plan = planRound(feed, this.o.plan); // throws on any feed error — before money moves
       this.plan = plan;
@@ -150,6 +211,8 @@ export class RoundPlayer {
       }
       s.win = this.money(plan.total);
       if (this.o.creditWins !== false) s.balance = round2(s.balance + s.win);
+      this.idleVars = { ...this.idleVars, total: s.win };
+      played = true;
       this.o.onRoundEnd?.(plan);
     } finally {
       s.busy = false;
@@ -161,9 +224,10 @@ export class RoundPlayer {
     }
     if (s.auto > 0) {
       s.auto--;
-      if (this.canSpin()) await this.spin();
-      else s.auto = 0;
+      if (this.canSpin()) return this.spin();
+      s.auto = 0;
     }
+    if (played) this.idle();
   }
 
   /** Autoplay: n rounds (0 stops). Starts now when idle. */
@@ -211,8 +275,8 @@ export class RoundPlayer {
   private async play(e: BookEvent, plan: RoundPlan): Promise<void> {
     const s = this.o.state;
     const vars = this.before(e);
-    let key = eventKey(e);
-    if (e.type === 'step' && !this.o.hooks?.[key] && !this.o.bindings[key]) key = 'step';
+    const keys = keysOf(e);
+    const key = keys.find((k) => this.o.hooks?.[k] || this.o.bindings[k]) ?? keys[keys.length - 1];
     const hook = this.o.hooks?.[key];
     const seq = this.o.bindings[key];
     if (hook) {
@@ -244,7 +308,9 @@ export class RoundPlayer {
         return { left: e.left, index: e.index, total: e.total, added: e.added };
       case 'frame':
         this.phase('stop');
-        return { grid: e.grid, kind: e.kind, mode: e.mode ?? '', fs: !!e.mode };
+        return { grid: e.grid, kind: e.kind, mode: e.mode ?? '', fs: !!e.mode, reels: e.grid.length, marks: marksOf(e.grid, this.o.marks), tease: teaseOf(e.grid, this.o.tease) };
+      case 'expand':
+        return { reel: e.reel, symbol: e.symbol, mult: e.mult, cells: cells(e.cells) };
       case 'cascade':
         this.phase('cascade');
         return { grid: e.ops.grid, removed: e.ops.winners.map((w) => ({ reel: w.reel, row: w.cell })), swaps: e.ops.swaps.map((w) => ({ reel: w.reel, row: w.cell, id: w.id })), snapshot: e.snapshot };
@@ -255,8 +321,10 @@ export class RoundPlayer {
       }
       case 'lines': {
         this.phase('win');
-        const lines = e.lines.map((l, i) => ({ cells: cells(l.cells), index: lineIndex(l.lineId, i), lineId: l.lineId, symbol: l.symbol, value: this.money(l.value) }));
-        return { lines, cells: union(e.lines.flatMap((l) => l.cells)), count: lines.length };
+        const lines = e.lines.map((l, i) => ({ cells: cells(l.cells), index: lineIndex(l.lineId, i), lineId: l.lineId, symbol: l.symbol, value: this.money(l.value), mult: l.mult }));
+        const vars = { lines, cells: union(e.lines.flatMap((l) => l.cells)), count: lines.length };
+        this.idleVars = { ...this.idleVars, ...vars };
+        return vars;
       }
       case 'stepWin': {
         const from = s.win;
@@ -336,4 +404,37 @@ function union(ps: Pos[]): ChoreoValue {
 function lineIndex(id: string, i: number): number {
   const n = Number(id);
   return Number.isInteger(n) && n >= 0 ? n : i;
+}
+
+/** The idle pass must end on a skip: `$skip: on`, a skip rule on every row, nested sequences alike. */
+function skippable(id: string, seqs: Record<string, Sequence>, seen: Set<string>): void {
+  if (seen.has(id)) return;
+  seen.add(id);
+  const seq = seqs[id];
+  if (!seq) throw new Error(`E_SLOT_BINDING: "idle" runs an unknown sequence "${id}"`);
+  if (seq.skip !== 'on') throw new Error(`E_SLOT_BINDING: idle sequence "${id}" must be $skip: on (a spin skips the idle pass)`);
+  for (const r of seq.rows) {
+    const m = /^run:(.+)$/.exec(r.action);
+    if (m) skippable(m[1], seqs, seen);
+    else if (r.skip.kind === 'none') throw new Error(`E_SLOT_BINDING: idle row ${r.at} has no skip rule (a spin must end it: now / cut)`);
+  }
+}
+
+/** Cells of the given letters on a grid, reel by reel. */
+function marksOf(grid: string[][], letters: readonly string[] | undefined): ChoreoValue {
+  if (!letters?.length) return [];
+  const out: ChoreoValue[] = [];
+  grid.forEach((col, reel) => col.forEach((symbol, row) => letters.includes(symbol) && out.push({ reel, row, symbol })));
+  return out;
+}
+
+/** Reels to tease: every reel after the one where `count` of the symbols have shown (left to right). */
+function teaseOf(grid: string[][], t: RoundPlayerOptions['tease']): ChoreoValue {
+  if (!t || !(t.count > 0)) return [];
+  let seen = 0;
+  for (let reel = 0; reel < grid.length; reel++) {
+    seen += grid[reel].filter((s) => t.symbols.includes(s)).length;
+    if (seen >= t.count) return grid.slice(reel + 1).map((_, i) => reel + 1 + i);
+  }
+  return [];
 }

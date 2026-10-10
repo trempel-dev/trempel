@@ -1,0 +1,12 @@
+{
+  "name": "03-wild-x2",
+  "note": "a ×2 wild takes reel 3: the top line of D over four reels, ×2",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["D","A","B"],["D","C","E"],["A","V","C"],["D","B","E"],["C","A","B"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}],"symbol":"V"}},
+    {"type":"paylines","value":[{"lineId":"1","line":[0,0,0,0,null],"value":400}]},
+    {"type":"win","value":400},
+    {"type":"roundFinished","value":400}
+  ]
+}

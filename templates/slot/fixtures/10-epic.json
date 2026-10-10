@@ -1,0 +1,13 @@
+{
+  "name": "10-epic",
+  "note": "two ×2 wilds among E: every line ×4, epic (120 bets)",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["E","E","E"],["V","E","E"],["E","E","V"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":1,"row":0},{"reel":1,"row":1},{"reel":1,"row":2}],"symbol":"V"}},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}],"symbol":"V"}},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":2400},{"lineId":"1","line":[0,0,0],"value":2400},{"lineId":"2","line":[2,2,2],"value":2400},{"lineId":"3","line":[0,1,2],"value":2400},{"lineId":"4","line":[2,1,0],"value":2400}]},
+    {"type":"win","value":12000},
+    {"type":"roundFinished","value":12000}
+  ]
+}

@@ -4,5 +4,7 @@
   "C": { "label": "Q", "color": "#83769c" },
   "D": { "label": "J", "color": "#00b543" },
   "E": { "label": "7", "color": "#ff004d" },
+  "W": { "label": "WILD", "color": "#29adff", "labelColor": "#1d2b53" },
+  "V": { "label": "W×2", "color": "#1d2b53", "labelColor": "#ffec27" },
   "S": { "label": "★", "color": "#7e2553", "labelColor": "#ffd34d" }
 }

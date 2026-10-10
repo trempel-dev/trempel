@@ -62,8 +62,14 @@ export interface SlotConfig {
   speeds?: ReelGridOptions['speeds'];
   /** Autoplay rounds of the AUTO button (default 10). */
   autoSpins?: number;
-  /** A sound cue played when a reel lands ('' — none; default 'stop', a kit synth preset). */
+  /** A sound cue played when a reel lands ('' — none, the choreography plays it; default 'stop', a kit synth preset). */
   reelStopSound?: string;
+  /** Expanding wilds: letter → multiplier (`frameExpandedWild` → the `expand` event, line multipliers). */
+  wilds?: Record<string, number>;
+  /** Letters a frame lists in its `marks` var (what lands with a show: scatters, wilds). */
+  marks?: string[];
+  /** Anticipation: reels after `count` of `symbols` have landed are teased (a frame's `tease` var). */
+  tease?: { symbols: string[]; count: number };
 }
 
 export interface SlotOptions {
@@ -111,7 +117,7 @@ export function symbolLooks(data: Record<string, SymbolLookData>): Record<string
 
 /** The plan options of a config (+ the game's transform handlers). */
 export function planOptions(config: SlotConfig, extend?: Record<string, Extension>): PlanOptions {
-  return { betCredits: config.betCredits, costs: config.costs, bigWin: config.bigWin, grid: config.grid, modes: config.modes, kinds: config.kinds, extend };
+  return { betCredits: config.betCredits, costs: config.costs, bigWin: config.bigWin, grid: config.grid, modes: config.modes, kinds: config.kinds, wilds: config.wilds, extend };
 }
 
 export function createSlot(o: SlotOptions): Slot {
@@ -121,6 +127,9 @@ export function createSlot(o: SlotOptions): Slot {
   const timings = Object.fromEntries((Object.keys(TIMINGS) as SpeedMode[]).map((m) => [m, { ...TIMINGS[m], ...cfg.timings?.[m] }])) as Record<SpeedMode, SpinTimings>;
   const looks = symbolLooks(o.symbols);
   for (const row of cfg.initial ?? []) for (const id of row) if (!looks[id]) throw new Error(`E_SLOT_CONFIG: initial grid letter "${id}" has no look`);
+  if (cfg.initial && (cfg.initial.length !== cfg.grid.reels || cfg.initial.some((c) => c.length !== cfg.grid.rows))) throw new Error(`E_SLOT_CONFIG: the initial grid is not ${cfg.grid.reels}×${cfg.grid.rows}`);
+  for (const id of [...Object.keys(cfg.wilds ?? {}), ...(cfg.marks ?? []), ...(cfg.tease?.symbols ?? [])]) if (!looks[id]) throw new Error(`E_SLOT_CONFIG: letter "${id}" (wilds / marks / tease) has no look`);
+  let resolve: ((href: string) => string) | undefined;
   let player: RoundPlayer | null = null;
   let reels: ReelsView | null = null;
   const ctl = () => {
@@ -129,7 +138,10 @@ export function createSlot(o: SlotOptions): Slot {
   };
   return {
     state,
-    components: (kit) => ({ 'reel-grid': reelGrid(kit, { symbols: looks, weights: cfg.weights, initial: cfg.initial, speeds: cfg.speeds }) }),
+    components: (kit) => {
+      resolve = kit.resolve;
+      return { 'reel-grid': reelGrid(kit, { symbols: looks, weights: cfg.weights, initial: cfg.initial, speeds: cfg.speeds, grid: cfg.grid }) };
+    },
     actions: {
       spinOrStop: () => void ctl().spinOrStop(),
       skip: () => ctl().skip(),
@@ -142,7 +154,8 @@ export function createSlot(o: SlotOptions): Slot {
       if (player) return player;
       const screen = game.screen(ids.screen ?? 'slot');
       const grid = screen.component<ReelGridInstance>(ids.reels ?? 'reels');
-      const view = pixiReels({ reels: grid, lines: screen.byId<Container>(ids.lines ?? 'lines'), timings, paths: cfg.lines });
+      const view = pixiReels({ reels: grid, lines: screen.byId<Container>(ids.lines ?? 'lines'), timings, paths: cfg.lines, looks, resolve, tweens: game.tweens });
+      const nodes = [...screen.scene.byId.keys()];
       reels = view;
       const stopSound = cfg.reelStopSound ?? 'stop';
       if (stopSound) grid.reelSet.events.on('spin:reelLanded', () => game.sound.play(stopSound));
@@ -164,6 +177,10 @@ export function createSlot(o: SlotOptions): Slot {
           get landed() {
             return view.landed;
           },
+          get landedReels() {
+            return view.landedReels;
+          },
+          nodes,
         },
       });
       player = new RoundPlayer({
@@ -177,8 +194,11 @@ export function createSlot(o: SlotOptions): Slot {
         creditWins: o.creditWins,
         onRoundEnd: o.onRoundEnd,
         onSkip: () => view.slam(),
+        marks: cfg.marks,
+        tease: cfg.tease,
       });
       bindSlotPopups(game);
+      player.idle();
       return player;
     },
     get player() {

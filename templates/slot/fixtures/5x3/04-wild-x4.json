@@ -1,0 +1,13 @@
+{
+  "name": "04-wild-x4",
+  "note": "two ×2 wilds take reels 2 and 3: every line ×4, the top one over four reels",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["B","A","C"],["E","V","D"],["V","C","A"],["B","D","E"],["A","C","B"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":1,"row":0},{"reel":1,"row":1},{"reel":1,"row":2}],"symbol":"V"}},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}],"symbol":"V"}},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1,null,null],"value":100},{"lineId":"1","line":[0,0,0,0,null],"value":200},{"lineId":"2","line":[2,2,2,null,null],"value":100},{"lineId":"3","line":[0,1,2,null,null],"value":100},{"lineId":"4","line":[2,1,0,null,null],"value":100}]},
+    {"type":"win","value":600},
+    {"type":"roundFinished","value":600}
+  ]
+}

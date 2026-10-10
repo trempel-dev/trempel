@@ -8,6 +8,9 @@
 // A core transform that contradicts the format throws — no silent skips. A transform of the game's
 // own goes to its handler (`extend`, which may check it and put data on the board's cells) and into the
 // book as an `extra` event for the player's hooks; without a handler it passes through as is.
+// Expanding wilds (`frameExpandedWild`, a transform of the studio dictionary, docs/feed.md) are read
+// here when the game declares its wilds (`wilds`: letter → multiplier): an `expand` event, and the
+// multiplier rides the reel's cells — a line through them shows the product (`LineWin.mult`, display only).
 
 import { applyDiff, boardOf, cascadeOps, frameDiff, letterId, lettersOf, sameFrame, viewOf, type Board, type CascadeOps, type ViewId } from './board.js';
 import { coreOf, DEFAULT_BET_CREDITS, type ExtraTransform, type Hit, type Pos, type RoundFeed, type Transform } from './types.js';
@@ -60,7 +63,22 @@ export interface LineWin {
   symbol: string;
   /** Credits. */
   value: number;
+  /** The product of the multipliers its cells carry (expanded wilds, `data.mult`); 1 — none. Display only: `value` has it. */
+  mult: number;
 }
+
+/** A reel taken by a wild (`frameExpandedWild`). */
+export interface Expansion {
+  reel: number;
+  /** The wild's letter. */
+  symbol: string;
+  /** Its multiplier (the game's `wilds`). */
+  mult: number;
+  cells: Pos[];
+}
+
+/** The transform of expanding wilds (the studio dictionary): `{ positions, symbol }`, one per reel. */
+export const EXPAND_TRANSFORM = 'frameExpandedWild';
 
 /** The round book: what the player plays, in order. Money in credits. */
 export type BookEvent =
@@ -70,6 +88,7 @@ export type BookEvent =
   | { type: 'cascade'; ops: CascadeOps; snapshot: string[][] }
   | { type: 'hits'; hits: Hit[]; trigger: boolean }
   | { type: 'lines'; lines: LineWin[] }
+  | ({ type: 'expand' } & Expansion)
   | { type: 'stepWin'; amount: number; spinSoFar: number }
   | { type: 'multTotal'; value: number; mode?: string }
   | { type: 'spinWin'; amount: number; base: number }
@@ -142,6 +161,8 @@ export interface PlanOptions {
   modes?: readonly string[];
   /** Handlers of the game's own transforms by type. */
   extend?: Record<string, Extension>;
+  /** Expanding wilds: letter → multiplier. Given — `frameExpandedWild` is read (an `expand` event, `data.mult` on the reel's cells). */
+  wilds?: Record<string, number>;
   /** Reel symbol ids of cells (default: the letter). */
   viewId?: ViewId;
   /** Called after every step with the field (the game's own checks of its cell data). */
@@ -265,6 +286,11 @@ export function planRound(feed: RoundFeed, opts: PlanOptions = {}): RoundPlan {
       if (t.context !== ctx && t.type !== 'switchToMode') fail(i, t, `context "${t.context}" ≠ step context "${ctx}"`);
       if (finalSeen && t.type !== 'switchToMode') fail(i, t, 'transform after the spin total');
       const c = coreOf(t);
+      if (!c && t.type === EXPAND_TRANSFORM && opts.wilds) {
+        if (!board) fail(i, t, 'an expansion without a field');
+        book.push({ type: 'expand', ...expansion(board!, t.value, opts.wilds, (msg) => fail(i, t, msg)) });
+        continue;
+      }
       if (!c) {
         opts.extend?.[t.type]?.(t, { board, step: info, fail: (msg) => fail(i, t, msg) });
         book.push({ type: 'extra', transform: t, step: info });
@@ -322,7 +348,8 @@ export function planRound(feed: RoundFeed, opts: PlanOptions = {}): RoundPlan {
             });
             if (!cells.length) fail(i, t, `line ${j} ("${p.lineId}") has no cells`);
             if (!(p.value > 0)) fail(i, t, `line ${j} ("${p.lineId}") pays ${p.value}`);
-            return { lineId: String(p.lineId), line: p.line, cells, symbol: b[cells[0].reel][cells[0].row].sym, value: p.value };
+            const mult = cells.reduce((m, q) => m * multOf(b[q.reel][q.row].data), 1);
+            return { lineId: String(p.lineId), line: p.line, cells, symbol: b[cells[0].reel][cells[0].row].sym, value: p.value, mult };
           });
           book.push({ type: 'lines', lines });
           break;
@@ -396,4 +423,27 @@ export function planRound(feed: RoundFeed, opts: PlanOptions = {}): RoundPlan {
   if (level) book.push({ type: 'bigWin', level, amount: total });
   book.push({ type: 'roundEnd', total });
   return { name, buy: feed.buy, cost, total, capped, betCredits, steps: groups.length, stepInfos, spins, snapshots, episodes, roundFinished, book };
+}
+
+const multOf = (data: Record<string, unknown> | undefined): number => (typeof data?.mult === 'number' && data.mult > 0 ? data.mult : 1);
+
+/** Read a `frameExpandedWild`: one reel of the field, a declared wild; its cells get the multiplier. */
+function expansion(board: Board, value: unknown, wilds: Record<string, number>, fail: (msg: string) => never): Expansion {
+  const v = value as { positions?: unknown; symbol?: unknown } | null;
+  if (!v || typeof v !== 'object' || !Array.isArray(v.positions) || !v.positions.length) fail('not { positions: [...], symbol }');
+  const symbol = String(v!.symbol);
+  const mult = wilds[symbol];
+  if (!(typeof mult === 'number' && mult > 0)) fail(`"${symbol}" is not a wild of the game (wilds: ${Object.keys(wilds).join(', ') || '—'})`);
+  const cells = (v!.positions as unknown[]).map((p) => {
+    const q = p as Partial<Pos> | null;
+    if (!q || !Number.isInteger(q.reel) || !Number.isInteger(q.row) || !board[q.reel!]?.[q.row!]) fail(`position ${JSON.stringify(p)} is off the field`);
+    return { reel: q!.reel!, row: q!.row! };
+  });
+  const reel = cells[0].reel;
+  if (cells.some((q) => q.reel !== reel)) fail('positions on more than one reel');
+  for (const q of cells) {
+    const cell = board[q.reel][q.row];
+    cell.data = { ...cell.data, mult };
+  }
+  return { reel, symbol, mult, cells };
 }

@@ -3,6 +3,9 @@
 // Geometry: tml:cols/rows/cellw/cellh/gapx/gapy on the heir, or — so that a reskin changes only
 // the BASE — plain data attributes on the base node: data-cols, data-rows, data-cellw, data-cellh,
 // data-gapx, data-gapy (the base stays sterile: no tml:*). Heir wins over base.
+// The grid as data: with `grid` (the slot config's) the field has that many reels and rows; a base that
+// gives the box of the field (data-width / data-height) fits the cells into it, so one skin serves any
+// grid; a base laid out cell by cell (cols / rows) must match the grid — otherwise E_SLOT_SKIN.
 // Time: the kit's ticker adapter (game loop). pixi-reels animates its reels with GSAP (its peer
 // dependency); this package does not import GSAP — it moves the instance pixi-reels resolved onto the
 // game loop (driveGsapWithTicker), so a platform pause freezes the reels with the rest of the game.
@@ -16,10 +19,14 @@ import { GameSymbol, type SymbolLook } from './symbol.js';
 export interface ReelGridInstance {
   root: Container;
   reelSet: ReelSet;
+  /** Over the reels (expanded wilds, teased reels' frames — slot/view/reels.ts). */
+  overlay: Container;
   cols: number;
   rows: number;
   cellW: number;
   cellH: number;
+  gapX: number;
+  gapY: number;
 }
 
 export interface ReelGridOptions {
@@ -33,6 +40,8 @@ export interface ReelGridOptions {
   rng?: () => number;
   /** Speed profiles by mode over pixi-reels' presets (normal / quick / turbo). */
   speeds?: Partial<Record<'normal' | 'quick' | 'turbo', Partial<SpeedProfile>>>;
+  /** The field size of the game (default: the scene's cols / rows). */
+  grid?: { reels: number; rows: number };
 }
 
 /** A pixi-reels speed profile between normal and turbo. */
@@ -53,11 +62,17 @@ export function reelGrid(kit: KitServices, opts: ReelGridOptions): ComponentFact
   return (ctx) => {
     const a = ctx.attrs;
     const g: Record<string, string | undefined> = {};
-    for (const k of ['cols', 'rows', 'cellw', 'cellh', 'gapx', 'gapy']) g[k] = ctx.tml[k] ?? a[`data-${k}`];
-    const cols = num(g.cols, 5);
-    const rows = num(g.rows, 3);
-    const cellW = num(g.cellw, 160);
-    const cellH = num(g.cellh, 160);
+    for (const k of ['cols', 'rows', 'cellw', 'cellh', 'gapx', 'gapy', 'width', 'height']) g[k] = ctx.tml[k] ?? a[`data-${k}`];
+    const want = opts.grid;
+    const cols = want?.reels ?? num(g.cols, 5);
+    const rows = want?.rows ?? num(g.rows, 3);
+    if (want && ((g.cols && num(g.cols, 0) !== cols && !g.width) || (g.rows && num(g.rows, 0) !== rows && !g.height))) {
+      throw new Error(`E_SLOT_SKIN: the scene lays the reels out for ${g.cols}×${g.rows}, the game is ${cols}×${rows} (give the field's box: data-width / data-height)`);
+    }
+    const gapX = num(g.gapx, 0);
+    const gapY = num(g.gapy, 0);
+    const cellW = g.width ? (num(g.width, 0) - gapX * (cols - 1)) / cols : num(g.cellw, 160);
+    const cellH = g.height ? (num(g.height, 0) - gapY * (rows - 1)) / rows : num(g.cellh, 160);
     const ids = Object.keys(opts.symbols);
     if (!ids.length) throw new Error('reel-grid: no symbols');
     driveOnLoop(kit.loop);
@@ -66,7 +81,7 @@ export function reelGrid(kit: KitServices, opts: ReelGridOptions): ComponentFact
       .reels(cols)
       .visibleCells(rows)
       .symbolSize(cellW, cellH)
-      .symbolGap(num(g.gapx, 0), num(g.gapy, 0))
+      .symbolGap(gapX, gapY)
       .symbols((r) => {
         for (const id of ids) r.register(id, GameSymbol, { looks: opts.symbols, resolve: kit.resolve, tweens: kit.tweens });
       })
@@ -80,8 +95,10 @@ export function reelGrid(kit: KitServices, opts: ReelGridOptions): ComponentFact
     const reelSet = builder.build();
     const root = new Container();
     root.label = 'reel-grid';
-    root.addChild(reelSet);
-    const inst: ReelGridInstance = { root, reelSet, cols, rows, cellW, cellH };
+    const overlay = new Container();
+    overlay.label = 'reel-overlay';
+    root.addChild(reelSet, overlay);
+    const inst: ReelGridInstance = { root, reelSet, overlay, cols, rows, cellW, cellH, gapX, gapY };
     return inst;
   };
 }

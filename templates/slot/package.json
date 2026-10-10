@@ -3,7 +3,7 @@
   "version": "2.2.0",
   "private": true,
   "type": "module",
-  "description": "Trempel template: a 3×3 slot with five lines, free spins and big win on @trempel/slot — rounds from synthetic fixtures, the presentation as choreography data, two skins; web and YouTube Playables builds.",
+  "description": "Trempel template: a slot with five lines on @trempel/slot (3×3 and 5×3) — expanding multiplier wilds, scatters, free spins, big win levels; rounds from synthetic fixtures, the base choreography of a slot with lines as data, two skins; web and YouTube Playables builds.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",

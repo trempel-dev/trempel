@@ -102,6 +102,26 @@ symbols…). The kit does not read it and does not reject it:
 New fields inside core types are not added: a game's fact is a transform of its own, or a flag of the
 step.
 
+### Expanding wilds — `frameExpandedWild`
+
+One transform of the studio dictionary the plan reads when the game declares its wilds
+(`PlanOptions.wilds`, the slot config's `"wilds": { "W": 1, "V": 2 }` — letter → multiplier):
+
+```json
+{ "type": "frameExpandedWild", "value": { "positions": [{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}], "symbol": "V" } }
+```
+
+- after the step's frame, one per reel a wild takes, left to right; `positions` — the cells of that one
+  reel, `symbol` — a declared wild;
+- the book gets an `expand` event (`reel`, `symbol`, `mult`, `cells`) instead of `extra`; the frame lands
+  as the feed sent it, the expansion is shown by its own sequence;
+- the reel's cells carry the multiplier (`BoardCell.data.mult`): a won line reports the product of the
+  multipliers it crosses (`LineWin.mult` — two ×2 wilds on a line → 4). Display only: the line's `value`
+  already has it;
+- loud errors: not a declared wild, positions off the field or on more than one reel.
+
+Without `wilds` it is a transform of the game's own, as above.
+
 ## What the plan checks
 
 Loud errors (`E_FEED: <round>: …`), before any money moves: a transform before the first marker, `n` out
@@ -114,7 +134,7 @@ transform after `maxWin`, `roundFinished` ≠ the computed total, a context that
 
 `planRound(feed, options)` → `RoundPlan` with the **book** the player plays in order (money in credits):
 `step`, `spinsLeft` (left, index, total, added), `frame` (grid of reel symbol ids), `cascade` (reel ops +
-snapshot), `hits` (trigger?), `lines` (paying cells, symbol), `stepWin`, `multTotal`, `spinWin`, `maxWin`,
+snapshot), `expand` (a wild takes a reel), `hits` (trigger?), `lines` (paying cells, symbol, mult), `stepWin`, `multTotal`, `spinWin`, `maxWin`,
 `fsStart` (mode, count), `fsEnd` (mode, total), `bigWin` (level, amount), `roundEnd` (total), `extra`.
 
 ## Sources

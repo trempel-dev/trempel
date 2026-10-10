@@ -1,0 +1,12 @@
+{
+  "name": "02-wild",
+  "note": "a wild takes reel 3: the V-line of A over three reels",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["A","B","C"],["B","A","D"],["C","W","E"],["A","D","B"],["E","B","C"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":2,"row":0},{"reel":2,"row":1},{"reel":2,"row":2}],"symbol":"W"}},
+    {"type":"paylines","value":[{"lineId":"3","line":[0,1,2,null,null],"value":100}]},
+    {"type":"win","value":100},
+    {"type":"roundFinished","value":100}
+  ]
+}

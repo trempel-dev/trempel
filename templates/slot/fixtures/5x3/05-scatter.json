@@ -1,0 +1,11 @@
+{
+  "name": "05-scatter",
+  "note": "three scatters pay 3 bets; two of them tease the reels after",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["S","A","B"],["C","S","D"],["A","B","S"],["D","C","A"],["B","A","C"]]},
+    {"type":"frameHits","value":[{"positions":[{"reel":0,"row":0},{"reel":1,"row":1},{"reel":2,"row":2}],"symbol":"S","multiplier":0,"value":300}]},
+    {"type":"win","value":300},
+    {"type":"roundFinished","value":300}
+  ]
+}

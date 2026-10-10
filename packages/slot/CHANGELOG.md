@@ -20,3 +20,15 @@ a viewer of rounds: the client plays a round feed that something else makes and 
 - **HUD and popups**: `SLOT_HEIR`, `SLOT_CONTRACT`, `SLOT_POPUPS`, `bindSlotPopups` (the big win title knows
   `max`).
 - Headless: `headlessReels` for tests and round runs without Pixi.
+- **A slot with lines** (TRM-17, for the template's base choreography): expanding wilds — the plan reads
+  `frameExpandedWild` when the game declares `wilds` (letter → multiplier): an `expand` event, the
+  multiplier on the reel's cells, `LineWin.mult` (the product a line crosses; display only); `reels:expand`
+  (the wild's panel over its reel with `×N`), `lines:show` draws `×N` on a multiplied line; reels landing
+  one by one (`landedReels` global, `ReelsView.landedReels`, the headless reels land reel by reel);
+  anticipation — `tease` of the config → a frame's `tease` reels (`reels:stop anticipation`, `reels:tease`),
+  `marks` → the cells that land with a show; `bigWin:<level>` bindings (fallback `bigWin`); `idle` — passes
+  while no round runs, a spin skips the pass (its rows must end on a skip — `E_SLOT_BINDING`); `quickstop` /
+  `skip` — a press's reaction sequences; the `nodes` global (rows for an optional node:
+  `when: has(nodes, 'character')`); the grid as data — `reel-grid` takes the config's grid, a base giving
+  the field's box (`data-width` / `data-height`) fits it, a base laid out for another grid fails
+  `E_SLOT_SKIN`; `SlotConfig` checks the initial grid's size and the letters of `wilds` / `marks` / `tease`.

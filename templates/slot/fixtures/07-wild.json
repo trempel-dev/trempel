@@ -1,0 +1,12 @@
+{
+  "name": "07-wild",
+  "note": "a wild takes the middle reel: the middle line of A and the diagonal of B",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["B","A","C"],["C","W","D"],["E","A","B"]]},
+    {"type":"frameExpandedWild","value":{"positions":[{"reel":1,"row":0},{"reel":1,"row":1},{"reel":1,"row":2}],"symbol":"W"}},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":100},{"lineId":"3","line":[0,1,2],"value":100}]},
+    {"type":"win","value":200},
+    {"type":"roundFinished","value":200}
+  ]
+}

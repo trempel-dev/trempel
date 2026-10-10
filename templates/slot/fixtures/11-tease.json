@@ -1,0 +1,9 @@
+{
+  "name": "11-tease",
+  "note": "two scatters on the first reels tease the last one; it misses",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["S","A","B"],["C","S","D"],["A","B","C"]]},
+    {"type":"roundFinished","value":0}
+  ]
+}
