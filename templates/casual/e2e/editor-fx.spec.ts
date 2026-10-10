@@ -175,11 +175,14 @@ test('view:shot of the scene with the effect: 10 runs, bit for bit', async () =>
   server?.kill();
   server = null;
   const shots = new Set<string>();
+  const order: string[] = [];
   for (let i = 0; i < 10; i++) {
     const out = join(DIR, `shot-${i}.png`);
     const json = execFileSync(process.execPath, [join(scene, 'view/bin.mjs'), 'view:shot', join(DIR, 'scene'), '--out', out, '--settle', '1'], { encoding: 'utf8', timeout: 180_000 });
     expect(JSON.parse(json).errors).toEqual([]);
-    shots.add(createHash('sha1').update(readFileSync(out)).digest('hex'));
+    const h = createHash('sha1').update(readFileSync(out)).digest('hex');
+    shots.add(h);
+    order.push(h.slice(0, 6));
   }
-  expect(shots.size).toBe(1);
+  expect(shots.size, order.join(' ')).toBe(1);
 });

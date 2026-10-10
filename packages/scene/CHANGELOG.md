@@ -42,6 +42,10 @@ Additions only; the format stays 1.3. The editor: an animator and the consumer's
   `editor.eval`, `editor.save`, `editor.state`). An agent's script is one undo step, marked «agent»
   in the log. `tml.clipsDoc(file?)`, `tml.clipCommands`, `tml.inspect`, `tml.anim.rec` /
   `tml.anim.params`; edit/API.md — the clip commands and the effects.
+- **`view:shot` mounts the scene at a fixed moment of the virtual clock** (one minute after the start):
+  loading the page leaks real time onto the paused clock — a few ms, tens on a busy machine — and a node
+  counting its time from its mount (an effect) started a tick later now and then (1 run of 16 of the
+  kit's effects showcase under a load average of 70). Now 24 of 24; the pictures are the same as before.
 
 ## 2.2.0
 

@@ -36,6 +36,8 @@ const SUFFIXES = ['.tml.svg', '.contract.xml', '.state.json', '.svg'];
 const CLOCK_START = Date.UTC(2026, 0, 1);
 /** install() this far before CLOCK_START, so pauseAt(CLOCK_START) is always ahead of the running clock. */
 const PAUSE_AHEAD = 10_000;
+/** 2.3: the scene mounts at this moment — always ahead of what loading the page leaked onto the clock. */
+const CLOCK_OPEN = CLOCK_START + 60_000;
 const FRAME_MS = 1000 / 60;
 
 function parseArgs(argv) {
@@ -157,13 +159,15 @@ try {
     if (bundles.length <= 1 || attempt >= 3) break;
     await page.close();
   }
+  // 2.3: loading the page leaks real time onto the paused clock (a new document picks the clock up
+  // where it is now) — a few ms, more under load; a node that counts its time from its mount (an
+  // effect) then started a tick later on a busy machine. The scene mounts at a fixed moment ahead.
+  await page.clock.pauseAt(CLOCK_OPEN);
   const opened = await page.evaluate(({ id, state, viewport }) => window.tmlView.open(id, { state, viewport }), { id, state, viewport: args.viewport });
-  // Settle to fixed moments of the page clock (CLOCK_START + i frames), not by steps from "now":
-  // loading leaks a ms or two of fake time, and the frames fall on a 16 ms grid — steps from a
-  // leaked start end a frame apart (2.2).
+  // Settle to fixed moments of the page clock (CLOCK_OPEN + i frames), not by steps from "now" (2.2).
   for (let i = 1; i <= settleFrames; i++) {
     const now = await page.evaluate(() => Date.now());
-    const ahead = Math.round(CLOCK_START + i * FRAME_MS) - now;
+    const ahead = Math.round(CLOCK_OPEN + i * FRAME_MS) - now;
     if (ahead > 0) await page.clock.runFor(ahead);
   }
   const r = { ...opened, ...(await page.evaluate(({ clip, t }) => window.tmlView.snap({ clip, t }), { clip: args.clip, t: times })) };
