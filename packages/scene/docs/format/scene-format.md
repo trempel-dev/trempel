@@ -747,8 +747,8 @@ game: viewer and editor always play the `.md`.
 Which scene a clip file belongs to (2.3.1): a file named after a scene of its folder —
 `anim/<scene>.md` or `<scene>.anim.md` — is that scene's only; every other clip file of the folder is
 shared and compiled against each scene of the folder (targets missing from a scene are its
-`E_ANIM_TARGET`). So `anim/popup-victory.md` is checked only against `popup-victory`, while
-`anim/world-complete.md` with no scene `world-complete` is checked against all of them.
+`E_ANIM_TARGET`). So `anim/popup-win.md` is checked only against `popup-win`, while
+`anim/level-done.md` with no scene `level-done` is checked against all of them.
 
 ### 9.1 Syntax
 

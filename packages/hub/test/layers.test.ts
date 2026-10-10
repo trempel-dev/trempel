@@ -117,23 +117,23 @@ describe('projects', () => {
 
   it('2.4.1: projects sharing a name are labelled with their folder; ids stay', () => {
     const root = tmp();
-    const a = makeProject(join(root, 'meadow-fortune'), { name: 'meadow-fortune-client', dependencies: { '@trempel/kit': '^2.4.0' } });
-    const b = makeProject(join(root, 'meadow-fortune-live'), { name: 'meadow-fortune-client', dependencies: { '@trempel/kit': '^2.4.0' } });
-    makeProject(join(root, 'findcat'), { name: 'findcat', dependencies: { '@trempel/kit': '^2.4.0' } });
+    const a = makeProject(join(root, 'garden'), { name: 'garden-client', dependencies: { '@trempel/kit': '^2.4.0' } });
+    const b = makeProject(join(root, 'garden-live'), { name: 'garden-client', dependencies: { '@trempel/kit': '^2.4.0' } });
+    makeProject(join(root, 'puzzle'), { name: 'puzzle', dependencies: { '@trempel/kit': '^2.4.0' } });
     // the same name and the same folder name in two places: the path tells them apart
-    const c = makeProject(join(root, 'x', 'meadow-fortune'), { name: 'meadow-fortune-client', dependencies: { '@trempel/kit': '^2.4.0' } });
+    const c = makeProject(join(root, 'x', 'garden'), { name: 'garden-client', dependencies: { '@trempel/kit': '^2.4.0' } });
     const found = scanProjects([root], [c], 2);
     const label = (dir: string): string => found.find((p) => p.root === dir)!.label;
-    expect(found.find((p) => p.name === 'findcat')!.label).toBe('findcat');
-    expect(label(b)).toBe('meadow-fortune-client · meadow-fortune-live');
-    expect(label(a)).toBe(`meadow-fortune-client · ${a}`);
-    expect(label(c)).toBe(`meadow-fortune-client · ${c}`);
+    expect(found.find((p) => p.name === 'puzzle')!.label).toBe('puzzle');
+    expect(label(b)).toBe('garden-client · garden-live');
+    expect(label(a)).toBe(`garden-client · ${a}`);
+    expect(label(c)).toBe(`garden-client · ${c}`);
     expect(new Set(found.map((p) => p.id)).size).toBe(found.length);
     expect(found.find((p) => p.root === a)!.id).toBe(describeProject(a).id);
-    expect(found.find((p) => p.root === a)!.name).toBe('meadow-fortune-client');
+    expect(found.find((p) => p.root === a)!.name).toBe('garden-client');
     // two of them only: the folder is enough
     const two = scanProjects([], [a, b], 2);
-    expect(two.map((p) => p.label).sort()).toEqual(['meadow-fortune-client · meadow-fortune', 'meadow-fortune-client · meadow-fortune-live']);
+    expect(two.map((p) => p.label).sort()).toEqual(['garden-client · garden', 'garden-client · garden-live']);
   });
 
   it('the monorepo templates are projects; versions are the installed ones', () => {

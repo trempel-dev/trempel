@@ -10,12 +10,12 @@ import { parse } from '../src/core';
 import { codesOf } from './helpers/codes';
 
 const FILES = [
-  'popup-victory.svg',
-  'popup-victory.tml.svg',
+  'popup-win.svg',
+  'popup-win.tml.svg',
   'world.svg',
   'world.anim.md',
-  'anim/popup-victory.md',
-  'anim/world-complete.md', // no scene world-complete: shared
+  'anim/popup-win.md',
+  'anim/level-done.md', // no scene level-done: shared
   'anim/common.md',
   'menu.svg',
   'menu.anim.md',
@@ -36,14 +36,14 @@ describe('clip files bound to scenes (2.3.1)', () => {
     expect(clipFileName('popups\\anim\\win.md')).toEqual({ folder: 'popups/', name: 'win' });
     expect(clipFileName('notes.md')).toBeNull();
     expect(clipFileName('anim/x.json')).toBeNull();
-    expect(clipFileScene('anim/world-complete.md', ['world', 'popup-victory'])).toBeNull();
+    expect(clipFileScene('anim/level-done.md', ['world', 'popup-win'])).toBeNull();
     expect(clipFileScene('popups/lose.anim.md', ['popups/lose'])).toBe('popups/lose');
   });
 
   it('a scene gets its own files and the shared ones, never another scene\'s', () => {
-    expect(clipFiles(FILES, 'popup-victory').sort()).toEqual(['anim/common.md', 'anim/popup-victory.md', 'anim/world-complete.md']);
-    expect(clipFiles(FILES, 'world').sort()).toEqual(['anim/common.md', 'anim/world-complete.md', 'world.anim.md']);
-    expect(clipFiles(FILES, 'menu').sort()).toEqual(['anim/common.md', 'anim/world-complete.md', 'menu.anim.md']);
+    expect(clipFiles(FILES, 'popup-win').sort()).toEqual(['anim/common.md', 'anim/popup-win.md', 'anim/level-done.md']);
+    expect(clipFiles(FILES, 'world').sort()).toEqual(['anim/common.md', 'anim/level-done.md', 'world.anim.md']);
+    expect(clipFiles(FILES, 'menu').sort()).toEqual(['anim/common.md', 'anim/level-done.md', 'menu.anim.md']);
     expect(clipFiles(FILES, 'popups/win').sort()).toEqual(['popups/anim/sparkle.md', 'popups/anim/win.md']);
     expect(clipFiles(FILES, 'popups/lose').sort()).toEqual(['popups/anim/sparkle.md', 'popups/lose.anim.md']);
   });
@@ -64,24 +64,24 @@ describe('clip files bound to scenes (2.3.1)', () => {
   it('the error panel: a target error of a shared file says how to bind it; a bound file\'s does not', () => {
     const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="panel" width="10" height="10"/></svg>';
     const md = (target: string): string => `# $clip pop\n\n## $track ${target}\n| t | alpha |\n|---|---|\n| 0 | 0 |\n| 1 | 1 |\n`;
-    const r = compileSceneClips({ 'anim/world-complete.md': md('map'), 'anim/popup-victory.md': md('ghost') }, parse(SVG), 'popup-victory');
+    const r = compileSceneClips({ 'anim/level-done.md': md('map'), 'anim/popup-win.md': md('ghost') }, parse(SVG), 'popup-win');
     expect(codesOf(r.errors)).toEqual(['E_ANIM_TARGET', 'E_ANIM_TARGET']);
-    expect(r.errors[0]).toMatch(/^E_ANIM_TARGET: anim\/world-complete\.md: .*shared clip file.*anim\/<scene>\.md or <scene>\.anim\.md/);
+    expect(r.errors[0]).toMatch(/^E_ANIM_TARGET: anim\/level-done\.md: .*shared clip file.*anim\/<scene>\.md or <scene>\.anim\.md/);
     expect(r.errors[1]).not.toMatch(/shared clip file/);
     // without a scene id — as before
-    expect(compileSceneClips({ 'anim/world-complete.md': md('map') }, parse(SVG)).errors[0]).not.toMatch(/shared/);
-    expect(isSharedClipFile('anim/world-complete.md', 'popup-victory')).toBe(true);
-    expect(isSharedClipFile('popup-victory.anim.md', 'popup-victory')).toBe(false);
+    expect(compileSceneClips({ 'anim/level-done.md': md('map') }, parse(SVG)).errors[0]).not.toMatch(/shared/);
+    expect(isSharedClipFile('anim/level-done.md', 'popup-win')).toBe(true);
+    expect(isSharedClipFile('popup-win.anim.md', 'popup-win')).toBe(false);
     expect(sharedClipHint('anim/x.md', 'a', 'E_ANIM_PARSE: x')).toBe('E_ANIM_PARSE: x');
   });
 
   it('the editor core: the same hint in the document\'s errors (path = the scene\'s base or heir)', () => {
     const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="panel" width="10" height="10"/></svg>';
     const md = '# $clip pop\n\n## $track map\n| t | alpha |\n|---|---|\n| 0 | 0 |\n| 1 | 1 |\n';
-    const doc = openDocument(SVG, { path: 'popups/popup-victory.svg', clips: { 'popups/anim/world-complete.md': md, 'popups/popup-victory.anim.md': md } });
+    const doc = openDocument(SVG, { path: 'popups/popup-win.svg', clips: { 'popups/anim/level-done.md': md, 'popups/popup-win.anim.md': md } });
     const errs = doc.errors.filter((e) => e.startsWith('E_ANIM_TARGET'));
     expect(errs).toHaveLength(2);
-    expect(errs.find((e) => e.includes('world-complete'))).toMatch(/shared clip file/);
-    expect(errs.find((e) => e.includes('popup-victory.anim.md'))).not.toMatch(/shared clip file/);
+    expect(errs.find((e) => e.includes('level-done'))).toMatch(/shared clip file/);
+    expect(errs.find((e) => e.includes('popup-win.anim.md'))).not.toMatch(/shared clip file/);
   });
 });
