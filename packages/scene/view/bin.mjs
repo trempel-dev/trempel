@@ -43,7 +43,8 @@ if (missing.length) {
   fail(`${cmd} needs ${missing.join(' and ')} — npm i -D ${missing.join(' ')}${missing.includes('playwright') ? ' && npx playwright install chromium' : ''} (or npx -p @trempel/scene ${missing.map((m) => `-p ${m}`).join(' ')} trempel-view ${cmd} …)`);
 }
 
-// the editor's folder is relative to where the bin runs (edit/cli.mjs reads INIT_CWD of `npm run edit`)
-if (cmd === 'edit') process.env.INIT_CWD = process.cwd();
+// paths are relative to where the bin runs: the scripts read INIT_CWD of `npm run view…` / `npm run
+// edit` in the repository, and an npm parent (a workspace script, npx) leaks its own
+process.env.INIT_CWD = process.cwd();
 process.argv = [process.argv[0], fileURLToPath(new URL(COMMANDS[cmd], import.meta.url)), ...rest];
 await import(COMMANDS[cmd]);
