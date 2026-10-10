@@ -127,7 +127,7 @@ describe('kit:update', () => {
     kit('kit-old', '2.2.0', '## actions\n\n### test\n$title: Old tests\n$group: gates\n$shell: echo old-gates\n');
     kit('kit-new', '2.4.0', '## actions\n\n### test\n$title: New tests\n$group: gates\n$shell: echo new-gates\n\n### lint\n$title: Lint\n$group: gates\n$shell: node -e "process.exit(1)"\n');
     const proj = makeProject(join(base, 'proj'), { name: 'proj', dependencies: { '@trempel/kit': 'file:../kit-old' } });
-    execFileSync('npm', ['install', '--no-fund', '--no-audit', '--offline'], { cwd: proj, stdio: 'pipe' });
+    execFileSync('npm', ['install', '--no-fund', '--no-audit', '--offline'], { cwd: proj, stdio: 'pipe', env: { ...process.env, npm_config_allow_scripts: '' } });
     const r = await startAction(proj, 'kit:update', { input: { version: 'file:../kit-new' } });
     const done = await waitRun(r.id, { timeoutMs: 90_000 });
     const log = readLog(r.id);

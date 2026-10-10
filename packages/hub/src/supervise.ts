@@ -55,7 +55,11 @@ process.on('SIGHUP', () => {});
 
 function runOne(cmd: string | null): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
   return new Promise((res) => {
-    const env = { ...process.env, ...spec!.env };
+    const env: NodeJS.ProcessEnv = { ...process.env, ...spec!.env };
+    // 2.4.1: a hub started by `npm run …` carries npm's config as env; a child `npm install` reads
+    // `allow-scripts` from it as a command-line flag and refuses (EALLOWSCRIPTS) — the project's own
+    // .npmrc decides, not the parent's
+    delete env.npm_config_allow_scripts;
     child = cmd === null
       ? spawn(process.execPath, [fileURLToPath(new URL('./js-runner.js', import.meta.url)), dir], { cwd: spec!.cwd, env, stdio: 'inherit' })
       : spawn(cmd, { cwd: spec!.cwd, env, stdio: 'inherit', shell: true });
