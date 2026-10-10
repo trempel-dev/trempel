@@ -14,6 +14,9 @@ import { PROJECT_FILE, type ProjectInfo } from './project.js';
 /** This package's folder (the hub layer, the legacy kit layer, templates, the page). */
 export const HUB_PACKAGE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/** A built entry of this package (the supervisor, the js runner) — also when the engine runs from src/ (tests). */
+export const distEntry = (name: string): string => join(HUB_PACKAGE, 'dist', name);
+
 export interface LayerSource {
   layer: Layer;
   file: string;

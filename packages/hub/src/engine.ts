@@ -5,10 +5,9 @@
 import { spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { Action, ActionInput } from './actions.js';
 import { writeJson } from './home.js';
-import { resolveActions, type ResolvedActions } from './layers.js';
+import { distEntry, resolveActions, type ResolvedActions } from './layers.js';
 import { describeProject, gitState, type GitState, type ProjectInfo } from './project.js';
 import { freePort, procStart } from './procs.js';
 import { activeServices, logFile, newRunId, pruneRuns, readRun, runDir, writeMeta, type RunMeta, type RunState } from './runs.js';
@@ -161,7 +160,7 @@ export async function startAction(root: string | ProjectInfo, actionId: string, 
   const fd = openSync(logFile(id), 'a');
   // a `once` child of a running js action stays in its parent's process group (stopping the parent stops it)
   const detached = !(opts.parent && action.kind === 'once');
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./supervise.js', import.meta.url)), runDir(id)], {
+  const child = spawn(process.execPath, [distEntry('supervise.js'), runDir(id)], {
     cwd,
     detached,
     stdio: ['ignore', fd, fd],
