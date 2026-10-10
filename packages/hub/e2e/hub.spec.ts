@@ -1,8 +1,21 @@
 // hub.spec.ts — the page end to end: the list → a project → run `dev` (the kit's service on a free
 // port) → its URL answers → stop (the URL goes down); two kit versions — two editors.
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 
 const CASUAL = '@trempel/template-casual';
+
+// A dev server listens on `localhost`: IPv4 on Linux, `::1` on macOS — try both loopbacks.
+async function answer(request: APIRequestContext, url: string, timeout = 10_000) {
+  let last: unknown;
+  for (const host of ['127.0.0.1', '[::1]']) {
+    try {
+      return await request.get(url.replace('localhost', host), { timeout });
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
 
 test('projects → casual → dev → the URL answers → stop', async ({ page, request }) => {
   await page.goto('/');
@@ -21,7 +34,7 @@ test('projects → casual → dev → the URL answers → stop', async ({ page, 
   const url = (await link.getAttribute('href'))!;
   expect(url).toMatch(/^http:\/\/localhost:\d+\/$/);
   await expect(dev.getByTestId('run-status')).toHaveText('ready', { timeout: 30_000 });
-  const res = await request.get(url.replace('localhost', '127.0.0.1'));
+  const res = await answer(request, url);
   expect(res.status()).toBe(200);
   expect(await res.text()).toContain('<script');
   await expect(page.getByTestId('log')).toContainText('[hub] ready');
@@ -35,7 +48,7 @@ test('projects → casual → dev → the URL answers → stop', async ({ page, 
 
   await proc.getByTestId('stop').click();
   await expect(page.getByText('No services running.')).toBeVisible({ timeout: 15_000 });
-  await expect(request.get(url.replace('localhost', '127.0.0.1'), { timeout: 3000 })).rejects.toThrow();
+  await expect(answer(request, url, 3000)).rejects.toThrow();
 
   // the run stays in the project's history, stopped
   await page.goto('/');
