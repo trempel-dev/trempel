@@ -41,7 +41,7 @@ describe('clip files bound to scenes (2.3.1)', () => {
   });
 
   it('a scene gets its own files and the shared ones, never another scene\'s', () => {
-    expect(clipFiles(FILES, 'popup-win').sort()).toEqual(['anim/common.md', 'anim/popup-win.md', 'anim/level-done.md']);
+    expect(clipFiles(FILES, 'popup-win').sort()).toEqual(['anim/common.md', 'anim/level-done.md', 'anim/popup-win.md']);
     expect(clipFiles(FILES, 'world').sort()).toEqual(['anim/common.md', 'anim/level-done.md', 'world.anim.md']);
     expect(clipFiles(FILES, 'menu').sort()).toEqual(['anim/common.md', 'anim/level-done.md', 'menu.anim.md']);
     expect(clipFiles(FILES, 'popups/win').sort()).toEqual(['popups/anim/sparkle.md', 'popups/anim/win.md']);
