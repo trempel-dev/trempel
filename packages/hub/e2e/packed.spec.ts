@@ -11,12 +11,17 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+// A child `npm` under `npm run`/`npm test` reads the parent's `allow-scripts` as a command-line flag
+// and refuses (EALLOWSCRIPTS) on a machine that sets it in its user .npmrc — hand it a clean env.
+const NPM_ENV: NodeJS.ProcessEnv = { ...process.env };
+delete NPM_ENV.npm_config_allow_scripts;
+
 const HUB = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = join(HUB, '..', '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function pack(pkg: string, dest: string): string {
-  const out = execFileSync(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', dest], { cwd: join(REPO, 'packages', pkg), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const out = execFileSync(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', dest], { cwd: join(REPO, 'packages', pkg), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: NPM_ENV });
   return join(dest, (JSON.parse(out) as { filename: string }[])[0].filename);
 }
 
@@ -86,7 +91,7 @@ test('scene + kit from npm pack: the editor action is on, trempel-edit serve ans
   mkdirSync(join(project, 'scenes'), { recursive: true });
   writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'packed-game', version: '1.0.0', private: true, type: 'module' }, null, 2));
   writeFileSync(join(project, 'scenes', 'menu.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="plate" width="50" height="50" fill="#36c"/></svg>\n');
-  execFileSync(npm, ['install', '--prefer-offline', '--no-audit', '--no-fund', scene, kit, `pixi.js@${installed('pixi.js')}`, `vite@${installed('vite')}`], { cwd: project, stdio: 'ignore', timeout: 180_000 });
+  execFileSync(npm, ['install', '--prefer-offline', '--no-audit', '--no-fund', scene, kit, `pixi.js@${installed('pixi.js')}`, `vite@${installed('vite')}`], { cwd: project, stdio: 'ignore', timeout: 180_000, env: NPM_ENV });
 
   // the editor page and what it needs ship; tests, e2e, snapshots and node_modules do not
   const pkgDir = join(project, 'node_modules', '@trempel', 'scene');
