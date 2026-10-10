@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Popup BASE: big win. Logic — SLOT_POPUPS.bigwin of @trempel/slot (heir + contract).
+       #dim — full-screen shade, #content — the plaque with its origin at the centre (the kit's popup
+       manager animates both). -->
+  <rect id="dim" x="0" y="0" width="720" height="1280" fill="#000000" opacity="0.75" data-stretch="xy"/>
+  <g id="content" transform="translate(360,640)" data-anchor="0.5 0.5">
+    <text id="bigwinTitle" x="0" y="-80" text-anchor="middle" fill="#ffd34d" font-size="96" font-weight="bold" stroke="#7e2553" stroke-width="8">BIG WIN</text>
+    <text id="bigwinAmount" x="0" y="50" text-anchor="middle" fill="#ffffff" font-size="80" font-weight="bold">$0.00</text>
+  </g>
+</svg>

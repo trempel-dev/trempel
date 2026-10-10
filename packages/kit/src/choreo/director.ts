@@ -327,7 +327,7 @@ export class Director {
         let t: number;
         if (i.forced !== undefined) t = i.forced;
         else if (i.row.t.startsWith('poll:')) {
-          // checked once per frame with a fresh `rand` (donor per-frame re-roll, S16 buy button)
+          // checked once per frame with a fresh `rand` (a per-frame re-roll: a button that lights up at random)
           const now = this.now();
           if (i.polledAt === now) continue;
           i.polledAt = now;

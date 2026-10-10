@@ -1,0 +1,70 @@
+{
+  "name": "@trempel/slot",
+  "version": "2.2.0",
+  "description": "Trempel slot: a slot on @trempel/kit — the round feed (types, plan, sources: fixtures / HTTP / function), a round player that plays the feed through choreography bound by data, pixi-reels reels as a scene component, the standard HUD heir and popups.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Denys Vynohradskyi",
+  "homepage": "https://trempel.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trempel-dev/trempel.git",
+    "directory": "packages/slot"
+  },
+  "bugs": {
+    "url": "https://github.com/trempel-dev/trempel/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./feed": {
+      "types": "./dist/feed/index.d.ts",
+      "import": "./dist/feed/index.js"
+    },
+    "./gates": {
+      "types": "./dist/gates.d.ts",
+      "import": "./dist/gates.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pixi-reels": "^3.1.0"
+  },
+  "peerDependencies": {
+    "@trempel/kit": "^2.2.0",
+    "@trempel/scene": "^2.2.0",
+    "pixi.js": "^8.19.0"
+  },
+  "devDependencies": {
+    "@trempel/kit": "^2.2.0",
+    "@trempel/scene": "^2.2.0",
+    "pixi.js": "^8.19.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pixijs",
+    "slot",
+    "reels",
+    "game",
+    "trempel"
+  ]
+}

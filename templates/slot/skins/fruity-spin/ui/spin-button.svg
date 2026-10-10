@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" width="212" height="212" data-icon="ui/art/icons/spin-light.png" data-action="continue">
+  <image id="bg" href="art/spin-button.png" x="0" y="0" width="212" height="212" />
+  <image id="icon" href="art/icons/spin-light.png" x="80" y="80" width="52" height="52" />
+  <rect id="hit" x="0" y="0" width="212" height="212" fill="#000000" opacity="0" />
+</svg>

@@ -8,7 +8,7 @@
 // open popup alone is interactive, the popups under it are not (createGame also blocks the screens
 // under them); a closing popup takes nothing — its fading dim does not eat the next click.
 //
-// Animations (DOTween timings of the donor): `scale` — dim alpha 0 → its own alpha in 0.2 s
+// Animations (DOTween-style timings): `scale` — dim alpha 0 → its own alpha in 0.2 s
 // OutQuad, content 0.01 → 1 in 0.3 s OutBack; hide: content → 0.01 in 0.2 s, dim → 0 in 0.2 s,
 // gone after 0.301 s. `top` — content slides in from above (canvas height + 20) in 0.3 s OutQuad,
 // out in 0.2 s. `none` — instant.

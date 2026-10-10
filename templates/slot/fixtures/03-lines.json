@@ -1,0 +1,11 @@
+{
+  "name": "03-lines",
+  "note": "the top line of B and the bottom line of C",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["B","A","C"],["B","E","C"],["B","D","C"]]},
+    {"type":"paylines","value":[{"lineId":"1","line":[0,0,0],"value":150},{"lineId":"2","line":[2,2,2],"value":100}]},
+    {"type":"win","value":250},
+    {"type":"roundFinished","value":250}
+  ]
+}

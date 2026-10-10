@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Slot BASE (the look) of the default skin. Logic is the standard heir of @trempel/slot (SLOT_HEIR),
+       the ids below are its contract (SLOT_CONTRACT). A RESKIN replaces this file, the popups, the art and
+       symbols.json — nothing else. Overlays (free-spins intro/outro, big win) are popup scenes: popups/*.svg.
+       Placeholder art: SVG shapes and procedural symbols; swap for <image href="art/..."/>. -->
+  <rect id="bg" x="0" y="0" width="720" height="1280" fill="#1a0f2e" data-stretch="xy"/>
+
+  <g id="top" data-anchor="0.5 0">
+    <text id="logo" x="360" y="120" text-anchor="middle" fill="#ffd34d" font-size="72" font-weight="bold">FIVE LINES</text>
+    <g id="fsBanner" transform="translate(160,170)">
+      <rect x="0" y="0" width="400" height="64" rx="32" fill="#7e2553"/>
+      <text id="fsCount" x="200" y="43" text-anchor="middle" fill="#ffffff" font-size="30" font-weight="bold">FREE SPINS 1 / 8</text>
+    </g>
+  </g>
+
+  <g id="machine" data-anchor="0.5 0.45">
+    <rect x="16" y="300" width="688" height="460" rx="24" fill="#2b1748"/>
+    <!-- Reels: the component owns this empty group; geometry as plain data attributes (3×3). -->
+    <g transform="translate(52,312)">
+      <g id="reels" data-cols="3" data-rows="3" data-cellw="200" data-cellh="140" data-gapx="8" data-gapy="8"/>
+    </g>
+    <rect x="16" y="300" width="688" height="460" rx="24" fill="none" stroke="#ffd34d" stroke-width="8"/>
+    <text id="win" x="360" y="830" text-anchor="middle" fill="#ffd34d" font-size="56" font-weight="bold"></text>
+    <!-- Where the choreography's win effects burst (fx:coins@winFx): the centre of the reels. -->
+    <g id="winFx" transform="translate(360,530)"/>
+  </g>
+
+  <g id="hud" data-anchor="0.5 1">
+    <text x="130" y="930" text-anchor="middle" fill="#c2c3c7" font-size="24">BALANCE</text>
+    <text id="balance" x="130" y="970" text-anchor="middle" fill="#ffffff" font-size="34" font-weight="bold">$1,000.00</text>
+    <text x="590" y="930" text-anchor="middle" fill="#c2c3c7" font-size="24">BET</text>
+    <text id="bet" x="590" y="970" text-anchor="middle" fill="#ffffff" font-size="34" font-weight="bold">$1.00</text>
+    <g id="betDown" transform="translate(500,995)">
+      <rect x="0" y="0" width="76" height="60" rx="14" fill="#5f574f"/>
+      <text x="38" y="44" text-anchor="middle" fill="#ffffff" font-size="40">−</text>
+    </g>
+    <g id="betUp" transform="translate(604,995)">
+      <rect x="0" y="0" width="76" height="60" rx="14" fill="#5f574f"/>
+      <text x="38" y="44" text-anchor="middle" fill="#ffffff" font-size="40">+</text>
+    </g>
+    <g id="spinBtn" transform="translate(360,1050)" data-fx="press">
+      <rect x="-110" y="-110" width="220" height="220" rx="110" fill="#00b543" stroke="#ffffff" stroke-width="6"/>
+      <text id="spinLabel" x="0" y="16" text-anchor="middle" fill="#ffffff" font-size="48" font-weight="bold">SPIN</text>
+    </g>
+    <g id="turboBtn" transform="translate(40,1110)" data-fx="press">
+      <rect x="0" y="0" width="180" height="70" rx="18" fill="#29adff"/>
+      <text id="turboLabel" x="90" y="47" text-anchor="middle" fill="#000000" font-size="28" font-weight="bold">TURBO</text>
+    </g>
+    <g id="autoBtn" transform="translate(500,1110)" data-fx="press">
+      <rect x="0" y="0" width="180" height="70" rx="18" fill="#ffa300"/>
+      <text id="autoLabel" x="90" y="47" text-anchor="middle" fill="#000000" font-size="28" font-weight="bold">AUTO</text>
+    </g>
+  </g>
+
+  <!-- Win lines and particles are drawn here by the slot. -->
+  <g id="lines"/>
+  <g id="fx"/>
+</svg>

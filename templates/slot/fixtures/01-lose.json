@@ -1,0 +1,9 @@
+{
+  "name": "01-lose",
+  "note": "no win",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["A","B","C"],["D","E","A"],["B","C","D"]]},
+    {"type":"roundFinished","value":0}
+  ]
+}

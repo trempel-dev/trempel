@@ -1,0 +1,7 @@
+# Trempel project
+
+The slot template's skins take shared prefabs (panels, buttons, icons) from the kit's default skin — the `@skin`
+collection (package `@trempel/kit`). The game bundles its art through the `#kit-skin` alias of vite.config.ts.
+
+## collections
+$skin: npm:@trempel/kit/skins/default/ui

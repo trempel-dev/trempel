@@ -1,0 +1,31 @@
+{
+  "name": "05-free",
+  "note": "three scatters → 3 free spins, the second retriggers +2; five free spins",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["S","B","C"],["D","S","A"],["B","C","S"]]},
+    {"type":"frameHits","value":[{"positions":[{"reel":0,"row":0},{"reel":1,"row":1},{"reel":2,"row":2}],"symbol":"S","multiplier":0,"value":0}]},
+    {"type":"switchToMode","value":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":1},"context":"freeSpins"},
+    {"type":"spinsLeft","value":3,"context":"freeSpins"},
+    {"type":"frameInit","value":[["A","B","C"],["D","E","A"],["B","C","D"]],"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":2},"context":"freeSpins"},
+    {"type":"spinsLeft","value":2,"context":"freeSpins"},
+    {"type":"frameInit","value":[["S","A","C"],["D","S","E"],["A","C","S"]],"context":"freeSpins"},
+    {"type":"frameHits","value":[{"positions":[{"reel":0,"row":0},{"reel":1,"row":1},{"reel":2,"row":2}],"symbol":"S","multiplier":0,"value":0}],"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":3},"context":"freeSpins"},
+    {"type":"spinsLeft","value":3,"context":"freeSpins"},
+    {"type":"frameInit","value":[["B","A","C"],["D","A","E"],["C","A","D"]],"context":"freeSpins"},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":150}],"context":"freeSpins"},
+    {"type":"win","value":150,"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":4},"context":"freeSpins"},
+    {"type":"spinsLeft","value":2,"context":"freeSpins"},
+    {"type":"frameInit","value":[["A","B","C"],["D","E","A"],["B","C","D"]],"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":5},"context":"freeSpins"},
+    {"type":"spinsLeft","value":1,"context":"freeSpins"},
+    {"type":"frameInit","value":[["D","C","A"],["D","C","B"],["D","C","E"]],"context":"freeSpins"},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":200},{"lineId":"1","line":[0,0,0],"value":300}],"context":"freeSpins"},
+    {"type":"win","value":500,"context":"freeSpins"},
+    {"type":"roundFinished","value":650}
+  ]
+}

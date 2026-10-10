@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280">
+  <!-- Popup BASE: free spins total. Logic — SLOT_POPUPS.fsOutro of @trempel/slot (heir + contract).
+       #dim — full-screen shade, #content — the plaque with its origin at the centre (the kit's popup
+       manager animates both). -->
+  <rect id="dim" x="0" y="0" width="720" height="1280" fill="#000000" opacity="0.7" data-stretch="xy"/>
+  <g id="content" transform="translate(360,640)" data-anchor="0.5 0.5">
+    <rect x="-300" y="-160" width="600" height="300" rx="32" fill="#2b1748" stroke="#ffd34d" stroke-width="6"/>
+    <text x="0" y="-60" text-anchor="middle" fill="#ffd34d" font-size="56" font-weight="bold">FREE SPINS OVER</text>
+    <text id="fsOutroText" x="0" y="40" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="bold">TOTAL 0.00</text>
+  </g>
+</svg>

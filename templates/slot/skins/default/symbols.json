@@ -1,0 +1,8 @@
+{
+  "A": { "label": "A", "color": "#ffa300" },
+  "B": { "label": "K", "color": "#ff77a8" },
+  "C": { "label": "Q", "color": "#83769c" },
+  "D": { "label": "J", "color": "#00b543" },
+  "E": { "label": "7", "color": "#ff004d" },
+  "S": { "label": "★", "color": "#7e2553", "labelColor": "#ffd34d" }
+}

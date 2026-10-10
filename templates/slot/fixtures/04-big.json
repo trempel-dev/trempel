@@ -1,0 +1,11 @@
+{
+  "name": "04-big",
+  "note": "every line of E: a big win (20 bets)",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["E","E","E"],["E","E","E"],["E","E","E"]]},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":400},{"lineId":"1","line":[0,0,0],"value":400},{"lineId":"2","line":[2,2,2],"value":400},{"lineId":"3","line":[0,1,2],"value":400},{"lineId":"4","line":[2,1,0],"value":400}]},
+    {"type":"win","value":2000},
+    {"type":"roundFinished","value":2000}
+  ]
+}

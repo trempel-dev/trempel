@@ -1,0 +1,8 @@
+{
+  "A": { "texture": "symbols/lemon.png" },
+  "B": { "texture": "symbols/cherries.png" },
+  "C": { "texture": "symbols/orange.png" },
+  "D": { "texture": "symbols/grapes.png" },
+  "E": { "texture": "symbols/watermelon.png" },
+  "S": { "texture": "symbols/bell.png" }
+}

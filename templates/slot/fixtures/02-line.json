@@ -1,0 +1,11 @@
+{
+  "name": "02-line",
+  "note": "the middle line of A pays half a bet",
+  "transforms": [
+    {"type":"step","value":{"kind":"spin","n":0}},
+    {"type":"frameInit","value":[["B","A","C"],["D","A","E"],["C","A","D"]]},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":50}]},
+    {"type":"win","value":50},
+    {"type":"roundFinished","value":50}
+  ]
+}

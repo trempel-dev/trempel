@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+  <image id="bg" href="art/bg.png" x="0" y="0" width="1920" height="1080" data-stretch="xy" />
+  <g id="machine" data-anchor="0.5 0.5">
+    <rect id="reelBacking" x="591" y="179" width="754" height="655" rx="22" fill="#9b582b" />
+    <image id="reelFrame" href="art/reelFrame.png" x="527" y="99" width="874" height="796" />
+    <use id="cell11" href="ui/reel-tile.svg" x="610" y="196" width="230" height="200" />
+    <use id="cell12" href="ui/reel-tile.svg" x="852" y="196" width="230" height="200" />
+    <use id="cell13" href="ui/reel-tile.svg" x="1094" y="196" width="230" height="200" />
+    <use id="cell21" href="ui/reel-tile.svg" x="610" y="407" width="230" height="200" />
+    <use id="cell22" href="ui/reel-tile.svg" x="852" y="407" width="230" height="200" />
+    <use id="cell23" href="ui/reel-tile.svg" x="1094" y="407" width="230" height="200" />
+    <use id="cell31" href="ui/reel-tile.svg" x="610" y="618" width="230" height="200" />
+    <use id="cell32" href="ui/reel-tile.svg" x="852" y="618" width="230" height="200" />
+    <use id="cell33" href="ui/reel-tile.svg" x="1094" y="618" width="230" height="200" />
+    <g id="reelOrigin" transform="translate(610,196)">
+      <g id="reels" data-cols="3" data-rows="3" data-cellw="230" data-cellh="200" data-gapx="12" data-gapy="11" />
+    </g>
+    <g id="lines" />
+    <g id="fx" />
+    <g id="winFx" transform="translate(965,507)" />
+    <g id="foliageTopPlacement" transform="translate(1030,61) scale(1)">
+      <use id="foliageTop" href="ui/foliage-top.svg" x="0" y="0" />
+    </g>
+    <g id="foliageSidePlacement" transform="translate(1355,192) scale(0.685)">
+      <use id="foliageSide" href="ui/foliage-side.svg" x="0" y="0" />
+    </g>
+    <g id="foliageBottomPlacement" transform="translate(1325,671) scale(1)">
+      <use id="foliageBottom" href="ui/foliage-side.svg" x="0" y="0" />
+    </g>
+    <g id="foliageTopLeftPlacement" transform="translate(510,68) scale(0.62)">
+      <use id="foliageTopLeft" href="ui/foliage-top.svg" x="0" y="0" />
+    </g>
+    <g id="foliageLeftPlacement" transform="translate(517,371) scale(0.52)">
+      <use id="foliageLeft" href="ui/foliage-side.svg" x="0" y="0" />
+    </g>
+    <g id="foliageLeftBottomPlacement" transform="translate(508,680) scale(0.6)">
+      <use id="foliageLeftBottom" href="ui/foliage-side.svg" x="0" y="0" />
+    </g>
+  </g>
+  <g id="top" data-anchor="0.5 0">
+    <image id="logo" href="art/logo.png" x="183" y="86" width="449" height="288" />
+    <use id="menuBtn" href="@skin/icon-button.svg" x="1653" y="27" data-action="settings">
+      <image href="@skin/art/icons/settings.png" x="18" y="18" width="52" height="52" />
+    </use>
+  </g>
+  <g id="hud" data-anchor="0.5 1">
+    <use id="hudPanel" href="@skin/hud-panel.svg" x="417" y="900" width="1325" height="140" />
+    <use id="infoBtn" href="@skin/icon-button.svg" x="453" y="928" data-action="paytable">
+      <image href="@skin/art/icons/info.png" x="18" y="18" width="52" height="52" />
+    </use>
+    <use id="betWell" href="@skin/value-well.svg" x="567" y="944" width="260" height="72" />
+    <text id="betCaption" x="697" y="941" font-size="24" font-weight="bold" fill="#754529" text-anchor="middle">BET</text>
+    <text id="bet" x="697" y="991" font-size="32" font-weight="bold" fill="#fff6e6" text-anchor="middle">1.00</text>
+    <use id="winWell" href="@skin/value-well.svg" x="861" y="941" width="325" height="73" />
+    <text id="winCaption" x="1024" y="936" font-size="24" font-weight="bold" fill="#754529" text-anchor="middle">WIN</text>
+    <text id="win" x="1024" y="992" font-size="39" font-weight="bold" fill="#fff0a5" text-anchor="middle">0.00</text>
+    <g id="betDown" transform="translate(588,981)" data-fx="press" data-sound="click">
+      <image id="betDownArt" href="@skin/art/icon-button.png" x="-34" y="-34" width="68" height="68" />
+      <image id="betDownIcon" href="@skin/art/icons/minus.png" x="-16" y="-16" width="32" height="32" />
+      <rect id="betDownHit" x="-44" y="-44" width="88" height="88" fill="#000000" opacity="0" />
+    </g>
+    <g id="betUp" transform="translate(790,981)" data-fx="press" data-sound="click">
+      <image id="betUpArt" href="@skin/art/icon-button.png" x="-34" y="-34" width="68" height="68" />
+      <image id="betUpIcon" href="@skin/art/icons/plus.png" x="-17" y="-17" width="34" height="34" />
+      <rect id="betUpHit" x="-44" y="-44" width="88" height="88" fill="#000000" opacity="0" />
+    </g>
+    <use id="walletBtn" href="@skin/round-button.svg" x="1314" y="916" data-action="balance">
+      <image href="@skin/art/icons/coins.png" x="22" y="22" width="52" height="52" />
+    </use>
+    <g id="spinBtn" transform="translate(1522,925)" data-fx="press" data-sound="click">
+      <image id="spinBtnArt" href="ui/art/spin-button.png" x="-106" y="-106" width="212" height="212" />
+      <image id="spinBtnIcon" href="ui/art/icons/spin-light.png" x="-69" y="-69" width="138" height="138" />
+      <rect id="spinBtnHit" x="-106" y="-106" width="212" height="212" fill="#000000" opacity="0" />
+      <g id="spinTextMode" display="none">
+        <text id="spinLabel" x="0" y="10" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle">SPIN</text>
+      </g>
+    </g>
+    <g id="autoBtn" transform="translate(1671,968)" data-fx="press" data-sound="click">
+      <image id="autoBtnArt" href="@skin/art/round-button.png" x="-48" y="-48" width="96" height="96" />
+      <image id="autoBtnIcon" href="ui/art/icons/auto.png" x="-26" y="-26" width="52" height="52" />
+      <rect id="autoBtnHit" x="-48" y="-48" width="96" height="96" fill="#000000" opacity="0" />
+      <g id="autoTextMode" display="none">
+        <text id="autoLabel" x="0" y="10" font-size="22" font-weight="bold" fill="#754529" text-anchor="middle">AUTO</text>
+      </g>
+    </g>
+    <g id="compatibility" display="none">
+      <text id="balance" x="0" y="0" font-size="26" font-weight="bold" fill="#754529" text-anchor="middle">1,234.56</text>
+      <g id="turboBtn" transform="translate(0,0)">
+        <text id="turboLabel" x="0" y="0" font-size="26" font-weight="bold" fill="#754529" text-anchor="middle">TURBO</text>
+      </g>
+      <g id="fsBanner">
+        <text id="fsCount" x="0" y="0" font-size="26" font-weight="bold" fill="#754529" text-anchor="middle">FREE SPINS 3 / 10</text>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,25 @@
+{
+  "name": "06-buy",
+  "note": "bought free spins (50 bets): the buy spin lands three scatters, 3 free spins",
+  "buy": "fs",
+  "transforms": [
+    {"type":"step","value":{"kind":"buy","n":0}},
+    {"type":"frameInit","value":[["S","A","B"],["C","S","D"],["E","A","S"]]},
+    {"type":"frameHits","value":[{"positions":[{"reel":0,"row":0},{"reel":1,"row":1},{"reel":2,"row":2}],"symbol":"S","multiplier":0,"value":0}]},
+    {"type":"switchToMode","value":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":1},"context":"freeSpins"},
+    {"type":"spinsLeft","value":3,"context":"freeSpins"},
+    {"type":"frameInit","value":[["E","A","D"],["E","B","D"],["E","C","D"]],"context":"freeSpins"},
+    {"type":"paylines","value":[{"lineId":"1","line":[0,0,0],"value":400},{"lineId":"2","line":[2,2,2],"value":250}],"context":"freeSpins"},
+    {"type":"win","value":650,"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":2},"context":"freeSpins"},
+    {"type":"spinsLeft","value":2,"context":"freeSpins"},
+    {"type":"frameInit","value":[["A","B","C"],["D","E","A"],["B","C","D"]],"context":"freeSpins"},
+    {"type":"step","value":{"kind":"freeSpin","n":3},"context":"freeSpins"},
+    {"type":"spinsLeft","value":1,"context":"freeSpins"},
+    {"type":"frameInit","value":[["B","A","C"],["D","A","E"],["C","A","D"]],"context":"freeSpins"},
+    {"type":"paylines","value":[{"lineId":"0","line":[1,1,1],"value":150}],"context":"freeSpins"},
+    {"type":"win","value":150,"context":"freeSpins"},
+    {"type":"roundFinished","value":800}
+  ]
+}

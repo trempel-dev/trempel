@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Trempel monorepo: @trempel/scene (scene format, runtime, editor) and @trempel/kit (game kit), plus a casual game template.",
+  "description": "Trempel monorepo: @trempel/scene (scene format, runtime, editor), @trempel/kit (game kit) and @trempel/slot (slot on the kit), plus casual and slot game templates.",
   "license": "MIT",
   "author": "Denys Vynohradskyi",
   "homepage": "https://trempel.dev",
@@ -17,12 +17,14 @@
   "workspaces": [
     "packages/scene",
     "packages/kit",
-    "templates/casual"
+    "packages/slot",
+    "templates/casual",
+    "templates/slot"
   ],
   "scripts": {
-    "build": "npm run build -w @trempel/scene && npm run build -w @trempel/kit",
-    "typecheck": "npm run build -w @trempel/scene && npm run typecheck --workspaces --if-present",
-    "test": "npm run build -w @trempel/scene && npm run test --workspaces --if-present",
+    "build": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run build -w @trempel/slot",
+    "typecheck": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run typecheck --workspaces --if-present",
+    "test": "npm run build -w @trempel/scene && npm run build -w @trempel/kit && npm run test --workspaces --if-present",
     "test:e2e": "npm run build && npm run test:e2e --workspaces --if-present",
     "check": "npm run check -w @trempel/scene --",
     "flatten": "npm run flatten -w @trempel/scene --",
