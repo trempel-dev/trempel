@@ -1,4 +1,4 @@
-// Kit 2.1 (TRM-10): the page leaf — its model, ported from A World of Differences (DIF-2): the
+// Kit 2.1 (TRM-10): the page leaf — its model, ported from a game: the
 // profile of a phase, the early finish of a portrait turn, front / back by the sign of the
 // determinant (screen vs RenderTexture, a mirrored parent), the painter's order of the indices.
 import { Matrix } from 'pixi.js';

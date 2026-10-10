@@ -1,6 +1,6 @@
 // trails.ts — particle trails (2.1), renderer-free: a history of positions per live particle of a
 // ParticleSim and the segments to stroke along it. The emitter strokes them with one Graphics under
-// its particles (emitter.ts). Taken from FindCat's trail layer (a port of the Shuriken Trails module
+// its particles (emitter.ts). Taken from a game's trail layer (a port of the Shuriken Trails module
 // in "particles" mode): a point is added when the particle moved `minVertexDistance`, the trail keeps
 // `lifetime` × the particle's life worth of frames, and every segment is thinner and more transparent
 // towards the tail (0 at the tail → 1 at the head).

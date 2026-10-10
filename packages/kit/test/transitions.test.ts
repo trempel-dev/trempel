@@ -75,7 +75,7 @@ describe('transitions: pure parts', () => {
 });
 
 describe('transitions: the leaf and its fallback', () => {
-  it('a snapshot renders the root with its world matrix shifted by the column (DIF-2 rake №1)', () => {
+  it('a snapshot renders the root with its world matrix shifted by the column (rake №1)', () => {
     const { h, renders } = host(false);
     const tr = new Transitions(h);
     const layer = new Container();

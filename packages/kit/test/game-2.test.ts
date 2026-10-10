@@ -1,4 +1,4 @@
-// Kit 2.0 (TRM-8b): the holes a real game found (A World of Differences, DIF-1/DIF-2), each with the
+// Kit 2.0 (TRM-8b): the holes a real game found (a game built on the kit, its first two rounds), each with the
 // case from the game. createGame headless as in game.test.ts (a fake Pixi Application, the mock
 // platform, scenes through the real PixiBackend).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -175,7 +175,7 @@ describe('kit 2.0 — the pause race (§1.4)', () => {
 });
 
 // ---- §1.5: the kit's and the game's save apart -------------------------------------------------------
-/** The save of A World of Differences v0 (kit 1.4: one flat object). */
+/** The save of a game's v0 (kit 1.4: one flat object). */
 const DIFF_V1 = JSON.stringify({
   done: ['istanbul-01'],
   found: { 'istanbul-02': [1, 3] },

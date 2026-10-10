@@ -6,7 +6,7 @@
 //            "soft additive" blend, a cone…);
 //   hard   — something it relies on is not played at all (noise, collisions, forces, sub-emitters,
 //            mesh rendering, a custom shader…).
-// The logic of the normalization is FindCat's converter (findcat/tools/lib/particles.ts — modules,
+// The logic of the normalization is a game's own converter (modules,
 // curves, bursts, shapes, texture sheet, y-up → y-down, pixels per unit), now on the raw YAML.
 //
 // Units: one unit of a config = `unit` px of the space the effect is mounted in: a world system —
@@ -84,7 +84,7 @@ export function shaderBlendByName(name: string): Blend | null {
   return null;
 }
 
-/** A texture name of the kit (and of FindCat): the file stem, lower-case, [a-z0-9_]. */
+/** A texture name of the kit (and of the games): the file stem, lower-case, [a-z0-9_]. */
 export function textureName(path: string): string {
   return (path.split('/').pop() ?? path)
     .replace(/\.[^.]+$/, '')

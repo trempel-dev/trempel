@@ -1,4 +1,4 @@
-// Kit 2.1 (TRM-10): createGame with what A World of Differences did by hand (DIF-2) — screens switched
+// Kit 2.1 (TRM-10): createGame with what a game did by hand — screens switched
 // by a snapshot transition, the popups' sounds, a click silent when it opened / closed a popup, a tap
 // right after a popup closes, the effects table. Headless as in game-2.test.ts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

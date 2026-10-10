@@ -196,7 +196,7 @@ clamped); `whenFull: 'wait'` (Cocos: the emission clock stops while the emitter 
 
 ## 2.1.0
 
-What A World of Differences (DIF-2) and FindCat did around the kit, moved into it. Additions only:
+What two games built on the kit did around it, moved into it. Additions only:
 the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/scene` ^2.0.
 
 ### Transitions: a page leaf, by snapshots
@@ -212,7 +212,7 @@ the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/sce
   `{ leaf: { dir: 1 | -1, look: 'hard' | 'soft' | { bend, twist }, duration, back } }`, or a function
   `(ctx) => Promise` over the snapshots `ctx.before` / `ctx.after` with a layer and frames — the
   extension point for other transitions. The kit renders both screens into textures with the root's
-  world matrix and the column's corner (DIF-2 rake №1: on a desktop the column is narrower than the
+  world matrix and the column's corner (rake №1: on a desktop the column is narrower than the
   window), hides the live screens while the transition plays, blocks the input (a blocker over the
   screens and `game.input`), frees the textures after. Without WebGL2 (or a shader that does not build,
   or `?transition=fade` in the web build) a leaf is a cross-fade of the same snapshots.
@@ -228,7 +228,7 @@ the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/sce
 - **Trails** in the kit's runtime (`ParticleConfig.trails`, typed `TrailConfig`: ratio, lifetime,
   minVertexDistance, width, color, blend, tint — all with defaults): a stroke along each particle's
   recent path, thinner and fainter towards the tail, one `Graphics` under the emitter's particles
-  (FindCat's trail layer). The "not supported" warning is gone.
+  (a game's trail layer). The "not supported" warning is gone.
 - **The effects table**: `createGame({ fx: { effects, textures } })` — `game.fx.play('name', …)` by name
   (`effects`: a config or a group, parent first — trempel-fx-import's `effects.json` as is); `textures`:
   a texture name → URL (or a function). A texture of the table that is not loaded yet loads at the
@@ -244,7 +244,7 @@ the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/sce
   `UIParticle` — its `m_Scale3D`; y-up → y-down. Writes `effects.json`, `textures/*.png` (no metadata;
   TGA decoded), `report.md` / `report.json`: every system `auto` / `manual` / `hard` with what is exact,
   approximated, not played; `--compare <configs.json>` — `compare.md` against a game's current configs.
-  The normalization is FindCat's converter (`findcat/tools/lib/particles.ts`), now on the raw YAML.
+  The normalization is a game's own converter, now on the raw YAML.
 
 ### Sound
 
@@ -260,7 +260,7 @@ the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/sce
   resumes it; synthesizing the presets and starting the loads run after that frame, one preset per
   task; a synth sound played before its turn is synthesized right then; a sound plays as soon as it is
   in (2.0: only after every sound loaded). Gate (the casual template's e2e): the first tap ≤ 20 ms of
-  main-thread work at CPU ×4 (was 117–133 ms in DIF-2).
+  main-thread work at CPU ×4 (was 117–133 ms before).
 
 ### Input
 
@@ -269,7 +269,7 @@ the 2.0 API is unchanged (new options, members and exports). Needs `@trempel/sce
 
 ## 2.0.0
 
-The holes a real game found (A World of Differences — `differences.dev` DIF-1 / DIF-2, the 1.4
+The holes a real game found (a game built on the kit — its first two rounds, the 1.4
 tests), a narrow stable entry, and `createGame` split into modules. Needs `@trempel/scene` 2.0
 (format 1.3). Migration: imports (the table below), `game.save` holds only the game's data, the
 md-clip and prefab workarounds go away.

@@ -12,7 +12,7 @@
 //   a function (ctx) => Promise — any transition over the two snapshots (the extension point).
 //
 // Snapshots: the root is rendered with its world matrix as it sits on the stage, shifted by the
-// column's corner (DIF-2 rake №1: Pixi's `transform` replaces the root's world matrix — the parent's
+// column's corner (rake №1: Pixi's `transform` replaces the root's world matrix — the parent's
 // part must be in it; on a desktop the column is narrower than the window). Input is blocked while a
 // transition runs (a blocker over the screens + game.input off). Without WebGL2 (or when the leaf's
 // shader does not build, or `fallback` is set) a leaf is a cross-fade of the same snapshots.
