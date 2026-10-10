@@ -167,6 +167,16 @@ describe('editor e2e — a heir without its own base (examples/prefabs copy)', (
       await idle(e.page);
       expect(await e.page.isVisible('#nobase')).toBe(true);
       expect(await e.page.textContent('#nobase')).toContain('heir of button');
+      // 2.3.1: a line of the toolbar (under it), not a box over the stage — the canvas is not covered
+      const box = async (sel: string) => (await e.page.locator(sel).boundingBox())!;
+      const [note, canvas, stage] = [await box('#nobase'), await box('#canvas-slot canvas'), await box('#stage-wrap')];
+      const overlap = (a: typeof note, b: typeof note): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      expect(overlap(note, canvas)).toBe(false);
+      expect(overlap(note, stage)).toBe(false);
+      const bar = await box('#toolbar');
+      expect(note.y).toBeGreaterThanOrEqual(bar.y + bar.height - 1);
+      expect(note.y + note.height).toBeLessThanOrEqual(stage.y + 1);
+      expect(await e.page.locator('#nobase button').isVisible()).toBe(true);
       expect(await e.page.evaluate(() => window.tmlEdit!.issues().filter((i) => i.level === 'error').length)).toBe(0);
       await e.page.click('#nobase button');
       await e.page.waitForFunction(() => window.tmlEdit!.entry?.id === 'ui/button' && !!window.tmlEdit!.doc);

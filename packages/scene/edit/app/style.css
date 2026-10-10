@@ -79,8 +79,11 @@ main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min
 #gizmo .pivot-drag { fill: none; stroke: #f2f4f8; stroke-width: 1.5; }
 /* the operator's status line (Blender's header): live value + the keys */
 #opstatus { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 6; padding: 5px 12px; border-radius: 6px; background: rgba(16,18,24,.9); border: 1px solid var(--line); font: 12px/1.4 ui-monospace, Menlo, monospace; white-space: nowrap; pointer-events: none; }
-/* a heir without its own base: a note with «open the base», not a red error */
-#nobase { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 6; padding: 12px 16px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
+/* a heir without its own base: a line of the toolbar (under it) with «open the base», not a red
+   error and not over the stage (2.3.1: it was a box in the middle of the stage and hid the scene) */
+#nobase { display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; overflow: hidden; flex-shrink: 0; }
+#nobase code { overflow: hidden; text-overflow: ellipsis; }
+#nobase button { padding: 1px 8px; }
 #cmd-form { position: fixed; inset: 0; z-index: 26; background: rgba(0,0,0,.35); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
 #cmd-form .box { width: min(520px, 90vw); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.5); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 #cmd-form h4 { margin: 0; font: 600 13px ui-monospace, Menlo, monospace; }
