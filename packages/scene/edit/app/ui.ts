@@ -13,7 +13,7 @@ import { apply, invert, parentPath, mapBox, nodeWorld, type Call } from '../geom
 import { hitTest } from '../hittest';
 import { IMAGE_EXT, type SceneIO } from '../io';
 import { Clips } from './clips';
-import { mountClipsPanel, shotBackground } from './clipspanel';
+import { shotBackground, Timeline } from './timeline';
 import { ConsolePanel } from './console';
 import { createTml, MACRO_DIR } from './tml';
 import { openPalette, paletteOpen } from './palette';
@@ -24,6 +24,8 @@ import { Operators } from './ops';
 import { Editor, ZOOM_MAX, ZOOM_MIN } from './editor';
 import { Inspector } from './inspector';
 import { PREFAB_MIME, PrefabPalette } from './prefabs';
+import { FX_DRAG_MIME } from '../../src/view.js';
+import { Inspectors } from './inspectors';
 import { Overlay } from './overlay';
 import { PathTool } from './pathtool';
 import { Reference } from './reference';
@@ -129,6 +131,9 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   const pickScene = async (): Promise<string | null> =>
     openPalette({ placeholder: 'Prefab — a scene of the folder…', items: ed.prefabCandidates().map((f) => ({ label: f, value: f })), empty: 'no other scenes in the folder' });
   new Inspector(ed, $('inspector'), $('insp-what'), pickImage, pickScene, () => ops.pickPivot());
+  // 2.3: the consumer's inspector panels (tml:type → a panel), their palettes and agent APIs
+  const inspectors = new Inspectors(ed, opts.io, config, { box: $('ext'), title: $('ext-title'), section: $('ext-pane') }, { box: $('palettes'), section: $('palette-pane') });
+  (window as unknown as { tmlInspectors?: Inspectors }).tmlInspectors = inspectors;
   // v0.9: the prefab palette (⌘P) — cards dragged onto the stage become instances
   const prefabs = new PrefabPalette(ed, config.prefabs ?? []);
   window.tmlPrefabs = prefabs;
@@ -160,12 +165,14 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
       return a.download;
     }
   };
-  mountClipsPanel(clips, () => {
+  const timeline = new Timeline(ed, clips);
+  timeline.mount(() => {
     snapshot(undefined).catch((e: unknown) => {
       const m = e instanceof Error ? e.message : String(e);
       ed.log('error', within('video snapshot', codeOf(m) ? m : coded('E_EDIT_SNAPSHOT', m)));
     });
   });
+  (window as unknown as { tmlTimeline?: Timeline }).tmlTimeline = timeline;
   ed.on('readonly', () => {
     const ro = $('readonly');
     ro.hidden = !ed.readOnly;
@@ -199,6 +206,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   const cons = new ConsolePanel($('console-out'), $('console-in') as HTMLTextAreaElement);
   const tml = createTml(ed, opts.io, cons, {
     clips,
+    inspect: inspectors.api,
     reference,
     viewBox: () => viewBoxOf(ed),
     pixels: async (box) => scenePixels(ed, { box, background: runtime.config.background ?? '#18181c' }),
@@ -212,6 +220,7 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
     $('pane-log').hidden = name !== 'log';
     $('pane-console').hidden = name !== 'console';
     $('pane-clips').hidden = name !== 'clips';
+    document.body.classList.toggle('timeline', name === 'clips');
     if (name === 'console') ($('console-in') as HTMLTextAreaElement).focus();
   };
   for (const t of tabs) t.onclick = () => showTab(t.dataset.tab!);
@@ -470,12 +479,19 @@ export async function mountEditor(opts: MountOptions): Promise<Editor> {
   );
   // v0.9: a palette card dropped on the stage → an instance at that point
   wrap.addEventListener('dragover', (e) => {
-    if (e.dataTransfer?.types.includes(PREFAB_MIME)) {
+    if (e.dataTransfer?.types.includes(PREFAB_MIME) || e.dataTransfer?.types.includes(FX_DRAG_MIME)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     }
   });
   wrap.addEventListener('drop', (e) => {
+    // 2.3: an effect from an inspector's palette → an effect node of the heir in the selected group
+    const fx = e.dataTransfer?.getData(FX_DRAG_MIME);
+    if (fx) {
+      e.preventDefault();
+      ed.insertFx(fx, scenePoint(e));
+      return;
+    }
     const p = e.dataTransfer?.getData(PREFAB_MIME);
     if (!p) return;
     e.preventDefault();

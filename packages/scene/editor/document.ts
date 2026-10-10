@@ -12,8 +12,10 @@ import { geometryErrors } from '@trempel/scene/internal/geom/check';
 import { propErrors } from '@trempel/scene/internal/props';
 import { rebase } from '@trempel/scene/internal/prefab';
 import type { Element } from '@xmldom/xmldom';
+import { attachClips, renameInClips, type ClipsDocument } from './clips.js';
 import { registry, type CommandName } from './commands.js';
 import { CommandError, Ctx, indexPath, type Op } from './ctx.js';
+import { HEIR_COMMANDS } from './heir.js';
 import { checkSchema } from './schema.js';
 import { elementChildren, parseSource, serializeSource, type SourceDoc } from './xml.js';
 
@@ -24,8 +26,17 @@ export interface OpenOptions {
   heir?: string;
   /** Where the base lives (informational, e.g. "scenes/game.svg"). */
   path?: string;
-  /** md clip files by name: compiled against the scene, errors prefixed with the file name. */
+  /**
+   * md clip files by name: compiled against the scene, errors prefixed with the file name. 2.3: each
+   * is a ClipsDocument (doc.clipsDoc(file)) sharing the scene's history.
+   */
   clips?: Record<string, string>;
+  /**
+   * 2.3: the scene is an heir extending another scene (no base of its own): `svg` is that scene's
+   * base, shown read-only — base commands fail with E_EDITOR_READONLY; the heir's effect commands
+   * (heir.*) and the clips are edited.
+   */
+  heirOnly?: boolean;
   /**
    * v0.9: prefab documents by path relative to the scene's folder (`ui/button.svg` → { base, heir?,
    * contract? }, null — none). Synchronous: the host preloads (or reads from its cache).
@@ -102,12 +113,14 @@ export class EditorDocument {
   readonly path?: string;
   private readonly src: SourceDoc;
   private readonly contractSrc?: string;
-  private readonly heirSrc?: string;
+  /** 2.3: the heir as a source-preserving DOM (heir.* commands write it). */
+  private readonly heirDoc: SourceDoc | null;
+  private heirSaved: string | undefined;
+  readonly heirOnly: boolean;
   private readonly loadScene?: SceneLoader;
   /** Prefab files created by commands (extract) — seen before the host's loader. */
   private readonly created = new Map<string, SceneSource>();
-  private readonly clips: Record<string, string>;
-  private readonly clipRefs = new Map<string, string[]>();
+  private readonly clipDocs = new Map<string, ClipsDocument>();
   private readonly sep: string;
   private readonly undoStack: Entry[] = [];
   private readonly redoStack: Entry[] = [];
@@ -126,21 +139,12 @@ export class EditorDocument {
     if (opts.contract != null) parseContract(opts.contract); // a bad contract / heir fails the open, as before
     if (opts.heir != null) parseHeir(opts.heir);
     this.contractSrc = opts.contract;
-    this.heirSrc = opts.heir;
+    this.heirDoc = opts.heir != null ? parseSource(opts.heir) : null;
+    this.heirSaved = opts.heir;
+    this.heirOnly = !!opts.heirOnly;
     this.loadScene = opts.loadScene;
-    this.clips = opts.clips ?? {};
-    for (const [file, md] of Object.entries(this.clips)) {
-      for (const clip of Object.values(compileClipsResult(md).clips)) {
-        for (const t of clip.tracks) {
-          for (const id of [t.target, t.path]) {
-            if (!id || id.startsWith('$')) continue;
-            const files = this.clipRefs.get(id) ?? [];
-            if (!files.includes(file)) files.push(file);
-            this.clipRefs.set(id, files);
-          }
-        }
-      }
-    }
+    const host = { scene: () => this._merged, record: (label: string, ops: Op[], type: ChangeEvent['type']) => this.record(label, ops, type) };
+    for (const [file, md] of Object.entries(opts.clips ?? {})) this.clipDocs.set(file, attachClips(md, file, host));
     const comma = /translate\(\s*[-+\d.eE]+\s*,/.test(svg);
     const space = /translate\(\s*[-+\d.eE]+\s+[-+\d.]/.test(svg);
     this.sep = space && !comma ? ' ' : ',';
@@ -168,9 +172,11 @@ export class EditorDocument {
     return (this.undoStack[this.undoStack.length - 1] ?? null) !== this.savedTop;
   }
 
-  /** The current state is what is on disk now (after the host saved serialize()). */
+  /** The current state is what is on disk now (after the host saved serialize(), 2.3: the heir and the clips too). */
   markClean(): void {
     this.savedTop = this.undoStack[this.undoStack.length - 1] ?? null;
+    this.heirSaved = this.serializeHeir();
+    for (const d of this.clipDocs.values()) d.markClean();
   }
 
   /** Undo entries, oldest first. */
@@ -328,6 +334,35 @@ export class EditorDocument {
     return serializeSource(this.src);
   }
 
+  /** 2.3: the heir as text (heir.* edits; untouched parts byte for byte); undefined — no heir. */
+  serializeHeir(): string | undefined {
+    return this.heirDoc ? serializeSource(this.heirDoc) : undefined;
+  }
+
+  /** 2.3: the heir changed since opened / saved. */
+  get heirDirty(): boolean {
+    return this.heirDoc != null && this.serializeHeir() !== this.heirSaved;
+  }
+
+  /** 2.3: clip files of the scene (their ClipsDocuments: clipsDoc(file)). */
+  clipFiles(): string[] {
+    return [...this.clipDocs.keys()];
+  }
+
+  /** 2.3: a clip file as a document of commands (clip.*, track.*, key.*, event.*) — in this scene's history. */
+  clipsDoc(file: string): ClipsDocument | null {
+    return this.clipDocs.get(file) ?? null;
+  }
+
+  /** 2.3: a new clip file of the scene (empty, or `text`); it is written on save. */
+  createClips(file: string, text = ''): ClipsDocument {
+    if (this.clipDocs.has(file)) throw new Error(coded('E_EDITOR_FILE_EXISTS', `${file}: the scene already has this clip file`));
+    const host = { scene: () => this._merged, record: (label: string, ops: Op[], type: ChangeEvent['type']) => this.record(label, ops, type) };
+    const d = attachClips(text, file, host);
+    this.clipDocs.set(file, d);
+    return d;
+  }
+
   /** The element tree (ids, tags, index paths) — for a layers panel or an agent's view. */
   tree(): TreeNode[] {
     const build = (el: Element): TreeNode => {
@@ -343,11 +378,47 @@ export class EditorDocument {
   // ---- internals -------------------------------------------------------------------------
 
   private ctx(): Ctx {
-    return new Ctx(this.src.doc, this.src.root, this.sep, this.clipRefs, {
+    let heir: Ctx | null | undefined;
+    const ctx: Ctx = new Ctx(this.src.doc, this.src.root, this.sep, this.clipRefs(), {
       merged: () => this._merged,
       loadScene: this.loadScene || this.created.size ? (rel) => this.load(rel) : undefined,
       files: [],
+      heir: () => {
+        if (heir === undefined) heir = this.heirDoc ? new Ctx(this.heirDoc.doc, this.heirDoc.root, ' ', new Map(), ctx.env, ctx) : null;
+        return heir;
+      },
+      renameInClips: (from, to) => [...this.clipDocs.values()].map((d) => d.textOp(renameInClips(d.toString(), from, to))).filter((op): op is Op => op != null),
     });
+    return ctx;
+  }
+
+  /** id → clip files that refer to it (track targets and motion paths). */
+  private clipRefs(): Map<string, string[]> {
+    const refs = new Map<string, string[]>();
+    for (const [file, d] of this.clipDocs) {
+      for (const clip of Object.values(compileClipsResult(d.toString()).clips)) {
+        for (const t of clip.tracks) {
+          for (const id of [t.target, t.path]) {
+            if (!id || id.startsWith('$')) continue;
+            const files = refs.get(id) ?? [];
+            if (!files.includes(file)) files.push(file);
+            refs.set(id, files);
+          }
+        }
+      }
+    }
+    return refs;
+  }
+
+  /** 2.3: ops applied elsewhere (a clip file) recorded as one undo entry, or into the open group. */
+  private record(label: string, ops: Op[], type: ChangeEvent['type']): void {
+    if (!ops.length) return;
+    if (this.group) this.group.ops.push(...ops);
+    else {
+      this.undoStack.push({ label, at: Date.now(), ops: [...ops] });
+      this.redoStack.length = 0;
+    }
+    this.changed({ type, label });
   }
 
   /** Prefab documents: created by commands first, then the host's loader. */
@@ -360,6 +431,9 @@ export class EditorDocument {
   private run(ctx: Ctx, name: string, args: unknown): string[] | null {
     const def = registry[name];
     if (!def) return [coded('E_EDITOR_COMMAND', `no command "${name}" (commands: ${Object.keys(registry).join(', ')})`)];
+    if (this.heirOnly && !HEIR_COMMANDS.has(name)) {
+      return [coded('E_EDITOR_READONLY', `${name}: the scene extends another scene — its base is read-only here (edit it where it lives); the heir's effects and the clips are edited`)];
+    }
     const argErrors = checkSchema(def.schema, args);
     if (argErrors.length) return argErrors;
     const mark = ctx.ops.length;
@@ -401,6 +475,7 @@ export class EditorDocument {
 
   private changed(e: ChangeEvent): void {
     this.validate();
+    for (const d of this.clipDocs.values()) d.notify(e);
     for (const fn of this.listeners) fn(e);
   }
 
@@ -414,11 +489,11 @@ export class EditorDocument {
       return;
     }
     const errors: string[] = [];
-    errors.push(...baseTmlErrors(scene), ...baseDuplicateIdErrors(scene));
+    if (!this.heirOnly) errors.push(...baseTmlErrors(scene), ...baseDuplicateIdErrors(scene));
     // Contract, instances (v0.9), heir — the runtime's composition over the expanded tree.
     const c = composeScene({
-      base: text,
-      heir: this.heirSrc,
+      base: this.heirOnly ? undefined : text,
+      heir: this.serializeHeir(),
       contract: this.contractSrc,
       path: this.path,
       loadScene: this.loadScene || this.created.size ? (rel) => this.load(rel) : undefined,
@@ -426,8 +501,8 @@ export class EditorDocument {
     errors.push(...c.errors.contract, ...c.errors.prefab, ...c.errors.merge.map((e) => within('heir', e)));
     const merged = c.tree ?? scene;
     errors.push(...geometryErrors(merged), ...propErrors(merged));
-    for (const [file, md] of Object.entries(this.clips)) {
-      errors.push(...compileClipsResult(md, merged).errors.map((e) => within(file, e)));
+    for (const [file, d] of this.clipDocs) {
+      errors.push(...compileClipsResult(d.toString(), merged).errors.map((e) => within(file, e)));
     }
     this._scene = scene;
     this._merged = merged;

@@ -17,6 +17,7 @@ import type { ComponentFactory } from '@trempel/scene';
 import type { ViewConfig } from '@trempel/scene/view';
 import { Tweens } from '../anim/tweens.js';
 import { Fx, type FxTables } from '../fx/fx.js';
+import { fxInspector } from '../fx/inspector.js';
 import { FxClipTime, fxComponents } from '../fx/node.js';
 import { adopt } from '../ui/components/base.js';
 import { uiComponents } from '../ui/components/index.js';
@@ -36,6 +37,15 @@ export interface KitViewOptions extends Omit<ViewConfig, 'registry' | 'onClipTim
   componentContext?: Record<string, unknown>;
   /** A backend with the skin's attributes (default: the kit's when a skin is on). */
   backend?: ViewConfig['backend'];
+  /**
+   * 2.3: where the effects live, for the editor's particle inspector: a file path relative to the
+   * scene folder → the JSON the game imports from it (a converter's systems.json — `import systems
+   * from './fx/particles/systems.json'`). An effect whose configs are elements of such an array is
+   * saved back into it; the project's own `fx/<name>.json` are found by the inspector.
+   */
+  effectSources?: Record<string, unknown>;
+  /** 2.3: the editor's inspectors (over the kit's `fx` particle editor). */
+  inspectors?: ViewConfig['inspectors'];
 }
 
 type Tick = (dt: number) => void;
@@ -73,7 +83,7 @@ function frames(): (fn: Tick) => () => void {
 
 /** The kit's view config: UI components and effect nodes in the viewer, the editor, view:shot. */
 export function kitView(o: KitViewOptions = {}): ViewConfig {
-  const { effects, textures, skin: skinOpt, components, componentContext, backend, onMount, setup, ...rest } = o;
+  const { effects, textures, skin: skinOpt, components, componentContext, backend, onMount, setup, effectSources, inspectors, ...rest } = o;
   const skin = skinOpt === false ? null : (skinOpt ?? defaultSkin());
   const tick = frames();
   const tweens = new Tweens();
@@ -101,6 +111,8 @@ export function kitView(o: KitViewOptions = {}): ViewConfig {
       onMount?.(args);
     },
     onClipTime: ({ scene, t, markers }) => clipTime.apply(scene, t, markers),
+    // 2.3: the particle editor of the scene editor (fx nodes), over the same effects table
+    inspectors: { fx: fxInspector({ fx, sources: effectSources }), ...inspectors },
   };
 }
 

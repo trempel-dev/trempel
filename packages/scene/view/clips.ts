@@ -88,6 +88,8 @@ export class ClipPlayer {
   playing = false;
   loop = true;
   speed = 1;
+  /** 2.3: values of the clip's parameters ($name cells) for the preview (the editor's fields). */
+  params: Record<string, number> = {};
 
   constructor(
     scene: MountedScene,
@@ -134,7 +136,7 @@ export class ClipPlayer {
     this.handle?.abort();
     // The panel's loop switch decides (not the clip's $loop): off — the end holds the last frame.
     const clip: AnimClip = { ...this.clip.clip, loop: this.loop && d > 0 };
-    this.handle = this.animator.play(clip);
+    this.handle = this.animator.play(clip, { params: this.params });
     this.elapsed = at;
     if (at > 0) {
       // A seek to the very end of a looping clip shows its last frame, not frame 0 of the next cycle.

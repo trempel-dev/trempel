@@ -34,6 +34,10 @@ export interface CtxEnv {
   loadScene?: SceneLoader;
   /** Files a command created (prefab.extract) — the host writes them. */
   files: { path: string; text: string }[];
+  /** 2.3: the heir's document as a context sharing this one's ops (null — the scene has no heir). */
+  heir?: () => Ctx | null;
+  /** 2.3: ops that rewrite references to a renamed id in the scene's md clips (node.setId). */
+  renameInClips?: (from: string, to: string) => Op[];
 }
 
 export interface Op {
@@ -78,8 +82,8 @@ function indentOf(el: Element): string {
 }
 
 export class Ctx {
-  readonly ops: Op[] = [];
-  readonly warnings: string[] = [];
+  readonly ops: Op[];
+  readonly warnings: string[];
   private readonly touched: string[] = [];
 
   constructor(
@@ -90,7 +94,12 @@ export class Ctx {
     /** id → clip files that refer to it (from the last validation). */
     readonly clipRefs: Map<string, string[]>,
     readonly env: CtxEnv = { merged: () => ({ tag: 'svg', attrs: {}, tml: {}, children: [] }), files: [] },
-  ) {}
+    /** 2.3: share another context's ops and warnings (the heir's context of a command). */
+    shared?: Ctx,
+  ) {
+    this.ops = shared ? shared.ops : [];
+    this.warnings = shared ? shared.warnings : [];
+  }
 
   get changed(): string[] {
     return [...new Set(this.touched)];
@@ -99,6 +108,11 @@ export class Ctx {
   private record(op: Op): void {
     op.redo();
     this.ops.push(op);
+  }
+
+  /** 2.3: apply and record an op made elsewhere (a clip file's text). */
+  apply(op: Op): void {
+    this.record(op);
   }
 
   /** Undo whatever this context did (a failed command or batch). */

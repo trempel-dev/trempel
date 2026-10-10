@@ -19,6 +19,7 @@ import * as P from './path.js';
 import type { JSONSchema7 } from './schema.js';
 import { cloneWithSource, elementChildren } from './xml.js';
 import { prefabCommands } from './prefab.js';
+import { heirCommands } from './heir.js';
 
 export interface CommandDef {
   schema: JSONSchema7;
@@ -178,7 +179,7 @@ const defs = {
   },
 
   'node.setId': {
-    describe: 'Rename a node; clip-path="url(#…)" references in the document are updated, clips get a warning.',
+    describe: 'Rename a node; clip-path="url(#…)" references in the document and the clips\' references (## $track, $path, fx:…@id events) are updated.',
     schema: obj({ node: NODE, id: ID }, ['node', 'id']),
     run(ctx: Ctx, a: { node: string; id: string }) {
       const el = ctx.node(a.node);
@@ -193,7 +194,9 @@ const defs = {
           ctx.setAttr(n, 'clip-path', `url(#${a.id})`);
         }
       }
-      clipWarnings(ctx, old, 'old');
+      // 2.3: the clips follow the rename (a document without its clips at hand — a warning)
+      if (ctx.env.renameInClips) for (const op of ctx.env.renameInClips(old, a.id)) ctx.apply(op);
+      else clipWarnings(ctx, old, 'old');
     },
   },
 
@@ -641,6 +644,7 @@ const defs = {
     },
   },
   ...prefabCommands,
+  ...heirCommands,
 } satisfies Record<string, { describe: string; schema: JSONSchema7; run(ctx: Ctx, a: never): void }>;
 
 function ensureDefs(ctx: Ctx): Element {

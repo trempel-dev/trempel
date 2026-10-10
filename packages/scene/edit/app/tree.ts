@@ -94,6 +94,12 @@ export class Tree {
           : 'inserted by the heir — drawn, edited in .tml.svg'
         : `path ${path || '(root)'}`;
 
+    // 2.3: a component the heir inserts (an effect node) — inspected by its id
+    if (path == null && r.id && r.type && !r.id.includes('/')) {
+      li.classList.add('inspectable');
+      if (ed.inspected === r.id) li.classList.add('sel');
+      li.onclick = () => ed.inspect(r.id!);
+    }
     if (path == null || path === '') return li;
 
     const ico = h('span', 'ico');

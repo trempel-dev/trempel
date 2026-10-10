@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const { commands } = await import('../dist/editor/index.js');
+const { commands, clipCommands } = await import('../dist/editor/index.js');
 const readme = fileURLToPath(new URL('../editor/README.md', import.meta.url));
 
 const typeOf = (s) => {
@@ -31,8 +31,10 @@ const args = (schema) => {
 
 // Tags in descriptions (<defs>, <g>) as code, so markdown does not take them for HTML.
 const cell = (t) => t.replace(/\|/g, '\\|').replace(/<[^>]+>/g, (m) => `\`${m}\``);
-const rows = Object.entries(commands).map(([name, c]) => `| \`${name}\` | ${args(c.schema)} | ${cell(c.describe)} |`);
-const block = ['| command | arguments | what it does |', '|---|---|---|', ...rows].join('\n');
+const tableOf = (reg) => ['| command | arguments | what it does |', '|---|---|---|', ...Object.entries(reg).map(([name, c]) => `| \`${name}\` | ${args(c.schema)} | ${cell(c.describe)} |`)].join('\n');
+const rows = Object.keys(commands);
+const block = tableOf(commands);
+const clipBlock = tableOf(clipCommands);
 
 const BEGIN = '<!-- BEGIN commands (scripts/editor-commands.mjs) -->';
 const END = '<!-- END commands -->';
@@ -43,8 +45,18 @@ if (a < 0 || b < a) {
   console.error(`E_CLI: editor/README.md: no markers ${BEGIN} … ${END}`);
   process.exit(2);
 }
-writeFileSync(readme, `${text.slice(0, a + BEGIN.length)}\n${block}\n${text.slice(b)}`);
-console.log(`editor/README.md: ${rows.length} commands`);
+let out = `${text.slice(0, a + BEGIN.length)}\n${block}\n${text.slice(b)}`;
+const CB = '<!-- BEGIN clip commands (scripts/editor-commands.mjs) -->';
+const CE = '<!-- END clip commands -->';
+const ca = out.indexOf(CB);
+const cb = out.indexOf(CE);
+if (ca < 0 || cb < ca) {
+  console.error(`E_CLI: editor/README.md: no markers ${CB} … ${CE}`);
+  process.exit(2);
+}
+out = `${out.slice(0, ca + CB.length)}\n${clipBlock}\n${out.slice(cb)}`;
+writeFileSync(readme, out);
+console.log(`editor/README.md: ${rows.length} commands, ${Object.keys(clipCommands).length} clip commands`);
 
 // ---- edit/API.md ---------------------------------------------------------------------------------
 
@@ -79,6 +91,16 @@ ${types}
 
 ${block}
 
+## Clips — \`tml.clipsDoc(file?).exec(name, args)\`
+
+The scene's md clips (\`anim/*.md\`, \`X.anim.md\`) are edited by commands with a minimal diff of the md; each is one undo step in the scene's history (with the base), saved by ⌘S / \`tml.save()\`. \`file\` — default the clip on the Timeline (else the scene's first file). A command that adds compile errors is refused (\`ok: false\`). Keys are addressed \`{ target, column, t }\`; events \`{ t, event }\`. Read the clip as written: \`tml.clipsDoc().clip('win')\` → \`{ tracks: [{ target, columns, keys: { x: [{ t, value, ease, param? }] } }], events, duration, loop }\`.
+
+${clipBlock}
+
+## Effects — \`tml.inspect.fx\` (the kit's \`kitView()\`), \`heir.*\`
+
+Effect nodes (\`tml:type="fx"\`) are configured in the heir: \`heir.setAttr\` (\`data-effect\` / \`data-scale\` / \`transform\` of a node the heir inserts, \`tml:effect\` of a \`<tml:ref>\`), a new one — \`heir.insertFx\`. The effects themselves (particle configs) — \`tml.inspect.fx\`: \`list()\` (\`{ name, origin: file | systems | preset | code }\`), \`origin(name)\`, \`get(name)\`, \`update(name, fn)\` (the preview plays it), \`save(name)\` (\`fx/<name>.json\` whole, a converter's \`systems.json\` — only that effect's systems), \`extract(name)\` (a preset / an effect from code → \`fx/<name>.json\`), \`unsaved()\`.
+
 ## Examples
 
 \`\`\`js
@@ -87,7 +109,17 @@ tml.doc.exec('node.move', { node: 'settingsBtn', dx: 10, dy: 0 })
 for (const id of tml.selection) tml.moveBy(id, 0, -20)          // the selection up by 20 scene units
 tml.doc.errors                                                   // contract, geometry, clips — after every command
 await tml.save()
+
+// «move every key of the track card by 0.2 s»
+const d = tml.clipsDoc(), tr = d.clip('collect').tracks.find((t) => t.target === 'card')
+d.exec('key.move', { clip: 'collect', keys: tr.columns.flatMap((column) => tr.keys[column].map((k) => ({ target: 'card', column, t: k.t }))), dt: 0.2 })
+// «put fx:fdFound@spot1 at 0.8»
+tml.clipsDoc().exec('event.add', { clip: 'collect', t: 0.8, event: 'fx:fdFound@spot1' })
+// «double the rate of fdHintButton» (and save it into its file)
+tml.inspect.fx.update('fdHintButton', (c) => { for (const s of c) s.rate *= 2 }); await tml.inspect.fx.save('fdHintButton')
 \`\`\`
+
+From outside the page — the same scripts into the page a person has open: \`npx trempel-edit eval [--port 5181] '<code>'\` (\`--file x.js\`), \`trempel-edit save\`, \`trempel-edit state\`; \`trempel-edit mcp\` — an MCP server (stdio) with \`editor.eval\`, \`editor.save\`, \`editor.state\`. An agent's script is one undo step, marked «agent» in the log.
 `;
 writeFileSync(fileURLToPath(new URL('../edit/API.md', import.meta.url)), api);
 console.log(`edit/API.md: ${api.split('\n').length} lines`);

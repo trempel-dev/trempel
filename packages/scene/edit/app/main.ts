@@ -4,6 +4,7 @@
 
 import { devIO } from '../io-dev';
 import { mountEditor } from './ui';
+import { connectBridge } from './bridge';
 
 // URL: ?scene=<id>&zoom=<fit|0.05…8>&ox=<px>&oy=<px> — the scene and the view (as in `view`).
 const params = new URLSearchParams(location.search);
@@ -19,6 +20,8 @@ const ed = await mountEditor({
   view: { zoom: Number.isFinite(zoomParam) && zoomParam > 0 ? zoomParam : null, offset: { x: num('ox'), y: num('oy') } },
 });
 window.tmlEdit = ed;
+// 2.3: the agent's bridge (POST /__tml/agent of the dev server → this page)
+if (import.meta.hot && window.tml) connectBridge(import.meta.hot as never, ed, window.tml, (window as unknown as { tmlClips?: never }).tmlClips);
 let urlTimer = 0;
 const syncUrl = (): void => {
   clearTimeout(urlTimer);

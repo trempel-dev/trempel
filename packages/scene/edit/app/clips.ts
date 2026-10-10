@@ -32,6 +32,13 @@ export class Clips {
   onion = { on: false, delta: 1 / 12 };
   /** Onion layers drawn now (0 or 2) — for tests. */
   onionLayers = 0;
+  /**
+   * 2.3: recording — while a clip poses the scene the stage stays editable, and an edit of a node
+   * becomes keys of the clip at the playhead (rec.ts), not a change of the base.
+   */
+  rec = false;
+  /** 2.3: values of the clip parameters for the preview (play(clip, { params })); a missing one is 0. */
+  params: Record<string, number> = {};
 
   private player: ClipPlayer | null = null;
   private scene: MountedScene | null = null;
@@ -75,8 +82,10 @@ export class Clips {
     this.list = compiled.clips;
     this.errors = compiled.errors;
     if (this.selected && !this.current) this.selected = null;
+    let resume: { name: string; t: number; playing: boolean } | null = null;
     if (scene !== this.scene) {
       // the scene was rebuilt: it is in the rest pose again
+      if (this.active && this.selected && this.current && scene) resume = { name: this.selected, t: this.time, playing: this.playing };
       this.halt();
       this.scene = scene;
       this.player = null;
@@ -86,6 +95,16 @@ export class Clips {
       }
     }
     this.emit('list', 'state');
+    // 2.3: an edit of the clip (the timeline) or of the scene while posed: the pose comes back at the same time
+    if (resume) {
+      try {
+        this.select(resume.name);
+        this.seek(resume.t);
+        if (resume.playing) this.play();
+      } catch (e) {
+        this.ed.log('error', msg(e));
+      }
+    }
   }
 
   private ensurePlayer(): ClipPlayer {
@@ -110,6 +129,7 @@ export class Clips {
     }
     this.player.loop = this.loop;
     this.player.speed = this.speed;
+    this.player.params = this.paramValues();
     return this.player;
   }
 
@@ -135,7 +155,15 @@ export class Clips {
     }
     this.pose();
     this.drawOnion();
+    this.remeasure();
     this.emit('state', 'tick');
+  }
+
+  /** Recording: the handles follow the posed nodes (the gizmo works on the pose). */
+  private remeasure(): void {
+    if (!this.rec || !this.active) return;
+    this.ed.measure();
+    this.ed.emit('selection');
   }
 
   play(name?: string): void {
@@ -183,6 +211,7 @@ export class Clips {
     p.seek(t);
     this.pose();
     this.drawOnion();
+    this.remeasure();
     this.emit('state', 'tick');
   }
 
@@ -210,6 +239,34 @@ export class Clips {
     this.emit('state');
   }
 
+  /** Parameter names of the selected clip ($name cells). */
+  paramNames(): string[] {
+    const out = new Set<string>();
+    for (const tr of this.current?.clip.tracks ?? []) for (const k of tr.keys) if (k.param) out.add(k.param);
+    return [...out];
+  }
+
+  private paramValues(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const n of this.paramNames()) out[n] = this.params[n] ?? 0;
+    return out;
+  }
+
+  /** 2.3: a parameter's preview value — the pose at the playhead is redrawn. */
+  setParam(name: string, value: number): void {
+    this.params[name] = value;
+    if (this.player) this.player.params = this.paramValues();
+    if (this.active && this.selected && !this.playing) this.seek(this.time);
+    this.emit('state');
+  }
+
+  /** 2.3: recording on / off (the stage is editable while a clip poses it when on). */
+  setRec(on: boolean): void {
+    this.rec = on;
+    if (this.active) this.ed.setReadOnly(on ? null : `▶ ${this.selected} · view only (⏹ — rest pose, ● Rec — record keys)`);
+    this.emit('state');
+  }
+
   setOnion(on: boolean, delta = this.onion.delta): void {
     this.onion = { on, delta: delta > 0 ? delta : 1 / 12 };
     this.drawOnion();
@@ -219,7 +276,7 @@ export class Clips {
   private pose(): void {
     if (this.active) return;
     this.active = true;
-    this.ed.setReadOnly(`▶ ${this.selected} · view only (⏹ — rest pose)`);
+    if (!this.rec) this.ed.setReadOnly(`▶ ${this.selected} · view only (⏹ — rest pose, ● Rec — record keys)`);
   }
 
   private halt(): void {

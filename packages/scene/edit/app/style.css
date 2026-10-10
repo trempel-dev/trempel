@@ -210,3 +210,80 @@ main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min
 #prefabs .card img { width: 100%; height: 72px; object-fit: contain; display: block; background: repeating-conic-gradient(#0002 0 25%, #0000 0 50%) 0 0 / 12px 12px; }
 #prefabs .group { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin: 6px 0 0; font-weight: bold; }
 #prefabs .note { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+
+/* 2.3: the timeline */
+body.timeline { grid-template-rows: 1fr 330px; }
+body.timeline #bottom { grid-template-columns: 240px 1fr; }
+#pane-clips .sep { width: 8px; }
+#clip-rec.on { background: #5a1d22; border-color: var(--err); color: #ffb3b3; }
+#clip-duration { width: 64px; }
+#clip-params { display: inline-flex; gap: 6px; align-items: center; }
+#clip-params input { width: 60px; }
+#timeline { flex: 1; min-height: 120px; display: grid; grid-template-columns: 1fr 230px; gap: 8px; }
+#tl-grid { position: relative; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background: #191b21; outline: none; user-select: none; }
+#tl-grid:focus { border-color: #3a4558; }
+.tl-inner { position: relative; min-height: 100%; }
+.tl-row { position: relative; height: 22px; border-bottom: 1px solid #23262e; }
+.tl-row.tl-track { background: #20232b; }
+.tl-ruler { position: sticky; top: 0; z-index: 3; background: var(--panel); cursor: ew-resize; }
+.tl-label { position: sticky; left: 0; z-index: 2; width: 150px; height: 100%; padding: 2px 6px; background: var(--panel); border-right: 1px solid var(--line); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.tl-col .tl-label { padding-left: 22px; }
+.tl-track .tl-label { color: var(--text); }
+.tl-track .fold { cursor: pointer; display: inline-block; width: 14px; color: var(--muted); }
+.tl-track .target { cursor: pointer; }
+.tl-track .target:hover { color: var(--accent); }
+.tl-tick { position: absolute; top: 3px; font-size: 10px; color: var(--muted); transform: translateX(-50%); pointer-events: none; }
+.tl-tick::after { content: ''; position: absolute; left: 50%; top: 14px; height: 5px; border-left: 1px solid var(--muted); }
+.tl-end { position: absolute; top: 0; width: 8px; height: 22px; margin-left: -4px; background: rgba(242,184,75,.35); border-left: 2px solid var(--warn); cursor: col-resize; }
+.tl-key { position: absolute; top: 6px; width: 10px; height: 10px; margin-left: -5px; background: #c9cfdb; transform-origin: center; rotate: 45deg; border: 1px solid #0f1115; cursor: pointer; }
+.tl-key.step { rotate: 0deg; }
+.tl-key.param { background: #b38cff; }
+.tl-key.sum { background: #6b7280; width: 8px; height: 8px; top: 7px; margin-left: -4px; cursor: default; pointer-events: none; }
+.tl-key.sel { background: var(--sel); }
+.tl-key .plabel { position: absolute; left: 10px; top: -4px; rotate: -45deg; font-size: 10px; color: #cbb6ff; white-space: nowrap; pointer-events: none; }
+.tl-ev { position: absolute; top: 2px; height: 18px; padding: 0 4px 0 0; transform-origin: left; font-size: 11px; white-space: nowrap; cursor: pointer; color: var(--muted); border-left: 2px solid #8a909c; }
+.tl-ev .icon { padding: 0 3px; }
+.tl-ev.fx { color: #ffd66b; border-left-color: #ffd66b; }
+.tl-ev.sel { color: var(--sel); border-left-color: var(--sel); }
+#tl-playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid #ff5a5a; z-index: 4; pointer-events: none; }
+.tl-box { position: absolute; z-index: 5; border: 1px dashed var(--accent); background: rgba(106,168,255,.12); pointer-events: none; }
+.tl-empty { padding: 12px; }
+#tl-side { overflow: auto; font-size: 12px; }
+#tl-side h4 { margin: 2px 0 6px; font-size: 12px; font-weight: 600; }
+#tl-side .row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+#tl-side input, #tl-side select { min-width: 0; flex: 1; }
+#tl-side .hint { margin-top: 8px; font-size: 11px; }
+.tl-curve { display: block; margin: 4px 0; }
+.tl-curve .frame { fill: #15171c; stroke: var(--line); }
+.tl-curve path { fill: none; stroke: var(--accent); stroke-width: 2; }
+.tl-curve line { stroke: var(--muted); }
+.tl-curve .handle { fill: var(--sel); cursor: grab; }
+.tl-ask { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.4); display: flex; align-items: flex-start; justify-content: center; padding-top: 18vh; }
+.tl-ask .box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
+.tl-ask .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* 2.3: the consumer's inspector panels, their palettes, the page's widgets */
+#ext-pane, #palette-pane { overflow: auto; }
+#ext .row, #palettes .row { display: flex; gap: 4px; align-items: center; margin-bottom: 3px; flex-wrap: wrap; }
+#ext .row .k { width: 92px; flex: none; color: var(--muted); font-size: 12px; }
+#ext input[type=number] { width: 64px; }
+#ext input[type=text], #ext select { min-width: 0; max-width: 150px; }
+#ext details { border-top: 1px solid var(--line); padding: 3px 0; }
+#ext summary { cursor: pointer; color: var(--text); font-size: 12px; margin-bottom: 3px; }
+#ext .muted { font-size: 11px; margin-bottom: 4px; }
+.fx-palette { display: flex; flex-wrap: wrap; gap: 4px; }
+.fx-item { padding: 1px 6px; border: 1px solid var(--line); border-radius: 10px; font-size: 11px; cursor: grab; background: #262a33; }
+.fx-item.preset { color: var(--muted); }
+.fx-item.file { color: #ffd66b; }
+#tree li.inspectable { cursor: pointer; }
+.w-curve svg { display: block; }
+.w-curve .frame { fill: #15171c; stroke: var(--line); }
+.w-curve .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.w-curve .pt { fill: var(--sel); cursor: grab; }
+.w-gradient { width: 210px; margin: 4px 0; }
+.w-gradient .strip { height: 16px; border: 1px solid var(--line); border-radius: 3px; }
+.w-gradient .stops { position: relative; height: 12px; }
+.w-gradient .stop { position: absolute; top: 1px; width: 9px; height: 10px; margin-left: -5px; border: 1px solid #000; border-radius: 2px; cursor: grab; }
+.w-gradient .stop.on { outline: 2px solid var(--sel); }
+.w-gradient .picker { width: 40px; padding: 0; }
+.w-gradient .alpha { width: 60px; }

@@ -4,7 +4,7 @@ An agent-first, lightweight 2D game engine on [PixiJS](https://pixijs.com):
 
 - **A scene format that is valid SVG.** The base `X.svg` is plain SVG any editor opens; behaviour lives in an heir `X.tml.svg` (`tml:` namespace: bindings, events, components, inserts) and an optional contract `X.contract.xml` that checks the view. Prefabs (`<use href>`), 9-slice, anchors, slots and shared collections (`@skin/…`) included.
 - **A runtime** that mounts a scene over a renderer backend (PixiJS out of the box), with reactive state, an expression language without `eval`, and an animation player for clips written as Markdown tables.
-- **An editor core** (`@trempel/scene/editor`) — every edit is a command an agent or a person runs the same way — and the editor page as a library (`@trempel/scene/edit`).
+- **An editor core** (`@trempel/scene/editor`) — every edit is a command an agent or a person runs the same way — and the editor page as a library (`@trempel/scene/edit`): a timeline over md clips (keys, eases, events, recording), the consumer's inspectors (the kit's particle editor), and an agent's line into the page a person has open (`trempel-edit eval`, an MCP server).
 
 Docs: [trempel.dev](https://trempel.dev) · format, public API and error codes: [`docs/format/scene-format.md`](docs/format/scene-format.md) · for agents: [`CLAUDE.md`](../../CLAUDE.md) · [`CHANGELOG.md`](CHANGELOG.md) · migration: [`MIGRATION.md`](MIGRATION.md)
 

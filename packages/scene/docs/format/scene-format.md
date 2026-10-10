@@ -9,7 +9,7 @@
 > `error=E_CODE` must fail with exactly that code, every other block must pass.
 
 This is the single, current specification of the Trempel scene format, as implemented by the
-npm package `@trempel/scene` 2.2 (format 1.3). The examples of this document
+npm package `@trempel/scene` 2.3 (format 1.3). The examples of this document
 are checked by tests at every build.
 
 Trempel is an agent-first 2D engine on PixiJS. The format comes first, the editor second: scenes
@@ -999,8 +999,21 @@ is a plain configuration object; every field is optional:
 | `background` | stage background colour |
 | `prefabs` | prefab folders for the editor palette, e.g. `['ui']` |
 | `collections` | v1.1: collection name → folder URL (relative to the scene folder, or absolute), over the project's (§12) |
+| `inspectors` | 2.3: the editor's panels for the nodes of a `tml:type` — `{ fx: factory }`; see below |
 
 The editor keeps per-project data (macros) in a `.trempel/` folder.
+
+**Inspectors (2.3).** The editor knows nothing of a consumer's components; a consumer brings their
+editors. `inspectors[type]` is a factory `(host) => { el, dispose }`, or `{ panel, palette?, api? }`:
+`panel` — shown for the inspected node of that `tml:type` (the selected node; a node the heir
+inserts is picked in the layers tree); `palette` — shown whatever is selected (what it drags onto
+the stage with the type `application/x-trempel-fx`, `FX_DRAG_MIME`, becomes an effect node of the
+heir — `heir.insertFx` into the selected group); `api` — the same edits for scripts and agents
+(`tml.inspect[type]`). The `host` gives the node (`id`, `tag`, `attrs`, `tml`, `inserted`), the
+mounted scene and the node's component, `exec(name, args)` — the editor core's commands (one undo
+step each), `files` (`list`, `read`, `write` — the scene folder; the editor writes scene documents,
+md clips and effect data: `fx/*.json`, `systems.json`), `ui` — the page's widgets (`curve`,
+`gradient`), `log`, `refresh`. The kit's `kitView()` brings the particle editor of `fx` nodes.
 
 ---
 
@@ -1131,6 +1144,7 @@ collections: name → absolute folder, heirs: document → absolute heir scene, 
 | `npm run view -- <folder>` / `npm run edit -- <folder>` | the viewer / the editor on a dev server; serves the project root and the collections' folders (anything else — 403) |
 | `npm run view:shot -- <scene> --out x.png` | a headless PNG + JSON of the scene's problems; the folder — `--dir`, else the nearest `trempel.view.ts`, else the project root |
 | `npm run flatten -- <scene> --out x.svg [--embed] [--state s.json]` | **open the scene anywhere:** one vanilla SVG (bin `trempel-flatten`) |
+| `trempel-edit eval [--port N] '<code>'` · `save` · `state` · `mcp` | 2.3: an agent in the editor page a person has open (`npm run edit`): a `tml` script as one undo step, ⌘S, the page's state; `mcp` — the same as an MCP server (stdio: `editor.eval`, `editor.save`, `editor.state`); localhost only |
 | `node scripts/migrate-collections.mjs <folder> [--dry-run]` | relative links into a collection → `@name/…` (MIGRATION §11) |
 
 **`flatten`** builds the scene with the runtime itself over a recording backend and writes what it
@@ -1184,7 +1198,7 @@ export only this; semver covers exactly this list.
 | Clips | `Animator`, `compileClips`, `compileClipsResult`; types `Clock`, `SpeedSource`, `PlayOptions`, `Handle`, `ClipSpec`, `AnimatorOptions`, `CompileClipsOptions`, `CompileClipsResult`, `AnimClip`, `Track`, `Keyframe`, `Marker`, `Ease`, `EaseName` |
 | Collections | `expandCollection`, `parseProject`, `PROJECT_FILE`; types `ProjectFile`, `CollectionSpec`; node: `loadProject`, `heirsOf`, `findProjectRoot`, `findPackageDir`, `collectionPath`, `isInside`, type `Project` |
 | Flatten, check | `flattenScene`, `checkScene`; types `FlattenInput`, `FlattenResult`, `CheckInput`, `CheckResult`; node: `flattenFile`, `sceneStemOf`, `imageSize`, `imageSizeOf`, `mimeOf` |
-| The consumer module | `defineView` (`@trempel/scene/view`); types `ViewConfig`, `ViewHookArgs`, `FontSpec` |
+| The consumer module | `defineView`, `FX_DRAG_MIME` (`@trempel/scene/view`); types `ViewConfig`, `ViewHookArgs`, `ViewClipArgs`, `FontSpec`, `InspectorFactory`, `InspectorHost`, `InspectorPanel`, `InspectorUi` |
 | Errors and codes | `TrempelError`, `ExpressionRuntimeError`, `ExpressionError`, `PathDataError`, `trempelError`, `CODES`, `coded`, `codeOf`, `within`; types `Code`, `ExpressionErrorInfo` |
 
 Everything else — geometry (`pathFromNode`, `shapeCommands`…), the hit test, dashes and outlines,
@@ -1398,6 +1412,14 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 | `E_EDITOR_PARAM` | a prefab parameter that cannot be one (a presentation attribute, not a child of the group, the wrong tag) |
 | `E_EDITOR_NO_ID` | a group without an id where the command needs one (prefab.extract) |
 | `E_EDITOR_FILE_EXISTS` | a file the command would create already exists |
+| `E_EDITOR_CLIP_NONE` | a clip the md clip file does not have |
+| `E_EDITOR_CLIP_TAKEN` | a clip name the md clip file already has |
+| `E_EDITOR_CLIP_TRACK` | a track (## $track) the clip does not have, or a column it already keys |
+| `E_EDITOR_CLIP_KEY` | a key the track does not have, or a key moved onto another key of its column |
+| `E_EDITOR_CLIP_EVENT` | an event ($events) the clip does not have |
+| `E_EDITOR_CLIP_VALUE` | a clip cell or attribute value of the wrong kind (a string in a number column, \| in a cell) |
+| `E_EDITOR_NO_HEIR` | an heir command on a scene without an heir (X.tml.svg) |
+| `E_EDITOR_READONLY` | a base command on a scene whose base lives in another scene (tml:extends) — read-only here |
 | `W_EDITOR_CLIP_REF` | a clip refers to a renamed or removed id |
 | `W_EDITOR_PATH_REWRITTEN` | d rewritten as absolute M L C Z (arcs approximated by cubics) |
 | `W_EDITOR_DETACH` | prefab logic (the tml of its heir) is not carried into a detached copy |
@@ -1411,7 +1433,9 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 | `E_EDIT_SINGULAR` | a degenerate transform (scale 0) cannot be inverted |
 | `E_EDIT_SCENE` | a scene the open folder does not have |
 | `E_EDIT_CLIP` | a clip the scene does not have, no clips, or no clip selected |
+| `E_EDIT_REC` | a recorded edit (● Rec) that cannot become clip keys (a node without an id) |
 | `E_EDIT_HOST` | a feature only the editor page provides (clips, reference, snapshots, prefabs) |
+| `E_EDIT_NO_PAGE` | the agent bridge has no open editor page to run in (or it did not answer) |
 | `E_EDIT_SCRIPT` | a console script or macro failed (or the page CSP forbids running scripts) |
 | `E_EDIT_MACRO` | a macro the folder does not have |
 | `W_EDIT_MACRO` | a macro file that could not be read |
@@ -1462,4 +1486,5 @@ catalog is `src/codes.ts`, this section is generated from it (`npm run error-cod
 - **1.3** (package 2.0) — what a real game needed: an instance's context inherits the scene's (names added after the mount — a game's actions — are seen inside prefabs); clip parameters (`$name` number cells, `play(clip, { params })`, `E_ANIM_PARAM`); `preserveAspectRatio` of an `<image>` (meet / slice, `E_ASPECT`); an heir of the project extending a collection document, and project heirs — every instance of a collection document is built with the project's heir over the collection's (`heirs` in `MountOptions`, found by the Node tools, `E_PROJECT_HEIR`).
 - **2.0** (package; the format stays 1.2) — every message in English with a code (§16); `<!DOCTYPE>` and entities are refused (`E_DOCTYPE`); a narrow stable API (§15), the rest under `@trempel/scene/internal/*`; `checkScene`; `@trempel/scene/view`; the examples of this document are tests.
 - **2.2** (package; the format stays 1.3) — the consumer module's `onClipTime` (§11): the viewer and the editor report the clip time shown and the markers crossed, so effects fired by clip markers are drawn at that moment; `view:shot` settles to fixed moments of its virtual clock (a picture that lives in time is the same every run).
+- **2.3** (package; the format stays 1.3) — the consumer module's `inspectors` (§11): the editor shows a consumer's panels for its components' nodes (the kit's particle editor), their palettes and agent APIs. The editor (not the format): md clips edited by commands with a minimal diff (the timeline), the heir's two effect edits (`heir.setAttr`, `heir.insertFx`), scenes extending another one edited (their clips and effects), the agent's bridge into the open page (`trempel-edit`).
 - **1.2** — no format changes. The runtime has no built-in components: the demo grid component of 1.1 left `createDefaultRegistry()`, which is now an empty registry — games register their own. The repository is a monorepo: `@trempel/scene` and the game kit `@trempel/kit` (screens, popups, layout, UI components, a default skin as the collection `npm:@trempel/kit/skins/default/ui`), versioned together.

@@ -6,7 +6,7 @@
 // The `Tml` interface below is what `npm run editor:commands` copies into edit/API.md for the
 // agent's context — keep its comments short and user-facing.
 
-import { commands, type CommandResult, type EditorDocument, type TreeNode } from '../../editor/index.js';
+import { clipCommands, commands, type ClipsDocument, type CommandResult, type EditorDocument, type TreeNode } from '../../editor/index.js';
 import { coded, type AnimClip, type MountedScene } from '../../src/core.js';
 import { legacyName, PROJECT_DIR, PROJECT_DIRS } from '../../src/compat.js';
 import { invert, nodeWorld, parentPath, type Call } from '../geometry';
@@ -28,9 +28,11 @@ export interface TmlPixels { width: number; height: number; data: Uint8ClampedAr
 /** A compiled clip of the scene (anim/*.md, *.anim.md — the md clip itself; `$tex` maps tex cells). */
 export interface TmlClip { name: string; file: string; duration: number; clip: AnimClip }
 /** Clips on the stage, own clock (exact pause/seek). Posed — the stage is read-only; stop() — the
- *  rest pose. speed 0.25–2; onion(on, delta = 1/12 s): frames t∓delta over the scene when paused. */
+ *  rest pose. speed 0.25–2; onion(on, delta = 1/12 s): frames t∓delta over the scene when paused.
+ *  rec (2.3): posed + rec — edits of nodes become keys at the playhead; params — $name values for the preview. */
 export interface TmlAnim {
-  readonly clip: string | null; readonly time: number; readonly playing: boolean; loop: boolean; speed: number;
+  readonly clip: string | null; readonly time: number; readonly playing: boolean; loop: boolean; speed: number; rec: boolean;
+  params: Record<string, number>;
   play(name?: string): void; pause(): void; seek(t: number): void; stop(): Promise<void>; onion(on: boolean, delta?: number): void;
 }
 /** Reference picture under/over the scene, fitted to the viewBox, opacity 0–100; not saved to the
@@ -77,6 +79,13 @@ export interface Tml {
   /** Run a script (body of an async function with `tml` and `console` in scope; a single
    *  expression is returned) as one undo step `label`; an exception rolls it all back. */
   run(code: string, label?: string): Promise<unknown>;
+  /** 2.3: an md clip file as commands (clip.*, track.*, key.*, event.* — the table below), in this scene's
+   *  undo: tml.clipsDoc().exec('key.move', { clip, keys, dt }); .clips() — clips as written (tracks,
+   *  keys by column, events). file — default the timeline's clip's file (else the scene's first). */
+  clipsDoc(file?: string): ClipsDocument | null;
+  readonly clipCommands: typeof clipCommands;
+  /** 2.3: inspectors of the folder's trempel.view.ts by tml:type, e.g. tml.inspect.fx — effects (kit). */
+  readonly inspect: Record<string, any>;
   /** Clips of the scene and their compile errors; playback — anim; the reference layer. */
   readonly clips: TmlClip[];
   readonly clipErrors: string[];
@@ -148,7 +157,9 @@ export function macroTitle(file: string, text: string): string {
 
 /** Batch 2 parts of the editor tml exposes (absent in a stand-in host — those members then throw). */
 export interface TmlExtras {
-  clips: Pick<Clips, 'list' | 'errors' | 'selected' | 'time' | 'playing' | 'loop' | 'speed' | 'play' | 'pause' | 'seek' | 'stop' | 'setLoop' | 'setSpeed' | 'setOnion' | 'onion'>;
+  clips: Pick<Clips, 'list' | 'errors' | 'selected' | 'time' | 'playing' | 'loop' | 'speed' | 'play' | 'pause' | 'seek' | 'stop' | 'setLoop' | 'setSpeed' | 'setOnion' | 'onion' | 'rec' | 'setRec' | 'params' | 'setParam' | 'current'>;
+  /** 2.3: the inspectors' agent APIs. */
+  inspect?: Record<string, Record<string, unknown>>;
   reference: Pick<Reference, 'state' | 'set' | 'pixels'>;
   viewBox(): TmlBounds;
   pixels(box?: TmlBounds): Promise<TmlPixels>;
@@ -186,6 +197,18 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
     },
     set speed(v) {
       x().clips.setSpeed(v);
+    },
+    get rec() {
+      return extras?.clips.rec ?? false;
+    },
+    set rec(v) {
+      x().clips.setRec(v);
+    },
+    get params() {
+      return { ...(extras?.clips.params ?? {}) };
+    },
+    set params(v) {
+      for (const [k, n] of Object.entries(v)) x().clips.setParam(k, n);
     },
     play: (name) => x().clips.play(name),
     pause: () => x().clips.pause(),
@@ -327,6 +350,16 @@ export function createTml(ed: TmlHost, io: Pick<SceneIO, 'list' | 'read'>, sink:
       return ok;
     },
     scenes: () => ed.scenes.map((s) => s.id),
+    clipsDoc(file) {
+      const doc = ed.doc;
+      if (!doc) return null;
+      const f = file ?? extras?.clips.current?.file ?? doc.clipFiles()[0];
+      return f ? doc.clipsDoc(f) : null;
+    },
+    clipCommands,
+    get inspect() {
+      return extras?.inspect ?? {};
+    },
     get clips() {
       return (extras?.clips.list ?? []).map((c) => ({ name: c.name, file: c.file, duration: c.duration, clip: c.clip }));
     },

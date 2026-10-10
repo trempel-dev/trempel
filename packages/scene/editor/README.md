@@ -41,13 +41,33 @@ doc.refresh();                    // a prefab changed on disk — validate again
 - `detach` copies the expanded content into the base (`<g>`, prefixed ids; nested instances stay `<use>`); the logic of the prefab's heir is not carried into the base (sterility) — static labels (`self.label` from a plain parameter) are baked in, the rest gets a warning.
 - `extract` creates files and the document sees them at once (validation); undo reverts the document edit, the files stay (the host wrote them).
 
+### Clips and the heir's effects (2.3)
+
+```ts
+import { openClips } from '@trempel/scene/editor';
+
+const clips = doc.clipsDoc('anim/win.md');                     // a clip file of the scene — in the scene's history
+// (standalone: openClips(md, 'anim/win.md', { scene: () => tree }) — its own undo/redo)
+clips.exec('key.move', { clip: 'collect', keys: [{ target: 'card', column: 'x', t: 0.25 }], dt: 0.2 });
+clips.exec('event.add', { clip: 'collect', t: 0.8, event: 'fx:burst@spot' });
+clips.clips();       // [{ name, duration, loop, attrs, tracks: [{ target, index, columns, keys: { x: [{ t, value, ease, param? }] } }], events }]
+clips.toString();    // the md: untouched lines byte for byte; clips.dirty / doc.markClean()
+doc.exec('heir.insertFx', { into: 'hud', id: 'sparks', effect: 'sparkle', x: 10, y: 20 });
+doc.serializeHeir(); // the heir with its two effect edits; doc.heirDirty
+```
+
+- A clip command reads the md into blocks, attributes and tables, changes only its lines and writes them back: prose, comment headings, column order and the tables it does not touch stay as written; a touched table is re-aligned whole when it was aligned (its lines of one width), else only its changed rows are rewritten (`| a | b |`). Times — ≤ 4 decimals; `key.move` / `event.move` snap to frames of 1/60 s and to other keys within 2 frames (`snap: false` — as given).
+- After every clip command the md is compiled against the scene: a command that adds compile errors is rolled back and returns them (`ok: false`); errors already in the file do not block.
+- One history: base commands, the heir's (`heir.*`) and every clip file's are one undo stack (`begin`/`end` groups them across files). `node.setId` rewrites the clips' references (`## $track`, `$path`, `fx:…@id`).
+- The heir is edited only for effects: `heir.setAttr` (an attribute of an element of the heir — `data-effect` of an inserted fx node, `tml:*` of a `<tml:ref>`; a ref is added for a base node) and `heir.insertFx`. A scene extending another one (`openDocument(parentBase, { heir, heirOnly: true, loadScene })`) has a read-only base (`E_EDITOR_READONLY`); its heir and clips are edited.
+
 ## Commands
 
 <!-- BEGIN commands (scripts/editor-commands.mjs) -->
 | command | arguments | what it does |
 |---|---|---|
 | `node.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Set a node attribute (value: null — remove it). tml:* are not allowed in the base; id — via node.setId. |
-| `node.setId` | `node`: string, `id`: string | Rename a node; clip-path="url(#…)" references in the document are updated, clips get a warning. |
+| `node.setId` | `node`: string, `id`: string | Rename a node; clip-path="url(#…)" references in the document and the clips' references (## $track, $path, fx:…@id events) are updated. |
 | `node.setText` | `node`: string, `text`: string | Replace the text of a `<text>` (the base's mock-up string; a binding in the heir overrides it). |
 | `node.move` | `node`: string, `dx`: number, `dy`: number | Move a node by (dx, dy) in its parent's coordinates: translate on a `<g>`, x/y, cx/cy, x1…y2, the points of d. |
 | `node.setTransform` | `node`: string, `translate?`: [x, y], `rotate?`: number, `scale?`: number \| [x, y], `pivot?`: [x, y] | Rebuild transform from parts: translate(t+pivot) rotate scale translate(-pivot). No parts — transform is removed. pivot defaults to the node's data-pivot. |
@@ -74,6 +94,33 @@ doc.refresh();                    // a prefab changed on disk — validate again
 | `prefab.setParam` | `node`: string, `name`: string, `value`: string \| null | An instance parameter: data-`<name>` on the `<use>` (value: null — remove it, the prefab default applies). |
 | `prefab.detach` | `node`: string | Turn an instance into a copy: a `<g>` with the prefab content (prefixed ids stay, nested instances stay `<use>`); the link to the prefab is broken, there is no way back. |
 | `prefab.extract` | `node`: string, `href`: string, `params?`: object[] | The selected `<g>` → a new prefab href (a base file, with params also an heir) + a `<use>` in its place. params: which image hrefs / texts of the children become parameters. |
+| `heir.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Effects only (2.3): set an attribute of an element of the heir — data-effect, data-scale, transform… of an fx node the heir inserts, tml:* of a `<tml:ref>` (one is added for a tml:* attribute of a base node the heir does not reference yet). value null — remove. |
+| `heir.insertFx` | `into`: string, `id`: string, `effect`: string, `x?`: number, `y?`: number, `scale?`: number | Effects only (2.3): a new effect node in the heir — `<g id tml:insert="into <into>`" tml:type="fx" transform="translate(x y)" data-effect>, at (x, y) of the group's space. |
 <!-- END commands -->
 
-The list above is generated: `npm run editor:commands`.
+### Clip commands — `doc.clipsDoc(file).exec(name, args)`
+
+<!-- BEGIN clip commands (scripts/editor-commands.mjs) -->
+| command | arguments | what it does |
+|---|---|---|
+| `clip.create` | `name`: string, `duration?`: number, `loop?`: boolean | Create an empty clip (# $clip `<name>`) at the end of the file; duration — $duration (s), loop — $loop. |
+| `clip.rename` | `clip`: string, `name`: string | Rename a clip. |
+| `clip.remove` | `clip`: string | Remove a clip with its tracks and events. |
+| `clip.duplicate` | `clip`: string, `name`: string | Copy a clip under a new name, right after it. |
+| `clip.setAttr` | `clip`: string, `name`: 'duration' \| 'loop' \| 'tex', `value`: number \| boolean \| string \| null | A clip attribute: duration ($duration, seconds), loop ($loop), tex ($tex template); value null — remove it. |
+| `track.add` | `clip`: string, `target`: string, `columns?`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height'[] | A new track (## $track `<target>`) in a clip, with a table of these value columns (t and ease added) and no keys yet. |
+| `track.remove` | `clip`: string, `target`: string, `index?`: integer | Remove the tracks of a target from a clip (index — only that table of the target). |
+| `track.retarget` | `clip`: string, `target`: string, `to`: string, `index?`: integer | Point a target's tracks at another node (index — only that table of the target). |
+| `track.setAttr` | `clip`: string, `target`: string, `index?`: integer, `name`: 'path' \| 'orient' \| 'orient-offset' \| 'offset' \| 'tex', `value`: number \| string \| null | A track attribute: path ($path, a geometry id for motion), orient (auto), orient-offset (degrees), offset ("dx, dy"), tex (template); value null — remove it. |
+| `key.set` | `clip`: string, `target`: string, `column`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height', `t`: number, `value`: number \| string, `ease?`: 'linear' \| 'in' \| 'out' \| 'inOut' \| 'outBack' \| 'inBack' \| 'outBounce' \| 'step' \| 'quadIn' \| 'quadOut' \| 'quadInOut' \| 'cubicInOut' \| 'backOut' \| 'elasticOut' \| number[] \| null | Set a key: the value of column at time t of the target in a clip — the track, the column and the row are created when missing (a new row takes the ease of the row before it). value: a number, #rrggbb (tint), a name (tex, view) or $name (a clip parameter). |
+| `key.remove` | `clip`: string, `keys`: object[] | Remove keys (cells); a row left without values is removed, a track left without rows too. |
+| `key.move` | `clip`: string, `keys`: object[], `dt`: number, `snap?`: boolean | Move keys by dt seconds (a selection — one step). snap (default true): the new times stick to other keys within 2 frames, else to frames of 1/60 s. A key landing on another key of its column is an error. |
+| `key.setEase` | `clip`: string, `keys`: object[], `ease`: 'linear' \| 'in' \| 'out' \| 'inOut' \| 'outBack' \| 'inBack' \| 'outBounce' \| 'step' \| 'quadIn' \| 'quadOut' \| 'quadInOut' \| 'cubicInOut' \| 'backOut' \| 'elasticOut' \| number[] \| null | The ease of keys (from the key to the next key of its column). The format keeps one ease per table row: the other values of the row share it. |
+| `key.setParam` | `clip`: string, `target`: string, `column`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height', `t`: number, `param`: string \| null, `value?`: number | Make a key a clip parameter (param: the name, cell $name — given at play time) or a number again (param: null, value: the number). |
+| `event.add` | `clip`: string, `t`: number, `event`: string | Add an event ($events) at t: a name the game handles, e.g. sfx:stamp, or fx:`<effect>`@`<node>` — an effect at a node of the scene. |
+| `event.remove` | `clip`: string, `events`: object[] | Remove events (by time and name); the $events block goes when it is empty. |
+| `event.move` | `clip`: string, `events`: object[], `dt`: number, `snap?`: boolean | Move events by dt seconds (snap — to frames of 1/60 s and to keys within 2 frames, default true). |
+| `event.set` | `clip`: string, `event`: object, `name?`: string, `t?`: number | Change one event: its name (name) and / or its time (t). |
+<!-- END clip commands -->
+
+The lists above are generated: `npm run editor:commands`.

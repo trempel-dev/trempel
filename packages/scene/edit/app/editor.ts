@@ -69,7 +69,14 @@ export class Editor {
    */
   readOnly: string | null = null;
   /** Clip files of the scene (md clips), as last read (a compiled .json next to them is the game's — not read). */
-  clipSources: { md: Record<string, string> } = { md: {} };
+  private clipsRead: Record<string, string> = {};
+
+  /** 2.3: the scene's md clips as they are now (the document's clip files, edited by the timeline). */
+  get clipSources(): { md: Record<string, string> } {
+    const doc = this.doc;
+    if (!doc) return { md: { ...this.clipsRead } };
+    return { md: Object.fromEntries(doc.clipFiles().map((f) => [f, doc.clipsDoc(f)!.toString()])) };
+  }
 
   listing: FolderListing = { name: '', files: [], module: null, writable: false };
   /** v1.1: files of the project's collections, as `@name/…` (prefabs placed from the palette's collection groups). */
@@ -77,7 +84,12 @@ export class Editor {
   scenes: SceneEntry[] = [];
   entry: SceneEntry | null = null;
   doc: EditorDocument | null = null;
-  heir: string | undefined;
+  /** The heir as read from disk. */
+  private heirRead: string | undefined;
+  /** The heir as it is now (2.3: heir.* commands edit it). */
+  get heir(): string | undefined {
+    return this.doc?.serializeHeir() ?? this.heirRead;
+  }
   /** The scene's contract text as last read. */
   contractText: string | undefined;
   stateText: string | undefined;
@@ -103,6 +115,8 @@ export class Editor {
   prefabDeps = new Set<string>();
 
   selection: string[] = [];
+  /** 2.3: a node of the composed scene inspected by id (a heir insert has no base path); null — the selection. */
+  inspected: string | null = null;
   scope = '';
   hidden = new Set<string>();
   /** Instance rows already shown (collapsed on first sight only). */
@@ -228,28 +242,37 @@ export class Editor {
     let contract: string | undefined;
     const clips: Record<string, string> = {};
     try {
-      [base, this.heir, contract, this.stateText] = await Promise.all([read(entry.base), read(entry.heir), read(entry.contract), read(entry.state)]);
+      [base, this.heirRead, contract, this.stateText] = await Promise.all([read(entry.base), read(entry.heir), read(entry.contract), read(entry.state)]);
       for (const f of clipFiles(this.listing.files, entry.id)) clips[f] = await this.io.read(f);
-      this.clipSources = { md: { ...clips } };
+      this.clipsRead = { ...clips };
     } catch (e) {
       this.renderIssues = [{ level: 'error', kind: 'base', message: msg(e) }];
       this.emit('issues', 'doc', 'render');
       return;
     }
+    let heirOnly = false;
     if (base == null) {
-      // a heir without its own base (a prefab variant): its base is edited where it lives
-      const ext = this.heir ? /tml:extends\s*=\s*"([^"]+)"/.exec(this.heir)?.[1] : undefined;
+      // a heir without its own base (a prefab variant, a project heir): its base is edited where it
+      // lives; 2.3 — here the heir's effects and the clips are, over that base shown read-only
+      const ext = this.heirRead ? /tml:extends\s*=\s*"([^"]+)"/.exec(this.heirRead)?.[1] : undefined;
       const from = ext && entry.heir ? resolveHref(ext, entry.heir) : null;
       const stem = from?.replace(/(\.tml)?\.svg$/, '') ?? null;
       this.noBase = ext ? { extends: ext, scene: this.scenes.some((s) => s.id === stem) ? stem : null } : null;
-      this.renderIssues = this.noBase ? [] : [{ level: 'error', kind: 'base', message: coded('E_EDIT_NO_BASE', `no base ${entry.id}.svg — the editor edits only the base`) }];
-      this.emit('issues', 'doc', 'render');
-      return;
+      if (!this.noBase || !ext) {
+        this.renderIssues = [{ level: 'error', kind: 'base', message: coded('E_EDIT_NO_BASE', `no base ${entry.id}.svg — the editor edits only the base`) }];
+        this.emit('issues', 'doc', 'render');
+        return;
+      }
+      this.contractText = contract;
+      await this.loadPrefabs(undefined, contract).catch(() => {});
+      base = this.docLoader()(ext)?.base ?? '<svg xmlns="http://www.w3.org/2000/svg"/>';
+      heirOnly = true;
+    } else {
+      this.contractText = contract;
+      await this.loadPrefabs(base, contract);
     }
-    this.contractText = contract;
-    await this.loadPrefabs(base, contract);
     try {
-      this.doc = openDocument(base, { heir: this.heir, contract, clips, path: entry.base, loadScene: this.docLoader() });
+      this.doc = openDocument(base, { heir: this.heirRead, contract, clips, path: entry.base ?? entry.heir, loadScene: this.docLoader(), heirOnly });
     } catch (e) {
       this.renderIssues = [{ level: 'error', kind: 'parse', message: msg(e) }];
       this.emit('issues', 'doc', 'render');
@@ -443,15 +466,29 @@ export class Editor {
     return r;
   }
 
-  /** Save the base: serialize → IO write → markClean. */
+  /**
+   * Save: the base (serialize → IO write); 2.3 — the heir when heir.* changed it, every clip file the
+   * timeline changed; then markClean. A scene extending another one has no base of its own to write.
+   */
   async save(): Promise<boolean> {
-    if (!this.doc || !this.entry?.base) return false;
-    const text = this.doc.serialize();
+    const doc = this.doc;
+    const entry = this.entry;
+    if (!doc || !entry || (!entry.base && !doc.heirOnly)) return false;
+    const writes: [string, string][] = [];
+    if (entry.base && !doc.heirOnly) writes.push([entry.base, doc.serialize()]);
+    const heir = doc.serializeHeir();
+    if (entry.heir && heir != null && doc.heirDirty) writes.push([entry.heir, heir]);
+    for (const f of doc.clipFiles()) if (doc.clipsDoc(f)!.dirty) writes.push([f, doc.clipsDoc(f)!.toString()]);
     try {
-      const { hash } = await this.io.write(this.entry.base, text);
-      this.lastHash = hash;
-      this.doc.markClean();
-      this.log('info', `saved: ${this.entry.base}`);
+      for (const [file, text] of writes) {
+        const { hash } = await this.io.write(file, text);
+        if (file === entry.base) this.lastHash = hash;
+        this.ownWrites.set(file, hash);
+        if (file === entry.heir) this.heirRead = text;
+        else if (file !== entry.base) this.clipsRead[file] = text;
+      }
+      doc.markClean();
+      this.log('info', `saved: ${writes.map(([f]) => f).join(', ') || 'nothing changed'}`);
       this.emit('doc');
       return true;
     } catch (e) {
@@ -459,6 +496,9 @@ export class Editor {
       return false;
     }
   }
+
+  /** 2.3: hashes of what save() wrote besides the base (heir, clips): their watch events are ours. */
+  private ownWrites = new Map<string, string>();
 
   private async onFileChange(c: FileChange): Promise<void> {
     if (c.file.endsWith('.svg') || c.file.endsWith('.xml') || c.file.endsWith('.json') || c.file.endsWith('.md')) {
@@ -482,6 +522,7 @@ export class Editor {
       return;
     }
     if (!mine) return;
+    if (c.file !== e.base && c.hash && this.ownWrites.get(c.file) === c.hash) return;
     if (c.file === e.base) {
       if (c.hash && c.hash === this.lastHash) return;
       if (!c.hash) {
@@ -535,7 +576,8 @@ export class Editor {
       return;
     }
     const text = doc.serialize();
-    const annotated = annotate(text);
+    // 2.3: a scene extending another one is drawn from its heir (the base is that scene's)
+    const annotated = doc.heirOnly ? undefined : annotate(text);
     const byPath = new Map<string, NodeHandle>();
     let standIns = null as StandInRegistry | null;
     let backend = null as RendererBackend | null;
@@ -567,7 +609,7 @@ export class Editor {
     if (this.session.tree) display = this.session.tree; // v0.9: what the runtime composed (instances expanded)
     else {
       try {
-        display = parse(annotated);
+        display = parse(annotated ?? text);
         if (this.heir) {
           const m = mergeScene(display, parseHeir(this.heir));
           if (!m.errors.length) display = m.tree;
@@ -768,6 +810,7 @@ export class Editor {
       else if (!next.includes(p)) next.push(p);
     }
     this.selection = next;
+    this.inspected = null;
     if (opts.scope != null) this.scope = opts.scope;
     else if (next.length) {
       const sc = parentPath(next[next.length - 1]);
@@ -775,6 +818,44 @@ export class Editor {
     }
     if (this.tool === 'path' && (next.length !== 1 || !isPathLike(this.node(next[0])))) this.setTool('select');
     this.emit('selection');
+  }
+
+  /** 2.3: inspect a node of the composed scene by id (a heir insert) — the inspector panels show it. */
+  inspect(id: string | null): void {
+    this.selection = [];
+    this.inspected = id;
+    this.emit('selection');
+  }
+
+  /**
+   * 2.3: an effect node at a scene point (a palette dropped on the stage): heir.insertFx into the
+   * selected group (else the scope, else the scene's first group with an id), placed in its space.
+   */
+  insertFx(effect: string, at?: Pt): CommandResult | null {
+    const doc = this.doc;
+    if (!doc) return null;
+    const groupPath = [this.selection[0], this.scope].find((p) => p != null && p !== '' && this.node(p)?.tag === 'g' && this.node(p)?.attrs.id);
+    const into = groupPath != null ? this.node(groupPath)!.attrs.id : doc.scene.attrs.id;
+    if (!into) {
+      this.log('error', coded('E_EDIT_SELECTION', 'an effect goes into a group with an id — select one (or enter it)'));
+      return null;
+    }
+    const p = at ?? this.viewCentre();
+    let local = p;
+    try {
+      local = apply(invertM(nodeWorld(doc.scene, groupPath ?? '')), p);
+    } catch {
+      // degenerate transform: scene coordinates
+    }
+    const stem = `${effect.replace(/[^\w.-]/g, '_').replace(/^([^A-Za-z_])/, '_$1')}Fx`;
+    let id = stem;
+    for (let k = 2; countId(doc.merged, id) > 0 || countId(doc.scene, id) > 0; k++) id = `${stem}${k}`;
+    const r = this.exec('heir.insertFx', { into, id, effect, x: Math.round(local.x), y: Math.round(local.y) });
+    if (r?.ok) {
+      this.log('info', `effect ${effect} → #${id} in #${into} (the heir)`);
+      void this.idle().then(() => this.inspect(id));
+    }
+    return r;
   }
 
   /** Double click: into the selected group (its child under the point is selected next); an instance opens its prefab. */
@@ -864,9 +945,20 @@ export class Editor {
 
   // ---- commands --------------------------------------------------------------------------------
 
+  /**
+   * 2.3: recording (● Rec with a clip posing the scene): base commands of the stage and the inspector
+   * go here instead and become clip keys; undefined — not recording, the command runs as usual.
+   */
+  recorder: ((label: string, calls: Call[]) => CommandResult | null | undefined) | null = null;
+
   /** One command; failures and warnings go to the log. */
   exec(name: string, args: Record<string, unknown>): CommandResult | null {
     if (!this.doc) return null;
+    const rec = this.recorder?.(name, [{ name, args }]);
+    if (rec !== undefined) {
+      if (rec) this.report(`● ${name}`, rec);
+      return rec;
+    }
     const r = this.doc.exec(name, args);
     this.report(name, r);
     return r;
@@ -876,6 +968,11 @@ export class Editor {
   batch(label: string, calls: Call[]): CommandResult | null {
     if (!this.doc || !calls.length) return null;
     if (calls.length === 1) return this.exec(calls[0].name, calls[0].args);
+    const rec = this.recorder?.(label, calls);
+    if (rec !== undefined) {
+      if (rec) this.report(`● ${label}`, rec);
+      return rec;
+    }
     const r = this.doc.batch(label, calls);
     this.report(label, r);
     return r;

@@ -153,6 +153,18 @@ function held(keys: Keyframe[], t: number): string {
   return String(v);
 }
 
+/**
+ * 2.3: a compiled track's value at time t (the editor's recording: what the clip shows now) — numbers
+ * interpolated with the segment eases, colours per channel, strings held. Parameter keys take
+ * `params` (missing — E_ANIM_PARAM). Motion tracks give the path fraction.
+ */
+export function sampleTrack(track: Track, t: number, params?: Record<string, number>): number | string {
+  const tr = withParams(track, params);
+  if (!tr.keys.length) return NaN;
+  if (typeof tr.keys[0].v === 'string') return held(tr.keys, t);
+  return tr.property === 'tint' ? interpColor(tr.keys, t) : interp(tr.keys, t);
+}
+
 export class Animator {
   private active = new Set<Playback>();
   private lastNow: number | null = null;

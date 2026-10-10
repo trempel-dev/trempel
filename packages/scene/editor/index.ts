@@ -8,3 +8,5 @@ export { commands } from './commands.js';
 export type { CommandName } from './commands.js';
 export { checkSchema } from './schema.js';
 export type { JSONSchema7 } from './schema.js';
+export { openClips, ClipsDocument, clipCommands, renameInClips, fmtTime, FRAME, CLIP_COLUMNS } from './clips.js';
+export type { ClipCommandName, ClipInfo, ClipTrackInfo, ClipKey, KeyRef, EventRef } from './clips.js';

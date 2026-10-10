@@ -80,6 +80,14 @@
         <h3>Inspector <span id="insp-what" class="muted"></span></h3>
         <div id="inspector"></div>
       </section>
+      <section id="ext-pane" hidden>
+        <h3 id="ext-title"></h3>
+        <div id="ext"></div>
+      </section>
+      <section id="palette-pane" hidden>
+        <h3>Palette <span class="muted">— drag onto the stage</span></h3>
+        <div id="palettes"></div>
+      </section>
     </aside>
 
     <footer id="bottom">
@@ -91,7 +99,7 @@
         <h3>
           <button class="tab on" data-tab="log">Log</button>
           <button class="tab" data-tab="console" title="Scripts over tml (⌘Enter), macros — ⌘K">Console</button>
-          <button class="tab" data-tab="clips" title="Scene clips (anim/*.md, *.anim.md): playback, frame, onion, video snapshot">Clips</button>
+          <button class="tab" data-tab="clips" title="Timeline: the scene's clips (anim/*.md, *.anim.md) — keys, events, eases, recording, playback, onion, video snapshot">Timeline</button>
           <span class="grow"></span>
           <button id="macros" class="link" title="Folder macros (.trempel/macros) — ⌘K">macros ⌘K</button>
           <button id="clear-log" class="link">clear</button>
@@ -104,15 +112,23 @@
         <div id="pane-clips" class="pane" hidden>
           <div class="row">
             <select id="clip-name" title="Clip"></select>
+            <button id="clip-new" title="New clip">＋</button>
+            <button id="clip-rename" title="Rename the clip">✎</button>
+            <button id="clip-dup" title="Duplicate the clip">⧉</button>
+            <button id="clip-del" title="Remove the clip">✕</button>
+            <span class="sep"></span>
             <button id="clip-play" title="Play">▶</button>
             <button id="clip-pause" title="Pause">⏸</button>
             <button id="clip-stop" title="Stop — rest pose, the stage is editable again">⏹</button>
-            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Time" />
-            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Time, s" />
+            <button id="clip-rec" class="rec" title="Record: with a clip on the stage, moving / turning / scaling a node writes keys at the playhead (not the base)">● Rec</button>
+            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Time" hidden />
+            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Playhead, s (← → — a frame, ⇧ — 0.1 s)" />
             <span id="clip-dur" class="muted"></span>
+            <label title="$duration of the clip, s (or drag its end on the ruler)">dur <input id="clip-duration" type="number" min="0.01" step="0.05" /></label>
+            <label title="$loop of the clip"><input id="clip-loop-attr" type="checkbox" /> $loop</label>
           </div>
           <div class="row">
-            <label><input id="clip-loop" type="checkbox" checked /> loop</label>
+            <label title="Playback loop"><input id="clip-loop" type="checkbox" checked /> loop</label>
             <label>speed
               <select id="clip-speed">
                 <option value="0.25">×0.25</option>
@@ -125,7 +141,12 @@
             </label>
             <label title="When paused: frames t−Δ (red) and t+Δ (green) on top"><input id="clip-onion" type="checkbox" /> onion</label>
             <label>Δ <input id="clip-onion-d" type="number" min="0.01" step="0.01" value="0.083" title="Δ, s (default 1/12)" /></label>
+            <span id="clip-params" title="Clip parameters ($name cells) — values for the preview, as play(clip, { params })"></span>
             <span id="clip-info" class="muted"></span>
+          </div>
+          <div id="timeline">
+            <div id="tl-grid" tabindex="0"></div>
+            <div id="tl-side"></div>
           </div>
           <div class="row">
             <span>video snapshot:</span>

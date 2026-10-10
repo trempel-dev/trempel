@@ -219,7 +219,7 @@ describe('commands — direct action, undo, redo', () => {
     expect(bad.errors![0]).toMatch(/^E_EDITOR_TAG: /);
   });
 
-  it('node.setId renames and updates clip-path references; warns about clips', () => {
+  it('node.setId renames and updates clip-path references; 2.3: and the clips', () => {
     const doc = openDocument(MOTION, { clips: MOTION_CLIPS });
     roundtripCommand(doc, 'node.setId', { node: 'win', id: 'frame' }, (after) => {
       expect(after).toContain('<clipPath id="frame">');
@@ -228,10 +228,9 @@ describe('commands — direct action, undo, redo', () => {
     });
     const res = doc.exec('node.setId', { node: 'bird', id: 'crow' });
     expect(res.ok).toBe(true);
-    expect(res.warnings!.map(codeOf)).toEqual(['W_EDITOR_CLIP_REF']);
-    expect(res.warnings![0]).toContain('anim/motion.md');
-    expect(res.warnings![0]).toContain('"bird"');
-    expect(doc.errors.some((e) => codeOf(e) === 'E_ANIM_TARGET' && e.includes('anim/motion.md:') && e.includes('bird'))).toBe(true);
+    expect(res.warnings).toBeUndefined();
+    expect(doc.clipsDoc('anim/motion.md')!.toString()).toContain('$track crow');
+    expect(doc.errors).toEqual([]);
     expect(doc.exec('node.setId', { node: 'crow', id: 'sun' }).errors![0]).toMatch(/^E_EDITOR_ID_TAKEN: /);
   });
 

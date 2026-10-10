@@ -13,14 +13,18 @@
 //   import 'virtual:trempel-view-module' → the folder's trempel.view.ts default export, or null
 //   ws 'tml:changed'         → a scene file changed on disk (the page reopens the scene);
 //                              { file, hash } — a write of our own (same hash) is not announced
-//   POST /__tml/write        → (editor, `writable`) { path, text } → { hash }; only a base X.svg
-//                              inside the folder — 403 for anything else (../, contract, heir)
+//   POST /__tml/agent        → 2.3 (editor, localhost only) { op: 'eval' | 'save' | 'state', code? } —
+//                              the agent's bridge to the open editor page (ws 'tml:agent' → the page runs
+//                              tml.run / save / reports its state → 'tml:agent-result'): { ok, value,
+//                              errors, dirty, … }; no page open — 409 E_EDIT_NO_PAGE
+//   POST /__tml/write        → (editor, `writable`) { path, text } → { hash }; inside the folder a base
+//                              or heir X(.tml).svg, md clips, effect data (2.3) — 403 for anything else
 
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import type { Plugin } from 'vite';
-import { isHeirFile, legacyName, VIEW_MODULE, VIEW_MODULES } from '../src/compat.js';
+import { legacyName, VIEW_MODULE, VIEW_MODULES } from '../src/compat.js';
 import { coded } from '../src/core.js';
 import { loadProject, isInside, type Project } from '../src/node/project.js';
 import { discoverScenes, SKIP_DIRS, type SceneEntry } from './discover';
@@ -159,18 +163,26 @@ export const textHash = (text: string | Buffer): string => createHash('sha1').up
 
 export type WriteResult = { status: 200; file: string; hash: string } | { status: 400 | 403; error: string };
 
+/** 2.3: md clips of a scene (`anim/*.md`, `X.anim.md`) — the timeline writes them. */
+export const isClipFile = (rel: string): boolean => /(^|\/)anim\/[^/]+\.md$/.test(rel) || /\.anim\.md$/.test(rel);
+/** 2.3: effect data the kit's particle inspector writes: `fx/<name>.json`, a converter's `systems.json`. */
+export const isEffectFile = (rel: string): boolean => /(^|\/)fx\/[^/]+\.json$/.test(rel) || /(^|\/)systems\.json$/.test(rel);
+
 /**
- * Write a scene base inside `dir`: only `X.svg` (not the heir `X.tml.svg`), only below the folder.
- * Contract, heir, state and clips are read-only for the editor — except a NEW heir: v0.9
- * prefab.extract creates `X.tml.svg` next to a new prefab (an existing heir is never overwritten).
+ * Write a scene file inside `dir`, only below the folder: a base `X.svg`, a heir `X.tml.svg` (2.3: the
+ * heir's effect edits; before — only a new one, made by prefab.extract), md clips (2.3: the timeline)
+ * and effect data (2.3: the particle inspector — `fx/*.json`, `systems.json`). Contract and state are
+ * read-only for the editor.
  */
 export function writeSceneFile(dir: string, rel: unknown, text: unknown): WriteResult {
   if (typeof rel !== 'string' || !rel || typeof text !== 'string') return { status: 400, error: coded('E_VIEW_REQUEST', 'expected { path: string, text: string }') };
   const root = resolve(dir);
   const file = resolve(root, rel);
   if (!file.startsWith(root + sep)) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: outside the scene folder`) };
-  if (isHeirFile(file) && existsSync(file)) return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the heir already exists — the editor does not overwrite .tml.svg`) };
-  if (!file.endsWith('.svg')) return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the editor writes only a scene base (X.svg)`) };
+  const relPath = relative(root, file).split(sep).join('/');
+  if (!file.endsWith('.svg') && !isClipFile(relPath) && !isEffectFile(relPath)) {
+    return { status: 403, error: coded('E_VIEW_WRITE', `${rel}: the editor writes a scene base or heir (X.svg, X.tml.svg), md clips (anim/*.md, X.anim.md) and effect data (fx/*.json, systems.json) only`) };
+  }
   const parts = relative(root, file).split(sep);
   if (parts.some((p) => p.startsWith('.') || SKIP_DIRS.has(p))) return { status: 403, error: coded('E_VIEW_ACCESS', `${rel}: a service folder`) };
   mkdirSync(dirname(file), { recursive: true });
@@ -213,6 +225,15 @@ export function findModule(dir: string, module?: string): string | null {
   return own ?? null;
 }
 
+/** 2.3: what the editor page answers the agent bridge. */
+export interface AgentResult {
+  ok: boolean;
+  value?: unknown;
+  errors?: string[];
+  dirty?: boolean;
+  [k: string]: unknown;
+}
+
 export function trempelView(opts: ViewPluginOptions): Plugin {
   const dir = resolve(opts.dir);
   const mod = findModule(dir, opts.module);
@@ -225,8 +246,22 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
     return null;
   };
 
+  /** Hashes of our own writes, by absolute file: their change events are not news. */
+  const own = new Map<string, string>();
+
   return {
     name: 'trempel-view',
+    // 2.3: a file the editor wrote (effect data a module imports — systems.json) must not reload the page
+    handleHotUpdate(ctx) {
+      const hash = own.get(ctx.file);
+      if (!hash) return undefined;
+      try {
+        if (textHash(readFileSync(ctx.file)) === hash) return [];
+      } catch {
+        // gone: an ordinary update
+      }
+      return undefined;
+    },
     resolveId(id) {
       return id === VIRTUAL ? '\0' + VIRTUAL : null;
     },
@@ -236,8 +271,6 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
       return `export { default } from ${JSON.stringify(mod.split(sep).join('/'))};`;
     },
     configureServer(server) {
-      /** Hashes of our own writes, by absolute file: their change events are not news. */
-      const own = new Map<string, string>();
       server.watcher.add(dir);
       for (const cdir of Object.values(collections)) server.watcher.add(cdir);
       server.watcher.on('change', (file) => {
@@ -250,13 +283,69 @@ export function trempelView(opts: ViewPluginOptions): Plugin {
             // gone between the event and the read: still a change
           }
           if (hash && own.get(file) === hash) return;
-          own.delete(file);
           server.ws.send({ type: 'custom', event: 'tml:changed', data: { file: name, hash } });
         }
       });
 
+      // 2.3: the agent's bridge — editor pages say hello; a request goes to the newest one
+      const pages: { send(p: unknown): void }[] = [];
+      const pending = new Map<string, (r: AgentResult) => void>();
+      let seq = 0;
+      if (opts.writable) {
+        server.ws.on('tml:agent-hello', (_data: unknown, client: { send(p: unknown): void; socket?: { on(e: string, f: () => void): void } }) => {
+          pages.push(client);
+          client.socket?.on('close', () => {
+            const i = pages.indexOf(client);
+            if (i >= 0) pages.splice(i, 1);
+          });
+        });
+        server.ws.on('tml:agent-result', (data: AgentResult & { id: string }) => {
+          const done = pending.get(data.id);
+          if (!done) return;
+          pending.delete(data.id);
+          const { id: _id, ...rest } = data;
+          done(rest);
+        });
+      }
+
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://x');
+        if (url.pathname === '/__tml/agent' && req.method === 'POST') {
+          const send = (status: number, body: unknown): void => {
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify(body));
+          };
+          const from = req.socket.remoteAddress ?? '';
+          if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(from)) return send(403, { ok: false, errors: [coded('E_VIEW_ACCESS', `the agent bridge answers only localhost (not ${from})`)] });
+          if (!opts.writable) return send(403, { ok: false, errors: [coded('E_VIEW_WRITE', 'the folder is open read-only (npm run view) — the agent bridge is in npm run edit')] });
+          readBody(req)
+            .then((raw) => {
+              let body: { op?: unknown; code?: unknown; label?: unknown } = {};
+              try {
+                body = JSON.parse(raw) as typeof body;
+              } catch {
+                return send(400, { ok: false, errors: [coded('E_VIEW_REQUEST', 'the body is not JSON')] });
+              }
+              const op = body.op ?? 'eval';
+              if (op !== 'eval' && op !== 'save' && op !== 'state') return send(400, { ok: false, errors: [coded('E_VIEW_REQUEST', `op: "${String(op)}" — expected eval, save or state`)] });
+              if (op === 'eval' && typeof body.code !== 'string') return send(400, { ok: false, errors: [coded('E_VIEW_REQUEST', 'eval needs { code: string }')] });
+              const page = pages[pages.length - 1];
+              if (!page) return send(409, { ok: false, errors: [coded('E_EDIT_NO_PAGE', 'no editor page is open on this server — open it in a browser (npm run edit prints the URL)')] });
+              const id = `a${++seq}`;
+              const timer = setTimeout(() => {
+                pending.delete(id);
+                send(504, { ok: false, errors: [coded('E_EDIT_NO_PAGE', 'the editor page did not answer in 60 s')] });
+              }, 60_000);
+              pending.set(id, (r) => {
+                clearTimeout(timer);
+                send(200, r);
+              });
+              page.send({ type: 'custom', event: 'tml:agent', data: { id, op, code: body.code, label: typeof body.label === 'string' ? body.label : undefined } });
+            })
+            .catch((e: unknown) => send(500, { ok: false, errors: [e instanceof Error ? e.message : String(e)] }));
+          return;
+        }
         if (url.pathname === '/__tml/scenes') {
           let files: string[] = [];
           let scenes: SceneEntry[] = [];

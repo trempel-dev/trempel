@@ -240,20 +240,25 @@ describe('SceneIO dev — writes only bases inside the folder', () => {
     if (r.status === 200) expect(r.hash).toBe(createHash('sha1').update('<svg id="x"/>').digest('hex'));
   });
 
-  it('v0.9: a NEW heir (prefab.extract) and a new subfolder are created; an existing heir is never overwritten', () => {
+  it('v0.9: a new heir (prefab.extract) and a new subfolder are created; 2.3: an existing heir, md clips, effect data are written', () => {
     expect(writeSceneFile(dir, 'ui/badge.svg', '<svg/>').status).toBe(200);
     expect(writeSceneFile(dir, 'ui/badge.tml.svg', '<svg/>').status).toBe(200);
     expect(readFileSync(join(dir, 'ui/badge.tml.svg'), 'utf8')).toBe('<svg/>');
-    expect(writeSceneFile(dir, 'ui/badge.tml.svg', 'x').status).toBe(403);
-    expect(readFileSync(join(dir, 'ui/badge.tml.svg'), 'utf8')).toBe('<svg/>');
+    expect(writeSceneFile(dir, 'ui/badge.tml.svg', '<svg id="h"/>').status).toBe(200);
+    expect(readFileSync(join(dir, 'ui/badge.tml.svg'), 'utf8')).toBe('<svg id="h"/>');
+    expect(writeSceneFile(dir, 'anim/win.md', '# $clip a\n').status).toBe(200);
+    expect(writeSceneFile(dir, 'popups/map.anim.md', '# $clip a\n').status).toBe(200);
+    expect(writeSceneFile(dir, 'fx/burst.json', '[]').status).toBe(200);
+    expect(writeSceneFile(dir, 'src/fx/particles/systems.json', '[]').status).toBe(200);
+    expect(writeSceneFile(dir, 'README.md', 'x').status).toBe(403);
+    expect(writeSceneFile(dir, 'package.json', '{}').status).toBe(403);
   });
 
-  it('../, absolute, existing heir, contract, state, service folders — 403; bad body — 400', () => {
+  it('../, absolute, contract, state, service folders — 403; bad body — 400', () => {
     writeFileSync(join(dir, 'game.tml.svg'), '<svg/>');
     expect(writeSceneFile(dir, '../evil.svg', 'x').status).toBe(403);
     expect(writeSceneFile(dir, 'popups/../../evil.svg', 'x').status).toBe(403);
     expect(writeSceneFile(dir, join(tmpdir(), 'evil.svg'), 'x').status).toBe(403);
-    expect(writeSceneFile(dir, 'game.tml.svg', 'x').status).toBe(403);
     expect(writeSceneFile(dir, 'game.contract.xml', 'x').status).toBe(403);
     expect(writeSceneFile(dir, 'game.state.json', 'x').status).toBe(403);
     expect(writeSceneFile(dir, 'node_modules/x.svg', 'x').status).toBe(403);
@@ -463,13 +468,13 @@ describe('tml.run — a script is one undo step', () => {
 
 describe('edit/API.md (npm run editor:commands)', () => {
   it('has the Tml interface of edit/app/tml.ts and every command', async () => {
-    const { commands } = await import('../editor/index.js');
+    const { commands, clipCommands } = await import('../editor/index.js');
     const api = readFileSync(new URL('./API.md', import.meta.url), 'utf8');
     const src = readFileSync(new URL('./app/tml.ts', import.meta.url), 'utf8');
     const block = src.slice(src.indexOf('// BEGIN tml-api'), src.indexOf('// END tml-api'));
     for (const line of block.split('\n').slice(1).map((l) => l.replace(/^export /, '')).filter((l) => l.trim())) expect(api, line).toContain(line);
-    for (const name of Object.keys(commands)) expect(api).toContain(`| \`${name}\` |`);
-    expect(api.split('\n').length).toBeLessThan(140); // two screens (batch 2: clips, reference, pixels; v1.0: node.resize)
+    for (const name of [...Object.keys(commands), ...Object.keys(clipCommands)]) expect(api).toContain(`| \`${name}\` |`);
+    expect(api.split('\n').length).toBeLessThan(200); // about two screens (batch 2: clips, reference, pixels; v1.0: node.resize; 2.3: clip commands, effects)
   });
 });
 
@@ -527,5 +532,60 @@ $duration: 2
     p.loop = true;
     p.seek(2.5);
     expect(p.time).toBeCloseTo(0); // clamped to the clip, wraps when looping
+  });
+});
+
+describe('trempel-edit mcp (2.3): an MCP server (stdio) over the agent bridge', () => {
+  it('initialize, tools/list, tools/call → POST /__tml/agent', async () => {
+    const { createServer } = await import('node:http');
+    const { spawn } = await import('node:child_process');
+    const seen: unknown[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        seen.push(JSON.parse(body));
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: true, value: 42, errors: [], dirty: true }));
+      });
+    });
+    await new Promise<void>((ok) => server.listen(0, 'localhost', ok));
+    const port = (server.address() as { port: number }).port;
+    const bin = new URL('../view/edit-bin.mjs', import.meta.url).pathname;
+    const p = spawn(process.execPath, [bin, 'mcp', '--port', String(port)]);
+    const lines: Record<string, unknown>[] = [];
+    let buf = '';
+    p.stdout.on('data', (c: Buffer) => {
+      buf += c.toString();
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        lines.push(JSON.parse(buf.slice(0, i)));
+        buf = buf.slice(i + 1);
+      }
+    });
+    const send = (m: unknown): boolean => p.stdin.write(`${JSON.stringify(m)}\n`);
+    const reply = async (id: number): Promise<Record<string, unknown>> => {
+      for (let k = 0; k < 200; k++) {
+        const hit = lines.find((l) => l.id === id);
+        if (hit) return hit;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      throw new Error(`no reply ${id}`);
+    };
+    try {
+      send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } });
+      expect(((await reply(1)).result as { serverInfo: { name: string } }).serverInfo.name).toBe('trempel-edit');
+      send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+      send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+      expect(((await reply(2)).result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(['editor.eval', 'editor.save', 'editor.state']);
+      send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'editor.eval', arguments: { code: '1 + 1' } } });
+      const r = (await reply(3)).result as { content: { text: string }[]; isError: boolean };
+      expect(r.isError).toBe(false);
+      expect(JSON.parse(r.content[0].text)).toMatchObject({ ok: true, value: 42 });
+      expect(seen).toEqual([{ op: 'eval', code: '1 + 1' }]);
+    } finally {
+      p.kill();
+      server.close();
+    }
   });
 });

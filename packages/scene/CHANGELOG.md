@@ -2,6 +2,47 @@
 
 The scene format has its own changelog at the end of [docs/format/scene-format.md](docs/format/scene-format.md).
 
+## 2.3.0
+
+Additions only; the format stays 1.3. The editor: an animator and the consumer's inspectors.
+
+- **Clip commands in the editor core** (`@trempel/scene/editor`): md clips are documents of commands —
+  `openClips(md, file)` standalone, `doc.clipsDoc(file)` / `doc.createClips(file)` in the scene's
+  history (one undo stack for the base, the heir and every clip file; `begin`/`end` group across
+  them). `clip.create` / `rename` / `remove` / `duplicate` / `setAttr`, `track.add` / `remove` /
+  `retarget` / `setAttr`, `key.set` / `remove` / `move` / `setEase` / `setParam`, `event.add` / `move`
+  / `remove` / `set` (`clipCommands`: JSON Schema + description). A minimal diff of the md: untouched
+  lines byte for byte, a touched table re-aligned when it was aligned, else only its changed rows; the
+  md is compiled against the scene after every command — a command adding compile errors is rolled
+  back. `node.setId` rewrites the clips' references (`## $track`, `$path`, `fx:…@id`) — no more
+  `W_EDITOR_CLIP_REF` for a rename.
+- **The heir's effect edits**: `heir.setAttr` (an attribute of an element of the heir — an inserted fx
+  node's `data-*`/`transform`, a ref's `tml:*`) and `heir.insertFx` (a new `tml:type="fx"` node by
+  `tml:insert`), with the heir's minimal diff (`doc.serializeHeir()`, `doc.heirDirty`). A scene
+  extending another one (`heirOnly`: a project heir of a collection document) opens with its base
+  read-only (`E_EDITOR_READONLY`) — its clips and effects are edited.
+- **The timeline** (the editor page's «Timeline» tab, instead of «Clips» — which it keeps): an events
+  lane (`fx:` markers with the effect icon), a track per `## $track` unfolded by column, keys
+  (diamond; `step` — a square; a parameter — with its `$name`), the playhead (scrub, ←/→ a frame,
+  ⇧ 0.1 s), click / ⇧ / box selection, drag = `key.move` / `event.move`, Delete, double-click — a key /
+  an event, the side panel: a key's value and parameter, its ease (named, Bézier with two handles,
+  the curve), an event's name, a track's target and attributes; the clip: new, rename, duplicate,
+  remove, `$duration` (the field or its end on the ruler), `$loop`; preview values of the clip's
+  parameters. **● Rec**: with a clip on the stage, the gizmo / G R S / the inspector write keys at the
+  playhead, not the base. ⌘S saves the base, the heir and the clips.
+- **Inspectors of the consumer module** (`trempel.view.ts` `inspectors`, §11; `@trempel/scene/view`:
+  `InspectorFactory`, `InspectorHost`, `InspectorPanel`, `InspectorUi`, `FX_DRAG_MIME`): a panel for the
+  nodes of a `tml:type`, a palette (an effect dropped on the stage → `heir.insertFx`), an agent API
+  (`tml.inspect[type]`); the page's widgets — a curve and a gradient editor. The dev server writes md
+  clips, the heir and effect data (`fx/*.json`, `systems.json`), and a file the editor wrote does not
+  reload the page.
+- **The agent's bridge**: the editor's dev server takes `POST /__tml/agent` (localhost) and runs it in
+  the open page — `{ op: eval | save | state }` → `{ ok, value, errors, dirty }`; bin `trempel-edit`
+  (`eval [--port N] '<code>'` / `--file`, `save`, `state`, `mcp` — an MCP server over stdio with
+  `editor.eval`, `editor.save`, `editor.state`). An agent's script is one undo step, marked «agent»
+  in the log. `tml.clipsDoc(file?)`, `tml.clipCommands`, `tml.inspect`, `tml.anim.rec` /
+  `tml.anim.params`; edit/API.md — the clip commands and the effects.
+
 ## 2.2.0
 
 Additions only; the format stays 1.3.

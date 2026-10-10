@@ -18,9 +18,11 @@ interface TmlPixels { width: number; height: number; data: Uint8ClampedArray }
 /** A compiled clip of the scene (anim/*.md, *.anim.md — the md clip itself; `$tex` maps tex cells). */
 interface TmlClip { name: string; file: string; duration: number; clip: AnimClip }
 /** Clips on the stage, own clock (exact pause/seek). Posed — the stage is read-only; stop() — the
- *  rest pose. speed 0.25–2; onion(on, delta = 1/12 s): frames t∓delta over the scene when paused. */
+ *  rest pose. speed 0.25–2; onion(on, delta = 1/12 s): frames t∓delta over the scene when paused.
+ *  rec (2.3): posed + rec — edits of nodes become keys at the playhead; params — $name values for the preview. */
 interface TmlAnim {
-  readonly clip: string | null; readonly time: number; readonly playing: boolean; loop: boolean; speed: number;
+  readonly clip: string | null; readonly time: number; readonly playing: boolean; loop: boolean; speed: number; rec: boolean;
+  params: Record<string, number>;
   play(name?: string): void; pause(): void; seek(t: number): void; stop(): Promise<void>; onion(on: boolean, delta?: number): void;
 }
 /** Reference picture under/over the scene, fitted to the viewBox, opacity 0–100; not saved to the
@@ -66,6 +68,13 @@ interface Tml {
   /** Run a script (body of an async function with `tml` and `console` in scope; a single
    *  expression is returned) as one undo step `label`; an exception rolls it all back. */
   run(code: string, label?: string): Promise<unknown>;
+  /** 2.3: an md clip file as commands (clip.*, track.*, key.*, event.* — the table below), in this scene's
+   *  undo: tml.clipsDoc().exec('key.move', { clip, keys, dt }); .clips() — clips as written (tracks,
+   *  keys by column, events). file — default the timeline's clip's file (else the scene's first). */
+  clipsDoc(file?: string): ClipsDocument | null;
+  readonly clipCommands: typeof clipCommands;
+  /** 2.3: inspectors of the folder's trempel.view.ts by tml:type, e.g. tml.inspect.fx — effects (kit). */
+  readonly inspect: Record<string, any>;
   /** Clips of the scene and their compile errors; playback — anim; the reference layer. */
   readonly clips: TmlClip[];
   readonly clipErrors: string[];
@@ -96,7 +105,7 @@ interface Tml {
 | command | arguments | what it does |
 |---|---|---|
 | `node.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Set a node attribute (value: null — remove it). tml:* are not allowed in the base; id — via node.setId. |
-| `node.setId` | `node`: string, `id`: string | Rename a node; clip-path="url(#…)" references in the document are updated, clips get a warning. |
+| `node.setId` | `node`: string, `id`: string | Rename a node; clip-path="url(#…)" references in the document and the clips' references (## $track, $path, fx:…@id events) are updated. |
 | `node.setText` | `node`: string, `text`: string | Replace the text of a `<text>` (the base's mock-up string; a binding in the heir overrides it). |
 | `node.move` | `node`: string, `dx`: number, `dy`: number | Move a node by (dx, dy) in its parent's coordinates: translate on a `<g>`, x/y, cx/cy, x1…y2, the points of d. |
 | `node.setTransform` | `node`: string, `translate?`: [x, y], `rotate?`: number, `scale?`: number \| [x, y], `pivot?`: [x, y] | Rebuild transform from parts: translate(t+pivot) rotate scale translate(-pivot). No parts — transform is removed. pivot defaults to the node's data-pivot. |
@@ -123,6 +132,37 @@ interface Tml {
 | `prefab.setParam` | `node`: string, `name`: string, `value`: string \| null | An instance parameter: data-`<name>` on the `<use>` (value: null — remove it, the prefab default applies). |
 | `prefab.detach` | `node`: string | Turn an instance into a copy: a `<g>` with the prefab content (prefixed ids stay, nested instances stay `<use>`); the link to the prefab is broken, there is no way back. |
 | `prefab.extract` | `node`: string, `href`: string, `params?`: object[] | The selected `<g>` → a new prefab href (a base file, with params also an heir) + a `<use>` in its place. params: which image hrefs / texts of the children become parameters. |
+| `heir.setAttr` | `node`: string, `name`: string, `value`: string \| number \| null | Effects only (2.3): set an attribute of an element of the heir — data-effect, data-scale, transform… of an fx node the heir inserts, tml:* of a `<tml:ref>` (one is added for a tml:* attribute of a base node the heir does not reference yet). value null — remove. |
+| `heir.insertFx` | `into`: string, `id`: string, `effect`: string, `x?`: number, `y?`: number, `scale?`: number | Effects only (2.3): a new effect node in the heir — `<g id tml:insert="into <into>`" tml:type="fx" transform="translate(x y)" data-effect>, at (x, y) of the group's space. |
+
+## Clips — `tml.clipsDoc(file?).exec(name, args)`
+
+The scene's md clips (`anim/*.md`, `X.anim.md`) are edited by commands with a minimal diff of the md; each is one undo step in the scene's history (with the base), saved by ⌘S / `tml.save()`. `file` — default the clip on the Timeline (else the scene's first file). A command that adds compile errors is refused (`ok: false`). Keys are addressed `{ target, column, t }`; events `{ t, event }`. Read the clip as written: `tml.clipsDoc().clip('win')` → `{ tracks: [{ target, columns, keys: { x: [{ t, value, ease, param? }] } }], events, duration, loop }`.
+
+| command | arguments | what it does |
+|---|---|---|
+| `clip.create` | `name`: string, `duration?`: number, `loop?`: boolean | Create an empty clip (# $clip `<name>`) at the end of the file; duration — $duration (s), loop — $loop. |
+| `clip.rename` | `clip`: string, `name`: string | Rename a clip. |
+| `clip.remove` | `clip`: string | Remove a clip with its tracks and events. |
+| `clip.duplicate` | `clip`: string, `name`: string | Copy a clip under a new name, right after it. |
+| `clip.setAttr` | `clip`: string, `name`: 'duration' \| 'loop' \| 'tex', `value`: number \| boolean \| string \| null | A clip attribute: duration ($duration, seconds), loop ($loop), tex ($tex template); value null — remove it. |
+| `track.add` | `clip`: string, `target`: string, `columns?`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height'[] | A new track (## $track `<target>`) in a clip, with a table of these value columns (t and ease added) and no keys yet. |
+| `track.remove` | `clip`: string, `target`: string, `index?`: integer | Remove the tracks of a target from a clip (index — only that table of the target). |
+| `track.retarget` | `clip`: string, `target`: string, `to`: string, `index?`: integer | Point a target's tracks at another node (index — only that table of the target). |
+| `track.setAttr` | `clip`: string, `target`: string, `index?`: integer, `name`: 'path' \| 'orient' \| 'orient-offset' \| 'offset' \| 'tex', `value`: number \| string \| null | A track attribute: path ($path, a geometry id for motion), orient (auto), orient-offset (degrees), offset ("dx, dy"), tex (template); value null — remove it. |
+| `key.set` | `clip`: string, `target`: string, `column`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height', `t`: number, `value`: number \| string, `ease?`: 'linear' \| 'in' \| 'out' \| 'inOut' \| 'outBack' \| 'inBack' \| 'outBounce' \| 'step' \| 'quadIn' \| 'quadOut' \| 'quadInOut' \| 'cubicInOut' \| 'backOut' \| 'elasticOut' \| number[] \| null | Set a key: the value of column at time t of the target in a clip — the track, the column and the row are created when missing (a new row takes the ease of the row before it). value: a number, #rrggbb (tint), a name (tex, view) or $name (a clip parameter). |
+| `key.remove` | `clip`: string, `keys`: object[] | Remove keys (cells); a row left without values is removed, a track left without rows too. |
+| `key.move` | `clip`: string, `keys`: object[], `dt`: number, `snap?`: boolean | Move keys by dt seconds (a selection — one step). snap (default true): the new times stick to other keys within 2 frames, else to frames of 1/60 s. A key landing on another key of its column is an error. |
+| `key.setEase` | `clip`: string, `keys`: object[], `ease`: 'linear' \| 'in' \| 'out' \| 'inOut' \| 'outBack' \| 'inBack' \| 'outBounce' \| 'step' \| 'quadIn' \| 'quadOut' \| 'quadInOut' \| 'cubicInOut' \| 'backOut' \| 'elasticOut' \| number[] \| null | The ease of keys (from the key to the next key of its column). The format keeps one ease per table row: the other values of the row share it. |
+| `key.setParam` | `clip`: string, `target`: string, `column`: 'x' \| 'y' \| 'rotation' \| 'scale' \| 'scaleX' \| 'scaleY' \| 'skewX' \| 'skewY' \| 'alpha' \| 'tint' \| 'z' \| 'tex' \| 'view' \| 'motion' \| 'dash' \| 'strokeWidth' \| 'strokeAlpha' \| 'width' \| 'height', `t`: number, `param`: string \| null, `value?`: number | Make a key a clip parameter (param: the name, cell $name — given at play time) or a number again (param: null, value: the number). |
+| `event.add` | `clip`: string, `t`: number, `event`: string | Add an event ($events) at t: a name the game handles, e.g. sfx:stamp, or fx:`<effect>`@`<node>` — an effect at a node of the scene. |
+| `event.remove` | `clip`: string, `events`: object[] | Remove events (by time and name); the $events block goes when it is empty. |
+| `event.move` | `clip`: string, `events`: object[], `dt`: number, `snap?`: boolean | Move events by dt seconds (snap — to frames of 1/60 s and to keys within 2 frames, default true). |
+| `event.set` | `clip`: string, `event`: object, `name?`: string, `t?`: number | Change one event: its name (name) and / or its time (t). |
+
+## Effects — `tml.inspect.fx` (the kit's `kitView()`), `heir.*`
+
+Effect nodes (`tml:type="fx"`) are configured in the heir: `heir.setAttr` (`data-effect` / `data-scale` / `transform` of a node the heir inserts, `tml:effect` of a `<tml:ref>`), a new one — `heir.insertFx`. The effects themselves (particle configs) — `tml.inspect.fx`: `list()` (`{ name, origin: file | systems | preset | code }`), `origin(name)`, `get(name)`, `update(name, fn)` (the preview plays it), `save(name)` (`fx/<name>.json` whole, a converter's `systems.json` — only that effect's systems), `extract(name)` (a preset / an effect from code → `fx/<name>.json`), `unsaved()`.
 
 ## Examples
 
@@ -132,4 +172,14 @@ tml.doc.exec('node.move', { node: 'settingsBtn', dx: 10, dy: 0 })
 for (const id of tml.selection) tml.moveBy(id, 0, -20)          // the selection up by 20 scene units
 tml.doc.errors                                                   // contract, geometry, clips — after every command
 await tml.save()
+
+// «move every key of the track card by 0.2 s»
+const d = tml.clipsDoc(), tr = d.clip('collect').tracks.find((t) => t.target === 'card')
+d.exec('key.move', { clip: 'collect', keys: tr.columns.flatMap((column) => tr.keys[column].map((k) => ({ target: 'card', column, t: k.t }))), dt: 0.2 })
+// «put fx:fdFound@spot1 at 0.8»
+tml.clipsDoc().exec('event.add', { clip: 'collect', t: 0.8, event: 'fx:fdFound@spot1' })
+// «double the rate of fdHintButton» (and save it into its file)
+tml.inspect.fx.update('fdHintButton', (c) => { for (const s of c) s.rate *= 2 }); await tml.inspect.fx.save('fdHintButton')
 ```
+
+From outside the page — the same scripts into the page a person has open: `npx trempel-edit eval [--port 5181] '<code>'` (`--file x.js`), `trempel-edit save`, `trempel-edit state`; `trempel-edit mcp` — an MCP server (stdio) with `editor.eval`, `editor.save`, `editor.state`. An agent's script is one undo step, marked «agent» in the log.
