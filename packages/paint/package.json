@@ -1,0 +1,51 @@
+{
+  "name": "@trempel/paint",
+  "version": "0.1.0",
+  "description": "Zero-dependency image editor for generative edits: canvas with pan/zoom and pixel mode, mask tools, inpaint-only-masked geometry (crop → work resolution → paste back with feather), pluggable generation adapters, layers as patches for sprite states.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Denys Vynohradskyi",
+  "homepage": "https://trempel.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trempel-dev/trempel.git",
+    "directory": "packages/paint"
+  },
+  "bugs": {
+    "url": "https://github.com/trempel-dev/trempel/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "build:browser": "vite build --config vite.browser.config.ts",
+    "prepack": "npm run build && npm run build:browser",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "image-editor",
+    "inpaint",
+    "mask",
+    "canvas",
+    "sprite",
+    "trempel"
+  ]
+}

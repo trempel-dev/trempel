@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.dist-gate-*/
+*.log
+.DS_Store
+
+.code/
+dist-*/
+*.zip
+test-results/
+playwright-report/
+build-report.md
+.visual/

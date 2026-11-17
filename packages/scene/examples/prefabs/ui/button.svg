@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72" width="240" height="72" data-resizable="x" data-label="Кнопка" data-action="">
+  <image id="bg" href="art/btn.png" width="240" height="72" data-slices="28 0"/>
+  <image id="shade" href="art/shade.png" width="240" height="72" data-slices="28 0" data-views="hover:art/shade-hover.png, pressed:art/shade-down.png"/>
+  <text id="label" x="120" y="46" text-anchor="middle" font-size="28" font-weight="bold" fill="#ffffff" data-anchor="0.5 0">Кнопка</text>
+  <rect id="hit" width="240" height="72" fill="#000000" opacity="0" data-stretch="x"/>
+</svg>

@@ -1,0 +1,7 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Menu: needs the action play() and state.best (number). -->
+  <text id="title"/>
+  <text id="best"/>
+  <g id="playBtn"/>
+  <g id="settingsBtn"/>
+</contract>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" width="800" height="440">
+  <rect id="bg" width="800" height="440" fill="#1b2238"/>
+  <text id="title" x="20" y="62" font-family="Arial" font-size="32" font-weight="bold" fill="#ffffff">Найди 5 отличий</text>
+  <text id="score" x="780" y="62" text-anchor="end" font-family="Arial" font-size="28" fill="#ffd93b">0 / 5</text>
+  <image id="left" href="art/picture.png" x="20" y="110" width="360" height="300"/>
+  <use id="right" href="picture.svg" x="420" y="110"/>
+  <!-- Зоны отличий: невидимы (display="none") до находки, но попадаются hitTest. Обводка прорисовывается
+       клипом found: pathLength="100" и stroke-dasharray="100" — dash (stroke-dashoffset) от 100 до 0 у любой зоны. -->
+  <g id="diffs">
+    <ellipse id="d1" cx="720" cy="165" rx="36" ry="36" fill="none" stroke="#ff3b30" stroke-width="4" stroke-linecap="round"
+             stroke-dasharray="100" stroke-dashoffset="100" pathLength="100" data-pivot="720 165" display="none"/>
+    <ellipse id="d2" cx="533" cy="295" rx="26" ry="23" fill="none" stroke="#ff3b30" stroke-width="4" stroke-linecap="round"
+             stroke-dasharray="100" stroke-dashoffset="100" pathLength="100" data-pivot="533 295" display="none"/>
+    <ellipse id="d3" cx="581" cy="325" rx="22" ry="34" fill="none" stroke="#ff3b30" stroke-width="4" stroke-linecap="round"
+             stroke-dasharray="100" stroke-dashoffset="100" pathLength="100" data-pivot="581 325" display="none"/>
+    <ellipse id="d4" cx="700" cy="249" rx="15" ry="15" fill="none" stroke="#ff3b30" stroke-width="4" stroke-linecap="round"
+             stroke-dasharray="100" stroke-dashoffset="100" pathLength="100" data-pivot="700 249" display="none"/>
+    <ellipse id="d5" cx="630" cy="376" rx="16" ry="14" fill="none" stroke="#ff3b30" stroke-width="4" stroke-linecap="round"
+             stroke-dasharray="100" stroke-dashoffset="100" pathLength="100" data-pivot="630 376" display="none"/>
+  </g>
+</svg>

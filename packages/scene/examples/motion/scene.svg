@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+  <!-- Trempel v0.7–v0.8 example — sterile base (plain SVG, opens in a browser / Inkscape as is).
+       <defs>: service geometry — the flight path, the orbit, the window mask. Not drawn.
+       The clips (anim/motion.md) and the logic (main.ts) refer to it by id. -->
+  <defs id="defs">
+    <path id="fly1" d="M 60 360 C 150 40 330 60 400 250 S 650 450 740 110"/>
+    <circle id="orbit" cx="610" cy="130" r="70"/>
+    <clipPath id="win">
+      <rect x="0" y="0" width="230" height="150" rx="26"/>
+    </clipPath>
+  </defs>
+
+  <rect id="sky" width="800" height="500" fill="#13233f"/>
+  <circle id="sun" cx="610" cy="130" r="36" fill="#ffd25e"/>
+  <!-- v0.8: the glow adds light (mix-blend-mode: plus-lighter → Pixi add). -->
+  <ellipse id="glow" cx="610" cy="130" rx="54" ry="54" fill="#ffb03a" fill-opacity="0.35" style="mix-blend-mode: plus-lighter"/>
+  <line id="horizon" x1="0" y1="430" x2="800" y2="430" stroke="#6fa8dc" stroke-width="3" stroke-linecap="round"/>
+  <!-- The flight path drawn once more as a visible line (same d) — so a still shows where the bird flies. -->
+  <path id="trail" d="M 60 360 C 150 40 330 60 400 250 S 650 450 740 110" fill="none"
+        stroke="#ffffff" stroke-opacity="0.25" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- A window: everything inside is cut by the rounded rect #win (in the group's own coordinates). -->
+  <g id="window" transform="translate(40 30)" clip-path="url(#win)">
+    <rect width="230" height="150" fill="#2b4a7a"/>
+    <path d="M -40 120 L 120 -40 L 160 -40 L 0 120 Z M 60 200 L 260 0 L 300 0 L 100 200 Z" fill="#3f6aa8"/>
+    <circle cx="215" cy="20" r="60" fill="#e86f5c"/>
+    <text x="115" y="132" text-anchor="middle" font-family="Arial" font-size="20" fill="#ffffff">окно</text>
+  </g>
+
+  <!-- Flies along #fly1 (clip "fly", $orient: auto); drawn nose to +x. v0.8: two sprite variants
+       (data-views) — the clip flaps the wings with the `view` column. -->
+  <g id="bird" transform="translate(60 360)">
+    <image id="birdImg" href="art/bird-up.svg" x="-14" y="-18" width="36" height="30"
+           data-views="up:art/bird-up.svg, down:art/bird-down.svg"/>
+  </g>
+
+  <!-- Moved by game logic along #orbit (MountedScene.path) at its own speed. -->
+  <g id="satellite" transform="translate(680 130)">
+    <circle r="8" fill="#9ad1ff"/>
+  </g>
+
+  <!-- A rig of three parts; the pose here is the rest pose. v0.8: draw order by data-z (the arm is
+       behind the body; clip "wave" brings it to the front), the arm turns around its shoulder
+       (data-pivot) and is tinted (data-tint) from a light-grey drawing. -->
+  <g id="mascot" transform="translate(150 430)">
+    <g id="mascotBody" data-z="1">
+      <image href="art/body.svg" x="-40" y="-92" width="80" height="92"/>
+    </g>
+    <g id="mascotHead" transform="translate(0 -86)" data-z="2">
+      <image href="art/head-idle.svg" x="-36" y="-66" width="72" height="72"/>
+    </g>
+    <g id="mascotArm" transform="translate(20 -78)" data-pivot="6 4" data-z="0">
+      <image href="art/arm.svg" x="0" y="0" width="14" height="44" data-tint="#f2c79b"/>
+    </g>
+  </g>
+</svg>

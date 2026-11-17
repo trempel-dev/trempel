@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="pause.svg">
+  <!-- Needs the game's actions restart() and toMenu(); resume() is the kit's. -->
+  <tml:ref id="frame" tml:type="ui-popup-frame" tml:bind-title="t('ui.pause')"/>
+  <tml:ref id="resumeBtn" tml:type="ui-button" tml:bind-text="t('ui.resume')" tml:on-click="resume()"/>
+  <tml:ref id="restartBtn" tml:type="ui-button" tml:bind-text="t('ui.restart')" tml:on-click="restart()"/>
+  <tml:ref id="menuBtn" tml:type="ui-button" tml:bind-text="t('ui.menu')" tml:on-click="toMenu()"/>
+  <tml:ref id="settingsBtn" tml:type="ui-icon-button" tml:on-click="popup('settings')"/>
+</svg>

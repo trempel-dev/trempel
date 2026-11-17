@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Prefabs from the collection @skin (.trempel/project.mdz → ../skin). -->
+  <rect id="bg" x="0" y="0" width="1280" height="720" fill="#20304a"/>
+  <text id="title" x="640" y="300" font-size="64" font-weight="bold" fill="#fff8e7" text-anchor="middle">COLLECTIONS</text>
+  <use id="settingsBtn" href="@skin/icon-button.svg" x="1168" y="24" data-action="settings">
+    <image href="@skin/art/icons/settings.png" x="18" y="18" width="52" height="52"/>
+  </use>
+  <use id="hudPanel" href="@skin/hud-panel.svg" x="240" y="560" width="800" height="136"/>
+  <use id="pauseBtn" href="@skin/icon-button.svg" x="276" y="584" data-action="pause">
+    <image href="@skin/art/icons/pause.png" x="18" y="18" width="52" height="52"/>
+  </use>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <!-- v0.9.1 dashes: the same shapes as solid.svg, dashed. -->
+  <rect id="bg" width="200" height="120" fill="#ffffff"/>
+  <ellipse id="e" cx="60" cy="60" rx="40" ry="30" fill="none" stroke="#d00" stroke-width="6" stroke-dasharray="12 8" stroke-linecap="round"/>
+  <line id="l" x1="120" y1="20" x2="190" y2="100" stroke="#00d" stroke-width="6" stroke-dasharray="10" stroke-dashoffset="5"/>
+  <rect id="r" x="110" y="80" width="30" height="30" fill="none" stroke="#090" stroke-width="4" stroke-dasharray="25" pathLength="100" stroke-dashoffset="-10"/>
+</svg>

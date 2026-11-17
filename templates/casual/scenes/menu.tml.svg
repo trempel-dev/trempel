@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="menu.svg">
+  <!-- Logic of the menu: kit components (tml:type), texts from i18n/state, clicks call scene-context
+       functions (play — the game's action; popup — kit built-in). -->
+  <tml:ref id="title" tml:bind="t('ui.title')"/>
+  <tml:ref id="best" tml:bind="t('ui.best', {n: state.best})"/>
+  <tml:ref id="playBtn" tml:type="ui-button" tml:bind-text="t('ui.play')" tml:on-click="play()"/>
+  <tml:ref id="settingsBtn" tml:type="ui-icon-button" tml:on-click="popup('settings')"/>
+</svg>

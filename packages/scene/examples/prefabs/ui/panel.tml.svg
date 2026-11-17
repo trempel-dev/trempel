@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="panel.svg">
+  <!-- Заголовок — параметр инстанса; крестик зовёт функцию сцены из data-close. -->
+  <tml:ref id="title" tml:bind="self.title"/>
+  <!-- Слот: дети <use href="ui/panel.svg"> встают сюда (slot="content" или без slot — он по умолчанию). -->
+  <tml:ref id="content" tml:slot="content default"/>
+</svg>

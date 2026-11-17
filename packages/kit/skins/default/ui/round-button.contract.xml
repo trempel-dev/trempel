@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<contract viewBox="0 0 96 96" params="data-action">
+  <image id="bg" />
+  <g id="icon" slot="true" />
+  <rect id="hit" />
+</contract>

@@ -1,0 +1,20 @@
+{
+  "name": "@trempel/template-casual",
+  "version": "2.5.0",
+  "private": true,
+  "type": "module",
+  "description": "Trempel kit template: an empty casual game \u2014 loading, menu, game screen stub, pause, settings, win/lose, save, restart; coins on the wallet service; web and YouTube Playables builds.",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:web": "vite build --mode web",
+    "build:yt": "vite build --mode youtube",
+    "test:e2e": "npm run build:web && npm run build:yt && playwright test"
+  },
+  "dependencies": {
+    "@trempel/kit": "^2.0.0",
+    "@trempel/scene": "^2.0.0",
+    "pixi.js": "^8.19.0"
+  }
+}

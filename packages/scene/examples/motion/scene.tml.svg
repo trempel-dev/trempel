@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene"
+     tml:extends="scene.svg">
+  <!-- Heir: the window's mask is switchable (state.open), a click on it toggles; the caption is bound. -->
+  <tml:ref id="window" tml:bind-clip-path="state.open ? 'url(#win)' : 'none'" tml:on-click="toggle()"/>
+
+  <text id="caption" tml:insert="after mascot" x="400" y="475" text-anchor="middle"
+        font-family="Arial" font-size="18" fill="#cfe3ff" tml:bind="state.caption"/>
+</svg>

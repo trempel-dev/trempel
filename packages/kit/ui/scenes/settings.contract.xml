@@ -1,0 +1,13 @@
+<contract viewBox="0 0 720 1280">
+  <!-- Settings: kit built-ins only (register as popups.settings). -->
+  <rect id="dim"/>
+  <g id="content"/>
+  <g id="frame"/>
+  <text id="sfxLabel"/>
+  <g id="sfxToggle"/>
+  <g id="sfxSlider"/>
+  <text id="musicLabel"/>
+  <g id="musicToggle"/>
+  <g id="musicSlider"/>
+  <g id="closeBtn"/>
+</contract>

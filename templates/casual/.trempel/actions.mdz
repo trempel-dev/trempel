@@ -1,0 +1,17 @@
+# Actions of this game for the Trempel hub
+
+The kit's actions (`dev`, builds, gates, `editor`, `view:shot` — `node_modules/@trempel/kit/hub/`)
+come with the kit; here — the game's own, and overrides of any of them by id. `trempel run --list`
+shows every layer.
+
+## actions
+
+### shots
+$title: Snapshots of the screens
+$icon: camera
+$group: content
+$input.scenes: { type: "select", options: ["all", "game", "menu"], default: "all", label: "Screens" }
+$input.settle: { type: "text", default: 1, label: "Seconds after mount" }
+$js: tools/hub/shots.mjs
+
+A PNG of each screen scene (`scenes/*.tml.svg`) into `shots/`, through the kit's `view:shot`.

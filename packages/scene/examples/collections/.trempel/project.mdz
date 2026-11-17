@@ -1,0 +1,6 @@
+# Trempel project
+
+Example of collections (format §12): the scene in `game/` takes its prefabs from the shared folder `skin/` as `@skin/…`.
+
+## collections
+$skin: skin

@@ -1,0 +1,129 @@
+{
+  "fly": {
+    "tracks": [
+      {
+        "target": "bird",
+        "property": "motion",
+        "path": "fly1",
+        "orient": "auto",
+        "offset": [0, -6],
+        "keys": [{"t": 0, "v": 0}, {"t": 4, "v": 1, "ease": "inOut"}]
+      },
+      {
+        "target": "bird",
+        "property": "alpha",
+        "keys": [
+          {"t": 0, "v": 0},
+          {"t": 0.4, "v": 1, "ease": "inOut"},
+          {"t": 3.6, "v": 1},
+          {"t": 4, "v": 0}
+        ]
+      },
+      {
+        "target": "bird",
+        "property": "href",
+        "keys": [
+          {"t": 0, "v": "art/bird-up.svg"},
+          {"t": 0.25, "v": "art/bird-down.svg"},
+          {"t": 0.5, "v": "art/bird-up.svg"},
+          {"t": 0.75, "v": "art/bird-down.svg"},
+          {"t": 1, "v": "art/bird-up.svg"},
+          {"t": 1.25, "v": "art/bird-down.svg"},
+          {"t": 1.5, "v": "art/bird-up.svg"},
+          {"t": 1.75, "v": "art/bird-down.svg"},
+          {"t": 2, "v": "art/bird-up.svg"},
+          {"t": 2.25, "v": "art/bird-down.svg"},
+          {"t": 2.5, "v": "art/bird-up.svg"},
+          {"t": 2.75, "v": "art/bird-down.svg"},
+          {"t": 3, "v": "art/bird-up.svg"},
+          {"t": 3.25, "v": "art/bird-down.svg"},
+          {"t": 3.5, "v": "art/bird-up.svg"}
+        ]
+      }
+    ],
+    "duration": 4,
+    "loop": true
+  },
+  "idle": {
+    "tracks": [
+      {
+        "target": "mascotBody",
+        "property": "y",
+        "relative": true,
+        "keys": [
+          {"t": 0, "v": 0},
+          {"t": 1.2, "v": -4, "ease": "inOut"},
+          {"t": 2.4, "v": 0, "ease": "inOut"}
+        ]
+      },
+      {
+        "target": "mascotBody",
+        "property": "scale.y",
+        "relative": true,
+        "keys": [
+          {"t": 0, "v": 1},
+          {"t": 1.2, "v": 1.03, "ease": "inOut"},
+          {"t": 2.4, "v": 1, "ease": "inOut"}
+        ]
+      },
+      {
+        "target": "mascotBody",
+        "property": "tint",
+        "keys": [
+          {"t": 0, "v": 16777215},
+          {"t": 1.2, "v": 13172700, "ease": "inOut"},
+          {"t": 2.4, "v": 16777215, "ease": "inOut"}
+        ]
+      },
+      {
+        "target": "mascotHead",
+        "property": "rotation",
+        "relative": true,
+        "keys": [
+          {"t": 0, "v": 0},
+          {"t": 1, "v": 0.10471975511965978, "ease": "inOut"},
+          {"t": 2.4, "v": 0, "ease": "inOut"}
+        ]
+      },
+      {
+        "target": "mascotHead",
+        "property": "href",
+        "keys": [
+          {"t": 0, "v": "art/head-idle.svg"},
+          {"t": 2.05, "v": "art/head-blink.svg"},
+          {"t": 2.15, "v": "art/head-idle.svg"}
+        ]
+      }
+    ],
+    "duration": 2.4,
+    "loop": true,
+    "markers": [{"t": 2.05, "name": "blink"}]
+  },
+  "wave": {
+    "tracks": [
+      {
+        "target": "mascotArm",
+        "property": "rotation",
+        "relative": true,
+        "keys": [
+          {"t": 0, "v": 0},
+          {"t": 0.5, "v": -2.6179938779914944, "ease": "inOut"},
+          {"t": 0.8, "v": -2.0943951023931953, "ease": "inOut"},
+          {"t": 1.1, "v": -2.6179938779914944, "ease": "inOut"},
+          {"t": 1.6, "v": 0, "ease": "inOut"}
+        ]
+      },
+      {
+        "target": "mascotArm",
+        "property": "z",
+        "keys": [
+          {"t": 0, "v": 0},
+          {"t": 0.5, "v": 3, "ease": "step"},
+          {"t": 1.6, "v": 0, "ease": "step"}
+        ]
+      }
+    ],
+    "duration": 2,
+    "loop": true
+  }
+}

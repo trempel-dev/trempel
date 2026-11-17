@@ -1,0 +1,5 @@
+<contract viewBox="0 0 400 300">
+  <rect id="back"/>
+  <text id="label"/>
+  <g id="missing"/>
+</contract>

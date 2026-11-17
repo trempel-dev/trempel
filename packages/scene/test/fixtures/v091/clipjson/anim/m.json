@@ -1,0 +1,3 @@
+{
+  "swap": {"duration": 1, "tracks": [{"target": "part", "property": "href", "keys": [{"t": 0, "v": "stale/a.png"}, {"t": 0.5, "v": "stale/b.png"}]}]}
+}

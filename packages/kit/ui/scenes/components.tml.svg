@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="components.svg">
+  <!-- Bindings to the stand-in state (components.state.json). -->
+  <tml:ref id="btn0" tml:type="ui-button"/>
+  <tml:ref id="btn1" tml:type="ui-button"/>
+  <tml:ref id="btn2" tml:type="ui-button"/>
+  <tml:ref id="btn3" tml:type="ui-button"/>
+  <tml:ref id="btnOff" tml:type="ui-button" tml:bind-disabled="true"/>
+  <tml:ref id="plate" tml:type="ui-plate"/>
+  <tml:ref id="icon0" tml:type="ui-icon-button"/>
+  <tml:ref id="icon1" tml:type="ui-icon-button"/>
+  <tml:ref id="icon2" tml:type="ui-icon-button"/>
+  <tml:ref id="icon3" tml:type="ui-icon-button"/>
+  <tml:ref id="icon4" tml:type="ui-icon-button"/>
+  <tml:ref id="icon5" tml:type="ui-icon-button"/>
+  <tml:ref id="icon6" tml:type="ui-icon-button"/>
+  <tml:ref id="icon7" tml:type="ui-icon-button"/>
+  <tml:ref id="icon8" tml:type="ui-icon-button"/>
+  <tml:ref id="icon9" tml:type="ui-icon-button"/>
+  <tml:ref id="icon10" tml:type="ui-icon-button"/>
+  <tml:ref id="icon11" tml:type="ui-icon-button"/>
+  <tml:ref id="icon12" tml:type="ui-icon-button"/>
+  <tml:ref id="icon13" tml:type="ui-icon-button"/>
+  <tml:ref id="icon14" tml:type="ui-icon-button"/>
+  <tml:ref id="icon15" tml:type="ui-icon-button"/>
+  <tml:ref id="icon16" tml:type="ui-icon-button"/>
+  <tml:ref id="icon17" tml:type="ui-icon-button"/>
+  <tml:ref id="toggle" tml:type="ui-toggle" tml:bind-checked="state.on"/>
+  <tml:ref id="badge" tml:type="ui-badge" tml:bind-text="state.count"/>
+  <tml:ref id="panel" tml:type="ui-panel"/>
+  <tml:ref id="progress" tml:type="ui-progress" tml:bind-value="state.progress"/>
+  <tml:ref id="slider" tml:type="ui-slider" tml:bind-value="state.volume"/>
+  <tml:ref id="stars" tml:type="ui-stars" tml:bind-value="state.stars"/>
+  <tml:ref id="slot0" tml:type="ui-slot" tml:bind-state="'idle'"/>
+  <tml:ref id="slot1" tml:type="ui-slot" tml:bind-state="'found'"/>
+  <tml:ref id="slot2" tml:type="ui-slot" tml:bind-state="'hint'"/>
+  <tml:ref id="frame" tml:type="ui-popup-frame"/>
+</svg>

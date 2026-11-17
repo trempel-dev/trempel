@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="button.svg">
+  <tml:ref id="label" tml:bind="self.label"/>
+  <tml:ref id="hit" tml:on-click="self.call(self.action)"/>
+</svg>

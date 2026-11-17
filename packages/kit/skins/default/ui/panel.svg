@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160" data-resizable="xy">
+  <image id="bg" href="art/panel.png" x="0" y="0" width="240" height="160" data-slices="28 28 28 28" />
+</svg>

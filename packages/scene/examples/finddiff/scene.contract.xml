@@ -1,0 +1,10 @@
+<!-- FindDiff: две картинки (левая — <image>, правая — префаб picture.svg) и зоны отличий d1…dN в #diffs.
+     Зоны — эллипсы с пивотом в центре и pathLength/stroke-dasharray, по которым клип found прорисовывает обводку. -->
+<contract viewBox="0 0 800 440">
+  <text id="score"/>
+  <image id="left"/>
+  <use id="right" href="picture.svg"/>
+  <g id="diffs">
+    <ellipse match="d\d+" count="1.." attrs="data-pivot pathLength stroke-dasharray"/>
+  </g>
+</contract>

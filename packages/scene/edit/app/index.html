@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trempel edit</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <aside id="side">
+      <header>
+        <div class="title">Trempel edit</div>
+        <div id="folder" class="muted"></div>
+      </header>
+      <ul id="scenes"></ul>
+    </aside>
+
+    <main>
+      <div id="toolbar">
+        <span id="stage-title" title="Scene (● — unsaved changes)"><span id="scene-name"></span><span id="scene-dirty" hidden> ●</span></span>
+        <span id="readonly" class="readonly" hidden></span>
+        <span class="tools">
+          <button id="tool-select" class="on" title="Select (V)">V</button>
+          <button id="tool-path" title="Contour (P) — a path or a line">P</button>
+        </span>
+        <label title="Viewport">
+          <select id="viewport">
+            <option value="scene">scene</option>
+            <option value="9:16">9:16</option>
+            <option value="9:19.5">9:19.5</option>
+            <option value="3:4">3:4</option>
+            <option value="16:9">16:9</option>
+          </select>
+        </label>
+        <span class="zoom">
+          <button id="zoom-out" title="Zoom out (−)">−</button>
+          <button id="zoom-fit" title="Fit (⌘0)">⤢</button>
+          <button id="zoom-100" title="100% (⌘1)">1:1</button>
+          <button id="zoom-in" title="Zoom in (+)">+</button>
+        </span>
+        <span id="size" class="muted"></span>
+        <span class="grow"></span>
+        <button id="commands" title="Command palette (F3)">F3</button>
+        <label title="Keymap: blender — G/R/S, Tab, ⇧D, H, A, F3; figma — V/P, arrows, ⌘D, ⌘⇧P">
+          <select id="keymap">
+            <option value="blender">blender</option>
+            <option value="figma">figma</option>
+          </select>
+        </label>
+        <button id="undo" title="Undo (⌘Z)">⟲</button>
+        <button id="redo" title="Redo (⇧⌘Z)">⟳</button>
+        <span id="ref-ctl" title="Reference: a picture under the scene, fitted to its viewBox (not written to the file)">
+          <button id="ref-pick">reference…</button>
+          <input id="ref-opacity" type="range" min="0" max="100" value="50" title="Reference opacity" hidden />
+          <label id="ref-over-label" title="Reference over the scene (otherwise under it)" hidden><input id="ref-over" type="checkbox" />⤒</label>
+          <button id="ref-off" class="link" title="Remove the reference" hidden>✕</button>
+        </span>
+        <label title="Service geometry: defs content and masks, dashed"><input id="service" type="checkbox" checked /> defs</label>
+        <button id="save" title="Save the base (⌘S)">save<span id="dirty" hidden> ●</span></button>
+      </div>
+      <div id="nobase" class="toolbar-line" title="This scene extends another one: its base is read-only here" hidden></div>
+      <div id="stage-wrap" class="checker">
+        <div id="stage-box">
+          <div id="canvas-slot"></div>
+          <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="gizmo" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="pathtool" xmlns="http://www.w3.org/2000/svg" hidden></svg>
+        </div>
+        <div id="empty" class="muted" hidden></div>
+        <div id="opstatus" hidden></div>
+      </div>
+    </main>
+
+    <aside id="right">
+      <section id="tree-pane">
+        <h3>Tree <span class="muted" id="tree-hint">⇧ — add, double-click — rename</span></h3>
+        <ul id="tree" tabindex="0"></ul>
+      </section>
+      <section id="inspector-pane">
+        <h3>Inspector <span id="insp-what" class="muted"></span></h3>
+        <div id="inspector"></div>
+      </section>
+      <section id="ext-pane" hidden>
+        <h3 id="ext-title"></h3>
+        <div id="ext"></div>
+      </section>
+      <section id="palette-pane" hidden>
+        <h3>Palette <span class="muted">— drag onto the stage</span></h3>
+        <div id="palettes"></div>
+      </section>
+    </aside>
+
+    <footer id="bottom">
+      <section>
+        <h3>Errors <span id="issue-count" class="badge"></span></h3>
+        <ul id="issues"></ul>
+      </section>
+      <section id="bottom-tabs">
+        <h3>
+          <button class="tab on" data-tab="log">Log</button>
+          <button class="tab" data-tab="console" title="Scripts over tml (⌘Enter), macros — ⌘K">Console</button>
+          <button class="tab" data-tab="clips" title="Timeline: the scene's clips (anim/*.md, *.anim.md) — keys, events, eases, recording, playback, onion, video snapshot">Timeline</button>
+          <span class="grow"></span>
+          <button id="macros" class="link" title="Folder macros (.trempel/macros) — ⌘K">macros ⌘K</button>
+          <button id="clear-log" class="link">clear</button>
+        </h3>
+        <div id="pane-log" class="pane"><ol id="log"></ol></div>
+        <div id="pane-console" class="pane" hidden>
+          <div id="console-out"></div>
+          <textarea id="console-in" rows="3"></textarea>
+        </div>
+        <div id="pane-clips" class="pane" hidden>
+          <div class="row">
+            <select id="clip-name" title="Clip"></select>
+            <button id="clip-new" title="New clip">＋</button>
+            <button id="clip-rename" title="Rename the clip">✎</button>
+            <button id="clip-dup" title="Duplicate the clip">⧉</button>
+            <button id="clip-del" title="Remove the clip">✕</button>
+            <span class="sep"></span>
+            <button id="clip-play" title="Play">▶</button>
+            <button id="clip-pause" title="Pause">⏸</button>
+            <button id="clip-stop" title="Stop — rest pose, the stage is editable again">⏹</button>
+            <button id="clip-rec" class="rec" title="Record: with a clip on the stage, moving / turning / scaling a node writes keys at the playhead (not the base)">● Rec</button>
+            <input id="clip-time" type="range" min="0" max="1" step="0.001" value="0" title="Time" hidden />
+            <input id="clip-t" type="number" min="0" step="0.01" value="0" title="Playhead, s (← → — a frame, ⇧ — 0.1 s)" />
+            <span id="clip-dur" class="muted"></span>
+            <label title="$duration of the clip, s (or drag its end on the ruler)">dur <input id="clip-duration" type="number" min="0.01" step="0.05" /></label>
+            <label title="$loop of the clip"><input id="clip-loop-attr" type="checkbox" /> $loop</label>
+          </div>
+          <div class="row">
+            <label title="Playback loop"><input id="clip-loop" type="checkbox" checked /> loop</label>
+            <label>speed
+              <select id="clip-speed">
+                <option value="0.25">×0.25</option>
+                <option value="0.5">×0.5</option>
+                <option value="0.75">×0.75</option>
+                <option value="1" selected>×1</option>
+                <option value="1.5">×1.5</option>
+                <option value="2">×2</option>
+              </select>
+            </label>
+            <label title="When paused: frames t−Δ (red) and t+Δ (green) on top"><input id="clip-onion" type="checkbox" /> onion</label>
+            <label>Δ <input id="clip-onion-d" type="number" min="0.01" step="0.01" value="0.083" title="Δ, s (default 1/12)" /></label>
+            <span id="clip-params" title="Clip parameters ($name cells) — values for the preview, as play(clip, { params })"></span>
+            <span id="clip-info" class="muted"></span>
+          </div>
+          <div id="timeline">
+            <div id="tl-grid" tabindex="0"></div>
+            <div id="tl-side"></div>
+          </div>
+          <div class="row">
+            <span>video snapshot:</span>
+            <label>background <input id="shot-bg" type="color" value="#ffffff" /></label>
+            <label><input id="shot-transparent" type="checkbox" /> transparent</label>
+            <button id="shot-take" title="PNG of the stage in the rest pose, 1:1 to the viewBox → renders/">take</button>
+          </div>
+        </div>
+      </section>
+    </footer>
+
+    <div id="menu" hidden></div>
+    <div id="dialog" hidden>
+      <div class="box">
+        <p id="dialog-text"></p>
+        <div class="row" id="dialog-buttons"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

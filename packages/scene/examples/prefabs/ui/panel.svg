@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" data-resizable="xy" data-title="Окно" data-close="">
+  <image id="bg" href="art/panel.png" width="320" height="240" data-slices="40 96 40 40"/>
+  <text id="title" x="160" y="46" text-anchor="middle" font-size="30" font-weight="bold" fill="#ffffff" data-anchor="0.5 0">Окно</text>
+  <use id="close" href="icon-button.svg" x="262" y="8" data-anchor="1 0" data-action="=self.close"/>
+  <g id="content" transform="translate(40 96)"/>
+</svg>

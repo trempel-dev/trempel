@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="effects.svg">
+  <!-- Effect nodes: the kit's `fx` component (data-effect / -loop / -scale / -autostart / -seed in the base). -->
+  <tml:ref id="sparkle" tml:type="fx"/>
+  <tml:ref id="trail" tml:type="fx"/>
+  <tml:ref id="top" tml:type="fx"/>
+</svg>

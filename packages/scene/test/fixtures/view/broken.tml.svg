@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="broken.svg">
+  <!-- Fixture for the viewer: a runtime expression error (state.box is null). -->
+  <tml:ref id="label" tml:bind="state.box.n"/>
+  <tml:ref id="back" tml:on-click="tap(1)"/>
+</svg>

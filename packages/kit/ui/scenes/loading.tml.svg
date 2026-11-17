@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:tml="https://trempel.dev/ns/scene" tml:extends="loading.svg">
+  <tml:ref id="title" tml:bind="t('ui.title')"/>
+  <tml:ref id="bar" tml:type="ui-progress" tml:bind-value="kit.progress / 100"/>
+  <tml:ref id="label" tml:bind="t('ui.loading')"/>
+</svg>

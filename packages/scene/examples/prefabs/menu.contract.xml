@@ -1,0 +1,9 @@
+<!-- Меню: четыре инстанса кнопок; у playBtn логика правит подпись изнутри. -->
+<contract viewBox="0 0 800 600">
+  <text id="title"/>
+  <use id="playBtn" href="ui/button.svg"/>
+  <use id="settingsBtn" href="ui/button.svg"/>
+  <use id="shopBtn" href="ui/button-green.svg"/>
+  <use id="exitBtn" href="ui/button.svg"/>
+  <text id="playBtn/label"/>
+</contract>

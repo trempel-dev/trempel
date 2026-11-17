@@ -1,0 +1,13 @@
+<contract viewBox="0 0 800 500">
+  <!-- What the logic and the clips need from the base: the geometry they move along and mask by,
+       and the parts they animate. Structure only. -->
+  <path id="fly1" attrs="d"/>
+  <circle id="orbit"/>
+  <g id="window"/>
+  <g id="bird"/>
+  <g id="satellite"/>
+  <g id="mascot"/>
+  <g id="mascotBody"/>
+  <g id="mascotHead"/>
+  <g id="mascotArm"/>
+</contract>
